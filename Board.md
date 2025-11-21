@@ -1,14 +1,14 @@
 # Project Status Board: AutoBoat
 
 ## Phase 1: Architecture & MVP (Minimum Viable Product)
->
+
 > **Goal:** Establish communication with Control Group and move the boat in a straight line.
 
 ### Define Interfaces
 
 - [ ] Agree on Topic names (`/planning/path`) with Control Group.
 - [ ] Agree on Message types (`nav_msgs/Path`).
-- [ ] Decide on Frame ID (Map vs Odom).
+- [ ] Set Frame ID (Map, Odom) as parameter.
 
 ### Setup Workspace
 
@@ -19,13 +19,21 @@
 
 - [ ] Write Subscriber for Odometry.
 - [ ] Write Subscriber for Goal.
-- [ ] Implement Linear Interpolation logic.
+- [ ] Implement Linear Interpolation Logic.
+- [ ] Test with VRX simulation (visualize path in Rviz).
+
+### Implement v1.0: Path Follow Node
+
+- [ ] Write Subscriber for Path.
+- [ ] Handle transform from odom/map to baselink
+- [ ] Publish local next goal in path ((with rviz visualisation))
+- [ ] PID control toward the next goal
 - [ ] Test with VRX simulation (visualize path in Rviz).
 
 ---
 
 ## Phase 2: Obstacle Avoidance (A*)
->
+
 > **Goal:** Navigate around buoys and islands without collision.
 
 ### Environment Representation

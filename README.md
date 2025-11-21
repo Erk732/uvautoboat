@@ -1,6 +1,10 @@
 # AutoBoat (uvautoboat)
 
+<<<<<<< HEAD
 ## Short Description
+=======
+[cite_start]AutoBoat is the Path Planning module for the VRX (Virtual RobotX) project[cite: 45, 47]. [cite_start]This ROS 2 node acts as the "brain" of the WAM-V surface vessel[cite: 48]. [cite_start]It receives the boat's current state and mission goals, processes environmental data (obstacles, boundaries), and calculates safe trajectories for the Control Group to execute[cite: 49].
+>>>>>>> bb5b0f2 (prof review)
 
 [cite_start]AutoBoat is the Path Planning module for the VRX (Virtual RobotX) project[cite: 45, 47]. [cite_start]This ROS 2 node acts as the "brain" of the WAM-V surface vessel[cite: 48]. [cite_start]It receives the boat's current state and mission goals, processes environmental data (obstacles, boundaries), and calculates safe trajectories for the Control Group to execute[cite: 49].
 
@@ -40,8 +44,12 @@
 
 ### Setup Steps
 
+<<<<<<< HEAD
 1. **Clone the repository into your workspace src folder:**
 
+=======
+1.  **Clone the repository into your workspace src folder:** Here the worspace name is `seal_ws`
+>>>>>>> bb5b0f2 (prof review)
     ```bash
     cd ~/seal_ws/src
     git clone [https://github.com/Erk732/uvautoboat.git](https://github.com/Erk732/uvautoboat.git)
