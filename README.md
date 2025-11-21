@@ -57,7 +57,7 @@ The computed trajectory (waypoints).
 
 Prerequisites
 
-ROS 2 (Humble or Jazzy)
+ROS 2 (Jazzy)
 
 VRX Simulation Environment
 
@@ -67,13 +67,13 @@ Installation
 
 Clone this repository into your ROS 2 workspace src folder:
 
-cd ~/vrx_ws/src
+cd ~/seal_ws/src
 git clone [https://github.com/Erk732/uvautoboat.git](https://github.com/Erk732/uvautoboat.git)
 
 
 Build the package:
 
-cd ~/vrx_ws
+cd ~/seal_ws
 colcon build --packages-select uvautoboat
 source install/setup.bash
 
