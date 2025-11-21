@@ -100,11 +100,12 @@ v3.0 (Planned): Boustrophedon patterns for area coverage.
 
 👥 Team Members
 
-[Member Name 1]
+Erk Cayhan
+Zhiyan Piao
+Harish Tannira
 
-[Member Name 2]
 
-[Member Name 3]
+
 Short Description
 
 ## Install instructions
