@@ -1,11 +1,11 @@
-from setuptools import find_packages, setup
+from setuptools import setup
 
 package_name = 'path'
 
 setup(
     name=package_name,
     version='0.0.0',
-    packages=find_packages(exclude=['test']),
+    packages=[package_name],
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
@@ -13,17 +13,15 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='bot',
-    maintainer_email='cayhanerk@gmail.com',
-    description='TODO: Package description',
+    maintainer='AutoBoat Team',
+    maintainer_email='student@example.com',
+    description='VRX Path Planning Node',
     license='TODO: License declaration',
-    extras_require={
-        'test': [
-            'pytest',
-        ],
-    },
+    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            # THIS IS THE MISSING LINE:
+            'simple_planner = path.simple_planner:main',
         ],
     },
 )
