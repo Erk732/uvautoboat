@@ -1,0 +1,36 @@
+--- Python ---
+
+pycache/
+*.py[cod]
+*$py.class
+.venv
+venv/
+env/
+
+--- ROS 2 / Colcon Build Artifacts ---
+
+build/
+install/
+log/
+build_isolated/
+devel_isolated/
+devel/
+
+--- Pytest / Testing ---
+
+.pytest_cache/
+.coverage
+htmlcov/
+test_results/
+
+--- IDEs / Editors ---
+
+.vscode/
+.idea/
+*.swp
+*~
+
+--- OS Generated ---
+
+.DS_Store
+Thumbs.db
