@@ -13,22 +13,22 @@
 ### Setup Workspace
 
 - [x] Create GitHub Repository (`uvautoboat`).
-- [ ] Create ROS 2 package structure in `seal_ws`.
+- [ ] Create ROS 2 Package structure in seal ws.
 
 ### Implement v1.0: Straight Line Planner
 
 - [ ] Write Subscriber for Odometry.
 - [ ] Write Subscriber for Goal.
 - [ ] Implement Linear Interpolation Logic.
-- [ ] Test with VRX simulation (visualize path in Rviz). **Done when:** path shows as a straight line between start/goal and endpoints are within tolerance.
+- [ ] Test with VRX simulation (visualize path in Rviz).
 
-### Implement v1.1: Path Follow Node
+### Implement v1.0: Path Follow Node
 
 - [ ] Write Subscriber for Path.
-- [ ] Handle transform from `map`/`odom` to `base_link` (verify TF tree map → odom → base_link).
-- [ ] Publish local next goal in path (with Rviz visualisation).
+- [ ] Handle transform from odom/map to baselink
+- [ ] Publish local next goal in path ((with rviz visualisation))
 - [ ] PID control toward the next goal
-- [ ] Test with VRX simulation (visualize path in Rviz). **Done when:** boat follows path within positional error threshold.
+- [ ] Test with VRX simulation (visualize path in Rviz).
 
 ---
 
@@ -45,7 +45,7 @@
 
 - [ ] Implement Heuristic function (Euclidean distance).
 - [ ] Implement core A* search loop.
-- [ ] Integrate Grid Map with A* logic. **Done when:** generated paths avoid inflated obstacles in sim.
+- [ ] Integrate Grid Map with A* logic.
 
 ### Path Smoothing
 
@@ -64,5 +64,4 @@
 ### Implement v3.0: Coverage Planner
 
 - [ ] Implement Boustrophedon (Lawn-mower) pattern generator.
-- [ ] Ensure path stays strictly within boundaries. **Done when:** simulated tracks remain inside provided polygon.
-- [ ] Add test scenario with multiple obstacles to validate coverage completion without boundary violations.
+- [ ] Ensure path stays strictly within boundaries.
