@@ -63,7 +63,7 @@ colcon build --merge-install
 ```bash
 cd ~/seal_ws
 colcon build --packages-select path
-source install/setup.bash
+. ~/seal_ws/install/setup.bash
 ```
 
 ---
