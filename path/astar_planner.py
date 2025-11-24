@@ -6,7 +6,7 @@ import heapq # Priority Queue for A*
 from nav_msgs.msg import Path, Odometry
 from geometry_msgs.msg import PoseStamped, Point
 
-# Import the GridMap class we just tested
+# Import the GridMap class
 from path.grid_map import GridMap
 
 class AStarPlanner(Node):
@@ -27,8 +27,7 @@ class AStarPlanner(Node):
         self.grid = GridMap(width_m=200, height_m=200, resolution=1.0)
         
         # --- ADD VIRTUAL OBSTACLES ---
-        # Let's put a "Virtual Island" at (25, 10) with radius 5m
-        # This blocks the straight line from (0,0) to (50,20)
+        # "Virtual Island" at (25, 10) with radius 5m
         self.get_logger().info("Adding Virtual Obstacles...")
         self.grid.set_obstacle(x=25.0, y=10.0, radius=5.0)
 
@@ -65,42 +64,65 @@ class AStarPlanner(Node):
             self.get_logger().error("No path found! Obstacle might be blocking completely.")
             return
 
-        # 3. Publish Path
-        self.publish_path(path_indices)
+        # 3. Convert Indices to World Points (Meters)
+        path_points = []
+        for r, c in path_indices:
+            wx, wy = self.grid.grid_to_world(r, c)
+            path_points.append((wx, wy))
+
+        # 4. SMOOTH THE PATH (New Step)
+        self.get_logger().info("Smoothing path...")
+        smoothed_points = self.smooth_path(path_points)
+
+        # 5. Publish
+        self.publish_path(smoothed_points)
+
+    def smooth_path(self, path, iterations=3):
+        """
+        Simple Moving Average Smoothing.
+        """
+        # Create a copy so we don't modify the original while reading it
+        new_path = list(path)
+        
+        for _ in range(iterations):
+            # Skip Start and End points (they must stay fixed)
+            for i in range(1, len(path) - 1):
+                prev_p = new_path[i-1]
+                curr_p = new_path[i]
+                next_p = new_path[i+1]
+                
+                # Average: (Prev + Curr + Next) / 3
+                new_x = (prev_p[0] + curr_p[0] + next_p[0]) / 3.0
+                new_y = (prev_p[1] + curr_p[1] + next_p[1]) / 3.0
+                
+                new_path[i] = (new_x, new_y)
+                
+        return new_path
 
     def run_astar(self, start, goal):
         self.get_logger().info(f"Planning from {start} to {goal}...")
         
-        # Priority Queue: stores (f_cost, current_node)
         open_list = []
         heapq.heappush(open_list, (0, start))
         
-        came_from = {} # To reconstruct path: came_from[next] = current
-        g_score = {start: 0} # Cost from start to current
+        came_from = {}
+        g_score = {start: 0}
         
         while open_list:
-            # Get node with lowest F score
             current_f, current = heapq.heappop(open_list)
             
             if current == goal:
                 return self.reconstruct_path(came_from, current)
             
-            # Check neighbors (8-connected: up, down, left, right, diagonals)
-            neighbors = [
-                (0,1), (0,-1), (1,0), (-1,0), 
-                (1,1), (1,-1), (-1,1), (-1,-1)
-            ]
-            
-            r, c = current
+            # 8-connected neighbors
+            neighbors = [(0,1), (0,-1), (1,0), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]
             
             for dr, dc in neighbors:
-                neighbor = (r + dr, c + dc)
+                neighbor = (current[0] + dr, current[1] + dc)
                 
-                # Check bounds and obstacles
                 if self.grid.is_blocked(neighbor[0], neighbor[1]):
                     continue
                 
-                # Distance cost: 1.0 for straight, 1.414 for diagonal
                 dist = 1.414 if abs(dr) + abs(dc) == 2 else 1.0
                 tentative_g = g_score[current] + dist
                 
@@ -110,10 +132,9 @@ class AStarPlanner(Node):
                     f_score = tentative_g + self.heuristic(neighbor, goal)
                     heapq.heappush(open_list, (f_score, neighbor))
                     
-        return None # No path found
+        return None 
 
     def heuristic(self, a, b):
-        # Euclidean distance heuristic
         return math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
 
     def reconstruct_path(self, came_from, current):
@@ -121,25 +142,23 @@ class AStarPlanner(Node):
         while current in came_from:
             current = came_from[current]
             path.append(current)
-        path.reverse() # Reverse to get Start -> Goal
+        path.reverse()
         return path
 
-    def publish_path(self, path_indices):
+    def publish_path(self, path_points):
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
         path_msg.header.frame_id = "map"
         
-        for r, c in path_indices:
-            wx, wy = self.grid.grid_to_world(r, c)
-            
+        for x, y in path_points:
             pose = PoseStamped()
             pose.header = path_msg.header
-            pose.pose.position.x = wx
-            pose.pose.position.y = wy
+            pose.pose.position.x = x
+            pose.pose.position.y = y
             path_msg.poses.append(pose)
             
         self.pub_path.publish(path_msg)
-        self.get_logger().info(f"Published A* Path with {len(path_msg.poses)} waypoints.")
+        self.get_logger().info(f"Published Smoothed Path with {len(path_msg.poses)} waypoints.")
 
 def main(args=None):
     rclpy.init(args=args)
@@ -150,3 +169,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+

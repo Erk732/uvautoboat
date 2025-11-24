@@ -23,6 +23,7 @@ setup(
             # THIS IS THE MISSING LINE:
             'simple_planner = path.simple_planner:main',
 	    'astar_planner = path.astar_planner:main',
+           'coverage_planner = path.coverage_planner:main',
         ],
     },
 )
