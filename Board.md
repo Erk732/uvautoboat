@@ -6,21 +6,21 @@
 
 ### Define Interfaces
 
-- [ ] Agree on Topic names (`/planning/path`) with Control Group.
-- [ ] Agree on Message types (`nav_msgs/Path`).
-- [ ] Set Frame ID (Map, Odom) as parameter.
+- [x] Agree on Topic names (`/planning/path`) with Control Group.
+- [x] Agree on Message types (`nav_msgs/Path`).
+- [x] Set Frame ID (Map, Odom) as parameter.
 
 ### Setup Workspace
 
 - [x] Create GitHub Repository (`uvautoboat`).
-- [ ] Create ROS 2 package structure in `seal_ws`.
+- [x] Create ROS 2 package structure in `seal_ws`.
 
 ### Implement v1.0: Straight Line Planner
 
-- [ ] Write Subscriber for Odometry.
-- [ ] Write Subscriber for Goal.
-- [ ] Implement Linear Interpolation Logic.
-- [ ] Test with VRX simulation (visualize path in Rviz). **Done when:** path shows as a straight line between start/goal and endpoints are within tolerance.
+- [x] Write Subscriber for Odometry.
+- [x] Write Subscriber for Goal.
+- [x] Implement Linear Interpolation Logic.
+- [x] Test with VRX simulation (visualize path in Rviz). **Done when:** path shows as a straight line between start/goal and endpoints are within tolerance.
 
 ### Implement v1.1: Path Follow Node
 
@@ -38,14 +38,14 @@
 
 ### Environment Representation
 
-- [ ] Create a class to convert (x, y) coordinates to Grid Map.
-- [ ] Implement "Inflation" (pad obstacles so boat doesn't hit edges).
+- [x] Create a class to convert (x, y) coordinates to Grid Map.
+- [x] Implement "Inflation" (pad obstacles so boat doesn't hit edges).
 
 ### Implement v2.0: A* Algorithm
 
-- [ ] Implement Heuristic function (Euclidean distance).
-- [ ] Implement core A* search loop.
-- [ ] Integrate Grid Map with A* logic. **Done when:** generated paths avoid inflated obstacles in sim.
+- [x] Implement Heuristic function (Euclidean distance).
+- [x] Implement core A* search loop.
+- [x] Integrate Grid Map with A* logic. **Done when:** generated paths avoid inflated obstacles in sim.
 
 ### Path Smoothing
 
