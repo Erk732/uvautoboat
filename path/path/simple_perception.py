@@ -2,38 +2,39 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import PoseArray, Pose
-from rclpy.qos import qos_profile_sensor_data # IMP: Connects to VRX easily
+from rclpy.qos import qos_profile_sensor_data
 import math
 
 class SimplePerception(Node):
     def __init__(self):
         super().__init__('simple_perception_node')
-
-        # Subscribe to LaserScan using SENSOR DATA QoS (Best Effort)
+        
+        # FIXED TOPIC NAME based on your list:
+        # Added "_sensor" to the path
         self.sub_lidar = self.create_subscription(
             LaserScan,
-            '/wamv/sensors/lidars/lidar_wamv/scan',
+            '/wamv/sensors/lidars/lidar_wamv_sensor/scan',
             self.lidar_callback,
-            qos_profile_sensor_data) # <--- Critical Fix
-
+            qos_profile_sensor_data)
+        
         self.pub_obstacles = self.create_publisher(PoseArray, '/perception/obstacles', 10)
-        self.get_logger().info('Perception Node Ready.')
+        self.get_logger().info('Perception Node Ready. Listening to ..._sensor/scan')
 
     def lidar_callback(self, msg):
         pose_array = PoseArray()
         pose_array.header = msg.header
-
-        # Check every 5th ray to save CPU
+        
+        # Check every 5th ray
         for i in range(0, len(msg.ranges), 5):
             dist = msg.ranges[i]
             if dist == float('inf') or math.isnan(dist): continue
-
-            # Only see objects between 1m and 20m
+            
+            # Distance filter: 1m to 20m
             if 1.0 < dist < 20.0:
                 angle = msg.angle_min + (i * msg.angle_increment)
                 obs_x = dist * math.cos(angle)
                 obs_y = dist * math.sin(angle)
-
+                
                 p = Pose()
                 p.position.x = obs_x
                 p.position.y = obs_y
@@ -51,3 +52,5 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
+
