@@ -81,3 +81,15 @@ Start the planner node:
 ```bash
 ros2 run path simple_planner
 ```
+
+## Using the Test Environment for path planning
+
+1. Let Gazebo know you have a new environment to load.
+```bash
+export GZ_SIM_RESOURCE_PATH=$HOME/seal_ws/src/uvautoboat/test_evironment:$GZ_SIM_RESOURCE_PATH
+```
+2. Source and launch the test environment.
+```bash
+source ~/seal_ws/install/setup.bash
+ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_custom
+```
