@@ -8,38 +8,29 @@ import math
 class SimplePerception(Node):
     def __init__(self):
         super().__init__('simple_perception_node')
-        
-        # FIXED TOPIC NAME based on your list:
-        # Added "_sensor" to the path
+        # CORRECTED TOPIC NAME FOR YOUR SIM
         self.sub_lidar = self.create_subscription(
             LaserScan,
             '/wamv/sensors/lidars/lidar_wamv_sensor/scan',
             self.lidar_callback,
             qos_profile_sensor_data)
-        
+
         self.pub_obstacles = self.create_publisher(PoseArray, '/perception/obstacles', 10)
-        self.get_logger().info('Perception Node Ready. Listening to ..._sensor/scan')
 
     def lidar_callback(self, msg):
         pose_array = PoseArray()
         pose_array.header = msg.header
-        
-        # Check every 5th ray
         for i in range(0, len(msg.ranges), 5):
             dist = msg.ranges[i]
             if dist == float('inf') or math.isnan(dist): continue
-            
-            # Distance filter: 1m to 20m
             if 1.0 < dist < 20.0:
                 angle = msg.angle_min + (i * msg.angle_increment)
                 obs_x = dist * math.cos(angle)
                 obs_y = dist * math.sin(angle)
-                
                 p = Pose()
                 p.position.x = obs_x
                 p.position.y = obs_y
                 pose_array.poses.append(p)
-
         if len(pose_array.poses) > 0:
             self.pub_obstacles.publish(pose_array)
 
@@ -52,5 +43,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
-
