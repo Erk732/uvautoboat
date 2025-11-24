@@ -14,16 +14,9 @@ class AStarPlanner(Node):
         super().__init__('astar_planner_node')
 
         # --- Interfaces ---
-        # 1. Listen to Boat Position
         self.sub_odom = self.create_subscription(Odometry, '/wamv/sensors/odometry', self.odom_callback, 10)
-        
-        # 2. Listen to User Goal
         self.sub_goal = self.create_subscription(PoseStamped, '/planning/goal', self.goal_callback, 10)
-        
-        # 3. Listen to DETECTED OBSTACLES (New!)
         self.sub_obstacles = self.create_subscription(PoseArray, '/perception/obstacles', self.obstacle_callback, 10)
-        
-        # 4. Publish Path
         self.pub_path = self.create_publisher(Path, '/planning/path', 10)
 
         # --- Internal State ---
@@ -31,6 +24,7 @@ class AStarPlanner(Node):
         self.goal_pose = None
         
         # --- The Map ---
+        # 200x200m grid
         self.grid = GridMap(width_m=200, height_m=200, resolution=1.0)
         
         self.get_logger().info('Dynamic A* Planner Ready. Waiting for Obstacles or Goal...')
@@ -39,23 +33,19 @@ class AStarPlanner(Node):
         self.current_pose = msg.pose.pose
 
     def obstacle_callback(self, msg):
-        """
-        Receives a list of detected objects (buoys) and updates the map.
-        """
+        """ Update map when obstacles are detected """
         obstacles_detected = len(msg.poses)
         if obstacles_detected > 0:
             self.get_logger().info(f'⚠️ Detected {obstacles_detected} obstacles! Updating Map...')
             
             for pose in msg.poses:
-                # Get x, y of the obstacle
                 ox = pose.position.x
                 oy = pose.position.y
-                # Mark it on the grid (radius 3.0m safety buffer)
+                # Mark on grid with 3.0m radius
                 self.grid.set_obstacle(ox, oy, radius=3.0)
             
-            # If we already have a goal, RE-PLAN immediately!
+            # Re-plan if we have a goal
             if self.goal_pose and self.current_pose:
-                self.get_logger().info('Obstacle appeared on map. Re-planning path...')
                 self.plan_path()
 
     def goal_callback(self, msg):
@@ -66,6 +56,9 @@ class AStarPlanner(Node):
             self.get_logger().warn('Waiting for Odometry...')
 
     def plan_path(self):
+        if not self.current_pose or not self.goal_pose:
+            return
+
         start_x = self.current_pose.position.x
         start_y = self.current_pose.position.y
         goal_x = self.goal_pose.position.x
@@ -75,6 +68,7 @@ class AStarPlanner(Node):
         goal_idx = self.grid.world_to_grid(goal_x, goal_y)
         
         if not start_idx or not goal_idx:
+            self.get_logger().warn("Start/Goal out of bounds")
             return
 
         path_indices = self.run_astar(start_idx, goal_idx)
@@ -83,11 +77,13 @@ class AStarPlanner(Node):
             self.get_logger().error("No path found! Obstacles are blocking the way.")
             return
 
+        # Convert back to world coordinates
         path_points = []
         for r, c in path_indices:
             wx, wy = self.grid.grid_to_world(r, c)
             path_points.append((wx, wy))
 
+        # Smooth and Publish
         smoothed_points = self.smooth_path(path_points)
         self.publish_path(smoothed_points)
 
@@ -119,6 +115,8 @@ class AStarPlanner(Node):
             
             for dr, dc in neighbors:
                 neighbor = (current[0] + dr, current[1] + dc)
+                
+                # Check bounds and obstacles
                 if self.grid.is_blocked(neighbor[0], neighbor[1]):
                     continue
                 
@@ -164,43 +162,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-```
-
-### Step 2: Build and Run
-
-1.  **Build:** (Always rebuild after changing python files to be safe)
-    ```bash
-    cd ~/seal_ws
-    colcon build --packages-select path
-    source install/setup.bash
-    ```
-
-2.  **Run the Planner:**
-    ```bash
-    ros2 run path astar_planner
-    ```
-
-### Step 3: Test the "Dynamic Detection"
-
-We are going to play a game. We will tell the boat to go straight, and then **while it is planning**, we will throw a fake obstacle in its way using the terminal.
-
-**1. Setup (Terminator Panes):**
-* **Top Left:** `astar_planner` running.
-* **Top Right:** Rviz (Topic `/planning/path`).
-* **Bottom:** Your command center.
-
-**2. Send Start and Goal (The Straight Line):**
-```bash
-# Start at 0,0
-ros2 topic pub --once /wamv/sensors/odometry nav_msgs/msg/Odometry "{header: {frame_id: 'map'}, pose: {pose: {position: {x: 0.0, y: 0.0, z: 0.0}}}}"
-
-# Go to 50,0
-ros2 topic pub --once /planning/goal geometry_msgs/msg/PoseStamped "{header: {frame_id: 'map'}, pose: {position: {x: 50.0, y: 0.0, z: 0.0}}}"
-```
-*Look at Rviz:* You should see a **straight line** because we removed the hardcoded island.
-
-**3. "Detect" a Buoy! (The Magic)**
-Now, simulate that your Perception team found a buoy right in the middle of the path (at x=25, y=0). Run this command:
-
-```bash
-ros2 topic pub --once /perception/obstacles geometry_msgs/msg/PoseArray "{header: {frame_id: 'map'}, poses: [{position: {x: 25.0, y: 0.0, z: 0.0}}]}"
