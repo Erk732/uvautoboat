@@ -3,13 +3,17 @@
 <package format="3">
   <name>control</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="yinpuchen0@gamil.com">ghostzero</maintainer>
+  <description>Control package for VRX WAM-V thruster-based path following.</description>
+  <maintainer email="yinpuchen0@gmail.com">ghostzero</maintainer>
   <license>Apache-2.0</license>
 
+  <!-- Runtime dependencies -->
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
 
+  <!-- Test dependencies -->
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
