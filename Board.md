@@ -49,7 +49,7 @@
 
 ### Path Smoothing
 
-- [ ] (Optional) Implement post-processing to round off sharp 90-degree turns.
+- [x] (Optional) Implement post-processing to round off sharp 90-degree turns.
 
 ---
 
