@@ -10,8 +10,8 @@ from path.grid_map import GridMap
 class AStarPlanner(Node):
     def __init__(self):
         super().__init__('astar_planner_node')
-
-        # TF Listener (Fixes the "Waiting for Odometry" issue)
+        
+        # TF Listener (This auto-finds the boat position)
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.create_timer(0.1, self.update_position)
@@ -23,11 +23,16 @@ class AStarPlanner(Node):
         self.current_pose = None
         self.goal_pose = None
         self.grid = GridMap(width_m=200, height_m=200, resolution=1.0)
-        self.get_logger().info('A* Planner Ready. Using TF.')
+        self.get_logger().info('A* Planner Ready. Waiting for TF...')
 
     def update_position(self):
+        # SMART LOOKUP: Check both possible names for the boat
+        target_frame = 'wamv/base_link'
+        if not self.tf_buffer.can_transform('map', target_frame, rclpy.time.Time()):
+            target_frame = 'base_link'
+
         try:
-            t = self.tf_buffer.lookup_transform('map', 'wamv/base_link', rclpy.time.Time())
+            t = self.tf_buffer.lookup_transform('map', target_frame, rclpy.time.Time())
             self.current_pose = Pose()
             self.current_pose.position.x = t.transform.translation.x
             self.current_pose.position.y = t.transform.translation.y
@@ -46,7 +51,7 @@ class AStarPlanner(Node):
         if self.current_pose:
             self.plan_path()
         else:
-            self.get_logger().warn('Waiting for TF Position... (Check Sim)')
+            self.get_logger().warn('Waiting for Position... (Is simulation running?)')
 
     def plan_path(self):
         if not self.current_pose or not self.goal_pose: return
@@ -73,7 +78,6 @@ class AStarPlanner(Node):
         heapq.heappush(open_list, (0, start))
         came_from = {}
         g_score = {start: 0}
-
         while open_list:
             _, current = heapq.heappop(open_list)
             if current == goal:
@@ -83,7 +87,7 @@ class AStarPlanner(Node):
                     path.append(current)
                 path.reverse()
                 return path
-
+            
             for dr, dc in [(0,1),(0,-1),(1,0),(-1,0),(1,1),(1,-1),(-1,1),(-1,-1)]:
                 neighbor = (current[0]+dr, current[1]+dc)
                 if self.grid.is_blocked(neighbor[0], neighbor[1]): continue
@@ -108,12 +112,12 @@ class AStarPlanner(Node):
             msg.poses.append(p)
         self.pub_path.publish(msg)
 
-def main(args=None):
-    rclpy.init(args=args)
-    node = AStarPlanner()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    def main(args=None):
+        rclpy.init(args=args)
+        node = AStarPlanner()
+        rclpy.spin(node)
+        node.destroy_node()
+        rclpy.shutdown()
 
-if __name__ == '__main__':
-    main()
+    if __name__ == '__main__':
+        main()
