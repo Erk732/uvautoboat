@@ -15,16 +15,13 @@ setup(
     zip_safe=True,
     maintainer='AutoBoat Team',
     maintainer_email='student@example.com',
-    description='VRX Path Planning Node',
-    license='TODO: License declaration',
+    description='VRX Path Planning',
+    license='TODO',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            # THIS IS THE MISSING LINE:
-            'simple_planner = path.simple_planner:main',
-	    'astar_planner = path.astar_planner:main',
-           'coverage_planner = path.coverage_planner:main',
-           'simple_perception = path.simple_perception:main',
+            'simple_perception = path.simple_perception:main',
+            'astar_planner = path.astar_planner:main',
         ],
     },
 )

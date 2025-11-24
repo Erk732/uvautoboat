@@ -1,50 +1,48 @@
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data # <--- THE FIX
 import math
 import heapq
 
 from nav_msgs.msg import Path, Odometry
 from geometry_msgs.msg import PoseStamped, PoseArray
-
-# Import the GridMap class
 from path.grid_map import GridMap
 
 class AStarPlanner(Node):
     def __init__(self):
         super().__init__('astar_planner_node')
 
-        # --- Interfaces ---
-        self.sub_odom = self.create_subscription(Odometry, '/wamv/sensors/odometry', self.odom_callback, 10)
+        # 1. Subscribe to Odom with QoS FIX (Best Effort)
+        self.sub_odom = self.create_subscription(
+            Odometry, 
+            '/wamv/sensors/odometry', 
+            self.odom_callback, 
+            qos_profile_sensor_data) # <--- Using Sensor Data QoS
+
+        # 2. Subscribe to Goal
         self.sub_goal = self.create_subscription(PoseStamped, '/planning/goal', self.goal_callback, 10)
+
+        # 3. Subscribe to Obstacles
         self.sub_obstacles = self.create_subscription(PoseArray, '/perception/obstacles', self.obstacle_callback, 10)
+
+        # 4. Publisher
         self.pub_path = self.create_publisher(Path, '/planning/path', 10)
 
-        # --- Internal State ---
         self.current_pose = None
         self.goal_pose = None
-        
-        # --- The Map ---
-        # 200x200m grid
         self.grid = GridMap(width_m=200, height_m=200, resolution=1.0)
-        
-        self.get_logger().info('Dynamic A* Planner Ready. Waiting for Obstacles or Goal...')
+
+        self.get_logger().info('A* Planner Ready. QoS set to Best Effort.')
 
     def odom_callback(self, msg):
         self.current_pose = msg.pose.pose
 
     def obstacle_callback(self, msg):
-        """ Update map when obstacles are detected """
-        obstacles_detected = len(msg.poses)
-        if obstacles_detected > 0:
-            self.get_logger().info(f'⚠️ Detected {obstacles_detected} obstacles! Updating Map...')
-            
+        if len(msg.poses) > 0:
+            # Update map
             for pose in msg.poses:
-                ox = pose.position.x
-                oy = pose.position.y
-                # Mark on grid with 3.0m radius
-                self.grid.set_obstacle(ox, oy, radius=3.0)
-            
-            # Re-plan if we have a goal
+                self.grid.set_obstacle(pose.position.x, pose.position.y, radius=3.0)
+            # Re-plan if moving
             if self.goal_pose and self.current_pose:
                 self.plan_path()
 
@@ -53,50 +51,37 @@ class AStarPlanner(Node):
         if self.current_pose:
             self.plan_path()
         else:
-            self.get_logger().warn('Waiting for Odometry...')
+            self.get_logger().warn('Waiting for Odometry... (Check Simulation is Unpaused)')
 
     def plan_path(self):
-        if not self.current_pose or not self.goal_pose:
-            return
+        if not self.current_pose or not self.goal_pose: return
 
-        start_x = self.current_pose.position.x
-        start_y = self.current_pose.position.y
-        goal_x = self.goal_pose.position.x
-        goal_y = self.goal_pose.position.y
-        
-        start_idx = self.grid.world_to_grid(start_x, start_y)
-        goal_idx = self.grid.world_to_grid(goal_x, goal_y)
-        
-        if not start_idx or not goal_idx:
-            self.get_logger().warn("Start/Goal out of bounds")
-            return
+        sx = self.current_pose.position.x
+        sy = self.current_pose.position.y
+        gx = self.goal_pose.position.x
+        gy = self.goal_pose.position.y
 
-        path_indices = self.run_astar(start_idx, goal_idx)
-        
-        if not path_indices:
-            self.get_logger().error("No path found! Obstacles are blocking the way.")
-            return
+        start = self.grid.world_to_grid(sx, sy)
+        goal = self.grid.world_to_grid(gx, gy)
 
-        # Convert back to world coordinates
-        path_points = []
-        for r, c in path_indices:
-            wx, wy = self.grid.grid_to_world(r, c)
-            path_points.append((wx, wy))
+        if not start or not goal: return
 
-        # Smooth and Publish
-        smoothed_points = self.smooth_path(path_points)
-        self.publish_path(smoothed_points)
+        path_indices = self.run_astar(start, goal)
+        if path_indices:
+            points = [self.grid.grid_to_world(r,c) for r,c in path_indices]
+            smoothed = self.smooth_path(points)
+            self.publish_path(smoothed)
 
-    def smooth_path(self, path, iterations=3):
+    def smooth_path(self, path):
         new_path = list(path)
-        for _ in range(iterations):
+        for _ in range(3):
             for i in range(1, len(path) - 1):
-                prev_p = new_path[i-1]
-                curr_p = new_path[i]
+                prev = new_path[i-1]
+                curr = new_path[i]
                 next_p = new_path[i+1]
-                new_x = (prev_p[0] + curr_p[0] + next_p[0]) / 3.0
-                new_y = (prev_p[1] + curr_p[1] + next_p[1]) / 3.0
-                new_path[i] = (new_x, new_y)
+                nx = (prev[0] + curr[0] + next_p[0]) / 3.0
+                ny = (prev[1] + curr[1] + next_p[1]) / 3.0
+                new_path[i] = (nx, ny)
         return new_path
 
     def run_astar(self, start, goal):
@@ -104,54 +89,41 @@ class AStarPlanner(Node):
         heapq.heappush(open_list, (0, start))
         came_from = {}
         g_score = {start: 0}
-        
+
         while open_list:
-            current_f, current = heapq.heappop(open_list)
-            
+            _, current = heapq.heappop(open_list)
             if current == goal:
-                return self.reconstruct_path(came_from, current)
-            
-            neighbors = [(0,1), (0,-1), (1,0), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]
-            
-            for dr, dc in neighbors:
-                neighbor = (current[0] + dr, current[1] + dc)
-                
-                # Check bounds and obstacles
-                if self.grid.is_blocked(neighbor[0], neighbor[1]):
-                    continue
-                
-                dist = 1.414 if abs(dr) + abs(dc) == 2 else 1.0
+                path = [current]
+                while current in came_from:
+                    current = came_from[current]
+                    path.append(current)
+                path.reverse()
+                return path
+
+            for dr, dc in [(0,1),(0,-1),(1,0),(-1,0),(1,1),(1,-1),(-1,1),(-1,-1)]:
+                neighbor = (current[0]+dr, current[1]+dc)
+                if self.grid.is_blocked(neighbor[0], neighbor[1]): continue
+
+                dist = 1.414 if abs(dr)+abs(dc)==2 else 1.0
                 tentative_g = g_score[current] + dist
-                
                 if neighbor not in g_score or tentative_g < g_score[neighbor]:
                     came_from[neighbor] = current
                     g_score[neighbor] = tentative_g
-                    f_score = tentative_g + self.heuristic(neighbor, goal)
+                    f_score = tentative_g + math.sqrt((neighbor[0]-goal[0])**2 + (neighbor[1]-goal[1])**2)
                     heapq.heappush(open_list, (f_score, neighbor))
-        return None 
+        return None
 
-    def heuristic(self, a, b):
-        return math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
-
-    def reconstruct_path(self, came_from, current):
-        path = [current]
-        while current in came_from:
-            current = came_from[current]
-            path.append(current)
-        path.reverse()
-        return path
-
-    def publish_path(self, path_points):
-        path_msg = Path()
-        path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = "map"
-        for x, y in path_points:
-            pose = PoseStamped()
-            pose.header = path_msg.header
-            pose.pose.position.x = x
-            pose.pose.position.y = y
-            path_msg.poses.append(pose)
-        self.pub_path.publish(path_msg)
+    def publish_path(self, points):
+        msg = Path()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = "map"
+        for x,y in points:
+            p = PoseStamped()
+            p.header = msg.header
+            p.pose.position.x = x
+            p.pose.position.y = y
+            msg.poses.append(p)
+        self.pub_path.publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)
