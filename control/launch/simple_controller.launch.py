@@ -10,7 +10,7 @@ def generate_launch_description():
             name='simple_controller',
             parameters=[{
                 'forward_cmd': 800.0,
-                'turn_angle': 0.0,
+                'turn_angle': 0.8,
                 'publish_period': 0.5,
                 'stop_topic': '/wamv/stop',
             }],
