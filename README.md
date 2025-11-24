@@ -6,16 +6,16 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
 
 ## Core Responsibilities
 
-- Point-to-point planning: navigate efficiently from start pose A to goal pose B.
-- Coverage/search planning: create systematic patterns (e.g., lawn-mower) to sweep a defined region for pollution or objects.
-- Obstacle avoidance: detect and route around static obstacles (e.g., buoys, islands) using planners such as A*.
+- Point-to-point planning: Navigate efficiently from start pose A to goal pose B.
+- Coverage/search planning: Create systematic patterns (e.g., lawn-mower) to sweep a defined region for pollution or objects.
+- Obstacle avoidance: Detect and route around static obstacles (e.g., buoys, islands) using planners such as A*.
 
 ---
 
 ## Architecture
 
 - Node name: `path_planner`
-- Role: bridge between the Mission/Perception layer and the Control layer.
+- Role: Bridge between the Mission / Perception layer and the Control layer.
 
 ### Interfaces
 
@@ -84,13 +84,13 @@ ros2 run path simple_planner
 
 ## Using the Test Environment for path planning
 
-1. Let `Gazebo` know you have a new environment to load.
+1.Let `Gazebo` know you have a new environment to load.
 
 ```bash
 export GZ_SIM_RESOURCE_PATH=$HOME/seal_ws/src/uvautoboat/test_evironment:$GZ_SIM_RESOURCE_PATH
 ```
 
-2. Source and launch the test environment.
+2.Source and launch the test environment.
 
 ```bash
 source ~/seal_ws/install/setup.bash
