@@ -37,6 +37,7 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
 - Python 3
 
 ### Setup
+# PLEASE NOTE THAT FOLLOW SETUP INSTRUCTIONS STRICTLY !
 
 1. Clone the repository into your workspace `src` folder (workspace name example `seal_ws`):
 
