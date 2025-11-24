@@ -46,8 +46,21 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
     cd ~/seal_ws/src
     git clone https://github.com/Erk732/uvautoboat.git
     ```
+2. Clone VRX environment from the repository given below:
+```bash
+git clone https://github.com/osrf/vrx.git
+```
+3. Source the main ROS 2 installation.:
+```bash
+source /opt/ros/jazzy/setup.bash
+```
 
-2. Build the package:
+4. Build your "seal" workspace:
+```bash
+cd ~/seal_ws
+colcon build --merge-install
+```
+5. Build the package:
 
     ```bash
     cd ~/seal_ws
