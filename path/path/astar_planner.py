@@ -112,12 +112,12 @@ class AStarPlanner(Node):
             msg.poses.append(p)
         self.pub_path.publish(msg)
 
-    def main(args=None):
-        rclpy.init(args=args)
-        node = AStarPlanner()
-        rclpy.spin(node)
-        node.destroy_node()
-        rclpy.shutdown()
+def main(args=None):
+    rclpy.init(args=args)
+    node = AStarPlanner()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
 
-    if __name__ == '__main__':
-        main()
+if __name__ == '__main__':
+    main()
