@@ -54,13 +54,13 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
    git clone https://github.com/osrf/vrx.git
    ```
 
-3. Source the main ROS 2 installation: (if you don't know where your ROS 2 is installed, most probably it is in /opt/ros/<distro_name>/setup.bash, in our case jazzy, and if you don't know what this sentence means, just copy the line below)
+3. Source the main ROS 2 installation: (if you don't know where your ROS 2 is installed, most probably it is in `/opt/ros/<distro_name>/setup.bash`, in our case `jazzy`, and if you don't know what this sentence means, just copy the line below)
 
    ```bash
    source /opt/ros/jazzy/setup.bash
    ```
 
-4. Build your "seal" workspace: (Again 'seal_ws' is just an example name, if you named your workspace differently, please change it accordingly)
+4. Build your "seal" workspace: (Again `seal_ws` is just an example name, if you named your workspace differently, please change it accordingly)
 
    ```bash
    cd ~/seal_ws
@@ -84,11 +84,14 @@ ros2 run path simple_planner
 
 ## Using the Test Environment for path planning
 
-1. Let Gazebo know you have a new environment to load.
+1. Let `Gazebo` know you have a new environment to load.
+
 ```bash
 export GZ_SIM_RESOURCE_PATH=$HOME/seal_ws/src/uvautoboat/test_evironment:$GZ_SIM_RESOURCE_PATH
 ```
+
 2. Source and launch the test environment.
+
 ```bash
 source ~/seal_ws/install/setup.bash
 ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_custom
