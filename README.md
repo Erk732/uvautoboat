@@ -71,7 +71,6 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
 
    ```bash
    cd ~/seal_ws
-   colcon build --packages-select path
    . ~/seal_ws/install/setup.bash
    ```
 
