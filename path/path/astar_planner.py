@@ -3,18 +3,26 @@ from rclpy.node import Node
 import math
 import heapq
 from tf2_ros import Buffer, TransformListener, TransformException
-from nav_msgs.msg import Path
+from nav_msgs.msg import Path, Odometry
 from geometry_msgs.msg import PoseStamped, PoseArray, Pose
 from path.grid_map import GridMap
+from rclpy.qos import qos_profile_sensor_data
 
 class AStarPlanner(Node):
     def __init__(self):
         super().__init__('astar_planner_node')
         
-        # TF Listener (This auto-finds the boat position)
+        # --- STRATEGY 1: TF Listener (Automatic) ---
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.create_timer(0.1, self.update_position)
+
+        # --- STRATEGY 2: Manual Backup (If TF fails, we use this) ---
+        self.sub_odom = self.create_subscription(
+            Odometry, 
+            '/wamv/sensors/odometry', 
+            self.odom_callback, 
+            qos_profile_sensor_data)
 
         self.sub_goal = self.create_subscription(PoseStamped, '/planning/goal', self.goal_callback, 10)
         self.sub_obstacles = self.create_subscription(PoseArray, '/perception/obstacles', self.obstacle_callback, 10)
@@ -23,10 +31,10 @@ class AStarPlanner(Node):
         self.current_pose = None
         self.goal_pose = None
         self.grid = GridMap(width_m=200, height_m=200, resolution=1.0)
-        self.get_logger().info('A* Planner Ready. Waiting for TF...')
+        self.get_logger().info('A* Planner Ready. Waiting for Position (TF or Manual)...')
 
     def update_position(self):
-        # SMART LOOKUP: Check both possible names for the boat
+        # Try to get position automatically
         target_frame = 'wamv/base_link'
         if not self.tf_buffer.can_transform('map', target_frame, rclpy.time.Time()):
             target_frame = 'base_link'
@@ -37,7 +45,11 @@ class AStarPlanner(Node):
             self.current_pose.position.x = t.transform.translation.x
             self.current_pose.position.y = t.transform.translation.y
         except TransformException:
-            pass
+            pass # If TF fails, we just wait for Manual Odom
+
+    def odom_callback(self, msg):
+        # This is the Backup: Update position from manual command
+        self.current_pose = msg.pose.pose
 
     def obstacle_callback(self, msg):
         if len(msg.poses) > 0:
@@ -51,7 +63,7 @@ class AStarPlanner(Node):
         if self.current_pose:
             self.plan_path()
         else:
-            self.get_logger().warn('Waiting for Position... (Is simulation running?)')
+            self.get_logger().warn('Waiting for Position... (Try sending Manual Odom!)')
 
     def plan_path(self):
         if not self.current_pose or not self.goal_pose: return
