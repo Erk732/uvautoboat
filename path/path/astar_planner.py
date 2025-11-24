@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data # <--- THE FIX
+from rclpy.qos import qos_profile_sensor_data # Fix for Best Effort QoS
 import math
 import heapq
 
