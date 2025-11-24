@@ -31,8 +31,9 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
 
 ### Prerequisites
 
-- ROS 2 (Jazzy)
-- VRX simulation environment
+- [ROS 2 (Jazzy)](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
+- [Gazebo(Harmonic)](https://gazebosim.org/docs/harmonic/install_ubuntu/)
+- [VRX Environment](https://github.com/osrf/vrx/wiki/installation_tutorial)
 - Python 3
 
 ### Setup
