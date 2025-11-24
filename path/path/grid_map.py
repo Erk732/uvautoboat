@@ -26,7 +26,7 @@ class GridMap:
         if center is None: return
         r_center, c_center = center
         inflation = int(radius / self.resolution)
-
+        
         for r in range(r_center - inflation, r_center + inflation + 1):
             for c in range(c_center - inflation, c_center + inflation + 1):
                 if 0 <= r < self.rows and 0 <= c < self.cols:
