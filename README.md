@@ -34,39 +34,46 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
 - [ROS 2 (Jazzy)](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
 - [Gazebo(Harmonic)](https://gazebosim.org/docs/harmonic/install_ubuntu/)
 - [VRX Environment](https://github.com/osrf/vrx/wiki/installation_tutorial)
-- Python 3
+- Python 3 (Google it if you don't know what it is)
 
 ### Setup
-# PLEASE NOTE THAT FOLLOW SETUP INSTRUCTIONS STRICTLY !
 
-1. Clone the repository into your workspace `src` folder (workspace name example `seal_ws`):
-```bash
-mkdir -p ~/vrx_ws/src
-cd ~/seal_ws/src
-git clone https://github.com/Erk732/uvautoboat.git
-```
+#### Please note that you should follow setup instructions strictly, and if any step is missed, the package may not work as intended
+
+1. Clone the repository into your workspace `src` folder (workspace name example `seal_ws` in our case):
+
+   ```bash
+   mkdir -p ~/seal_ws/src
+   cd ~/seal_ws/src
+   git clone https://github.com/Erk732/uvautoboat.git
+   ```
+
 2. Clone VRX environment from the repository given below:
-```bash
-git clone https://github.com/osrf/vrx.git
-```
-3. Source the main ROS 2 installation.:
-```bash
-source /opt/ros/jazzy/setup.bash
-```
 
-4. Build your "seal" workspace:
-```bash
-cd ~/seal_ws
-colcon build --merge-install
-```
+   ```bash
+   git clone https://github.com/osrf/vrx.git
+   ```
+
+3. Source the main ROS 2 installation: (if you don't know where your ROS 2 is installed, most probably it is in /opt/ros/<distro_name>/setup.bash, in our case jazzy, and if you don't know what this sentence means, just copy the line below)
+
+   ```bash
+   source /opt/ros/jazzy/setup.bash
+   ```
+
+4. Build your "seal" workspace: (Again 'seal_ws' is just an example name, if you named your workspace differently, please change it accordingly)
+
+   ```bash
+   cd ~/seal_ws
+   colcon build --merge-install
+   ```
+
 5. Build the package:
-```bash
-cd ~/seal_ws
-colcon build --packages-select path
-. ~/seal_ws/install/setup.bash
-```
 
----
+   ```bash
+   cd ~/seal_ws
+   colcon build --packages-select path
+   . ~/seal_ws/install/setup.bash
+   ```
 
 ## How to Run
 
