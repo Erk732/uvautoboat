@@ -75,7 +75,7 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
    . ~/seal_ws/install/setup.bash
    ```
 
-## How to Run (🚧 WORK ON PROGRESS 🚧)
+## How to Run (🚧 WORK IN PROGRESS 🚧)
 
 Start the planner node:
 
