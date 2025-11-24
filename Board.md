@@ -38,6 +38,8 @@
 
 ### Environment Representation
 
+- [ ] Understand how to add obstacles
+- [ ] Download some obstacles from Fuel
 - [x] Create a class to convert (x, y) coordinates to Grid Map.
 - [x] Implement "Inflation" (pad obstacles so boat doesn't hit edges).
 
