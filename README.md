@@ -40,10 +40,10 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
 # PLEASE NOTE THAT FOLLOW SETUP INSTRUCTIONS STRICTLY !
 
 1. Clone the repository into your workspace `src` folder (workspace name example `seal_ws`):
-    ```bash
-    mkdir -p ~/vrx_ws/src
-    cd ~/seal_ws/src
-    git clone https://github.com/Erk732/uvautoboat.git
+```bash
+mkdir -p ~/vrx_ws/src
+cd ~/seal_ws/src
+git clone https://github.com/Erk732/uvautoboat.git
     ```
 2. Clone VRX environment from the repository given below:
 ```bash
@@ -60,11 +60,11 @@ cd ~/seal_ws
 colcon build --merge-install
 ```
 5. Build the package:
-    ```bash
-    cd ~/seal_ws
-    colcon build --packages-select path
-    source install/setup.bash
-    ```
+```bash
+cd ~/seal_ws
+colcon build --packages-select path
+source install/setup.bash
+```
 
 ---
 
