@@ -44,7 +44,7 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
 mkdir -p ~/vrx_ws/src
 cd ~/seal_ws/src
 git clone https://github.com/Erk732/uvautoboat.git
-    ```
+```
 2. Clone VRX environment from the repository given below:
 ```bash
 git clone https://github.com/osrf/vrx.git
