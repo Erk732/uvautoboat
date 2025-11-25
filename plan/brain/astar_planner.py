@@ -6,7 +6,7 @@ import tf2_geometry_msgs  # <--- CRITICAL IMPORT for transforming poses
 from tf2_ros import Buffer, TransformListener, TransformException
 from nav_msgs.msg import Path, Odometry
 from geometry_msgs.msg import PoseStamped, PoseArray, Pose
-from path.grid_map import GridMap
+from brain.grid_map import GridMap
 from rclpy.qos import qos_profile_sensor_data
 
 class AStarPlanner(Node):
