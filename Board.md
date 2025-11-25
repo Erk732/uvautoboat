@@ -3,7 +3,7 @@
 **Project**: Autonomous Navigation for Virtual RobotX Competition  
 **Repository**: [uvautoboat](https://github.com/Erk732/uvautoboat)  
 **Last Updated**: November 2025  
-**Status**: Phase 2 Complete | Phase 3-4 In Progress
+**Status**: Phase 1 In Progress - Workspace Setup Complete
 
 ---
 
@@ -11,10 +11,10 @@
 
 | Phase | Title | Status | Completion |
 |-------|-------|--------|------------|
-| 1 | Architecture & MVP | ✅ Complete | 100% |
-| 2 | Obstacle Avoidance (A*) | 🔄 In Progress | 20% |
-| 3 | Coverage & Search | 🔄 In Progress | 10% |
-| 4 | Integration & Testing | 🔄 In Progress | 0% |
+| 1 | Architecture & MVP | 🔄 In Progress | 50% |
+| 2 | Obstacle Avoidance (A*) | ⏸️ Not Started | 0% |
+| 3 | Coverage & Search | ⏸️ Not Started | 0% |
+| 4 | Integration & Testing | ⏸️ Not Started | 0% |
 
 ---
 
@@ -22,11 +22,13 @@
 
 **Objective**: Establish foundational architecture and demonstrate basic straight-line navigation.
 
-**Status**: ✅ **COMPLETED**
+**Status**: 🔄 **IN PROGRESS** | **Priority**: High | **Completion**: 50%
 
 ### 1.1 Interface Definition
 
 **Goal**: Establish standardized communication protocols between planning and control modules.
+
+**Status**: ✅ **COMPLETED**
 
 - [x] Define topic naming conventions (`/planning/path`) in coordination with Control Team
 - [x] Specify message types (`nav_msgs/Path`, `geometry_msgs/PoseStamped`)
@@ -36,6 +38,8 @@
 
 **Goal**: Initialize project repository and ROS 2 workspace structure.
 
+**Status**: ✅ **COMPLETED**
+
 - [x] Create GitHub repository (`uvautoboat`) with proper .gitignore
 - [x] Initialize ROS 2 package structure in workspace (`seal_ws`)
 - [x] Configure package dependencies and build system
@@ -44,24 +48,26 @@
 
 **Goal**: Implement basic point-to-point navigation without obstacle consideration.
 
+**Status**: ⏸️ **NOT STARTED** | **Priority**: High
+
 **Implementation Tasks:**
 
-- [x] Implement odometry subscriber (`nav_msgs/Odometry`)
-- [x] Implement goal pose subscriber (`geometry_msgs/PoseStamped`)
-- [x] Develop linear interpolation algorithm for waypoint generation
-- [x] Integrate RViz visualization for path display
+- [ ] Implement odometry subscriber (`nav_msgs/Odometry`)
+- [ ] Implement goal pose subscriber (`geometry_msgs/PoseStamped`)
+- [ ] Develop linear interpolation algorithm for waypoint generation
+- [ ] Integrate RViz visualization for path display
 
 **Acceptance Criteria:**
 
-- ✅ Generated path appears as straight line between start and goal
-- ✅ Endpoint accuracy within specified tolerance (±0.5m)
-- ✅ Path successfully visualized in RViz
+- [ ] Generated path appears as straight line between start and goal
+- [ ] Endpoint accuracy within specified tolerance (±0.5m)
+- [ ] Path successfully visualized in RViz
 
 ### 1.4 Path Following Controller (v1.1)
 
 **Goal**: Implement trajectory tracking for autonomous navigation.
 
-**Status**: 🔄 **IN PROGRESS**
+**Status**: ⏸️ **NOT STARTED** | **Priority**: High
 
 **Implementation Tasks:**
 
@@ -83,7 +89,7 @@
 
 **Objective**: Implement intelligent path planning with static obstacle avoidance using A* algorithm.
 
-**Status**: ✅ **COMPLETED**
+**Status**: ⏸️ **NOT STARTED** | **Priority**: Medium
 
 ### 2.1 Environment Representation
 
@@ -91,18 +97,18 @@
 
 **Implementation Tasks:**
 
-- [x] Research and understand Gazebo obstacle integration
-- [x] Source obstacle models from Gazebo Fuel library
-- [x] Implement `GridMap` class for coordinate-to-grid conversion (`grid_map.py`)
-- [x] Develop obstacle inflation algorithm for safety margins
-- [x] Create custom simulation environment (`test_environment/sydney_regatta_custom.sdf`)
-- [x] Integrate cardboard box model for collision testing
+- [ ] Research and understand Gazebo obstacle integration
+- [ ] Source obstacle models from Gazebo Fuel library
+- [ ] Implement `GridMap` class for coordinate-to-grid conversion (`grid_map.py`)
+- [ ] Develop obstacle inflation algorithm for safety margins
+- [ ] Create custom simulation environment (`test_environment/sydney_regatta_custom.sdf`)
+- [ ] Integrate obstacle models for testing
 
-**Deliverables:**
+**Expected Deliverables:**
 
-- ✅ Functional grid-based environment representation
-- ✅ Configurable obstacle inflation radius
-- ✅ Custom test world with multiple obstacle configurations
+- [ ] Functional grid-based environment representation
+- [ ] Configurable obstacle inflation radius
+- [ ] Custom test world with multiple obstacle configurations
 
 ### 2.2 A* Path Planning Algorithm (v2.0)
 
@@ -110,17 +116,17 @@
 
 **Implementation Tasks:**
 
-- [x] Implement Euclidean distance heuristic function
-- [x] Develop core A* search algorithm with priority queue
-- [x] Integrate grid map with A* planning logic (`astar_planner.py`)
-- [x] Create obstacle-aware planner variant (`avoidingOBS_planner.py`)
-- [x] Implement time-stamped version for dynamic environments (`avoidingobs_ts_planner.py`)
+- [ ] Implement Euclidean distance heuristic function
+- [ ] Develop core A* search algorithm with priority queue
+- [ ] Integrate grid map with A* planning logic (`astar_planner.py`)
+- [ ] Create obstacle-aware planner variant (`avoidingOBS_planner.py`)
+- [ ] Implement time-stamped version for dynamic environments (`avoidingobs_ts_planner.py`)
 
 **Acceptance Criteria:**
 
-- ✅ Generated paths successfully avoid all inflated obstacles
-- ✅ Path optimality verified (near-optimal given grid discretization)
-- ✅ Planner handles multiple obstacle scenarios
+- [ ] Generated paths successfully avoid all inflated obstacles
+- [ ] Path optimality verified (near-optimal given grid discretization)
+- [ ] Planner handles multiple obstacle scenarios
 
 ### 2.3 Path Smoothing
 
@@ -128,12 +134,12 @@
 
 **Implementation Tasks:**
 
-- [x] Implement path smoothing algorithm to reduce sharp angles
-- [x] Add configurable smoothing parameters
+- [ ] Implement path smoothing algorithm to reduce sharp angles
+- [ ] Add configurable smoothing parameters
 
-**Deliverables:**
+**Expected Deliverables:**
 
-- ✅ Smoothed paths with gradual turns suitable for maritime vessel dynamics
+- [ ] Smoothed paths with gradual turns suitable for maritime vessel dynamics
 
 ---
 
@@ -141,7 +147,7 @@
 
 **Objective**: Implement systematic area coverage for search and surveillance missions.
 
-**Status**: 🔄 **IN PROGRESS** | **Priority**: Medium
+**Status**: ⏸️ **NOT STARTED** | **Priority**: Low
 
 ### 3.1 Region Definition
 
@@ -202,46 +208,43 @@
 
 **Objective**: Ensure seamless integration of all subsystems and validate complete navigation stack.
 
-**Status**: 🔄 **IN PROGRESS** | **Priority**: High | **Completion**: 60%
+**Status**: ⏸️ **NOT STARTED** | **Priority**: Low | **Completion**: 0%
 
 ### 4.1 Plan Package Implementation
 
 **Goal**: Finalize planning module architecture and components.
 
-**Status**: ✅ **COMPLETED**
+**Status**: ⏸️ **NOT STARTED**
 
-**Completed Components:**
+**Planned Components:**
 
-- [x] ROS 2 package structure with proper dependencies (`package.xml`, `setup.py`)
-- [x] A* planning nodes:
-  - [x] `astar_planner.py` - Core A* implementation
-  - [x] `avoidingOBS_planner.py` - Obstacle-aware variant
-  - [x] `avoidingobs_ts_planner.py` - Time-stamped version
-- [x] Perception module (`simple_perception.py`)
-- [x] Mission coordination (`mission_trigger.py`)
-- [x] Transform management (`tf_broadcaster.py`)
-- [x] Utility modules:
-  - [x] `grid_map.py` - Grid-based mapping
-  - [x] `FREE.py` - Free space utilities
-  - [x] `OUT.py` - Boundary detection
-- [x] Launch configuration (`demo.launch.py`)
-- [x] RViz visualization config (`default.rviz`)
+- [ ] ROS 2 package structure with proper dependencies (`package.xml`, `setup.py`)
+- [ ] A* planning nodes:
+  - [ ] `astar_planner.py` - Core A* implementation
+  - [ ] `avoidingOBS_planner.py` - Obstacle-aware variant
+  - [ ] `avoidingobs_ts_planner.py` - Time-stamped version
+- [ ] Perception module (`simple_perception.py`)
+- [ ] Mission coordination (`mission_trigger.py`)
+- [ ] Transform management (`tf_broadcaster.py`)
+- [ ] Utility modules:
+  - [ ] `grid_map.py` - Grid-based mapping
+  - [ ] `FREE.py` - Free space utilities
+  - [ ] `OUT.py` - Boundary detection
+- [ ] Launch configuration (`demo.launch.py`)
+- [ ] RViz visualization config (`default.rviz`)
 
 ### 4.2 Control Package Implementation
 
 **Goal**: Develop trajectory tracking and low-level control.
 
-**Status**: 🔄 **IN PROGRESS** | **Completion**: 75%
+**Status**: ⏸️ **NOT STARTED** | **Completion**: 0%
 
-**Completed Components:**
+**Planned Components:**
 
-- [x] ROS 2 package structure (`control` package)
-- [x] Simple controller node (`simple_controller.py`) - Basic thruster testing
-- [x] Path follower node (`path_follower.py`) - Trajectory tracking
-- [x] Launch files (`simple_controller.launch.py`)
-
-**Remaining Tasks:**
-
+- [ ] ROS 2 package structure (`control` package)
+- [ ] Simple controller node (`simple_controller.py`) - Basic thruster testing
+- [ ] Path follower node (`path_follower.py`) - Trajectory tracking
+- [ ] Launch files (`simple_controller.launch.py`)
 - [ ] Tune PID controller parameters for optimal performance
 - [ ] Implement adaptive control for varying environmental conditions
 - [ ] Add velocity profiling for smooth acceleration/deceleration
@@ -250,7 +253,7 @@
 
 **Goal**: Validate complete navigation pipeline under realistic conditions.
 
-**Status**: 🔄 **IN PROGRESS**
+**Status**: ⏸️ **NOT STARTED**
 
 **Test Suite:**
 
@@ -282,17 +285,18 @@
 
 **Goal**: Provide comprehensive documentation for users and developers.
 
-**Status**: 🔄 **IN PROGRESS** | **Completion**: 70%
+**Status**: 🔄 **IN PROGRESS** | **Completion**: 30%
 
 **Completed Documentation:**
 
-- [x] Project README with installation instructions
-- [x] Package-level documentation (plan & control)
-- [x] Node usage examples and command reference
+- [x] Project README with basic project description
 - [x] Development board tracking (this document)
 
 **Remaining Documentation:**
 
+- [ ] Complete installation instructions
+- [ ] Package-level documentation (plan & control)
+- [ ] Node usage examples and command reference
 - [ ] **Configuration Guide**
   - [ ] Parameter descriptions and tuning guidelines
   - [ ] Launch file customization
@@ -380,5 +384,5 @@
 ---
 
 **Document Version**: 2.0  
-**Maintained By**: AutoBoat Development Team  
+**Maintained By**: AutoBoat Development Team composed by IMT Nord Europe Industry 4.0 students and professors
 **Review Frequency**: Bi-weekly
