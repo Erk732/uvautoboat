@@ -1,22 +1,20 @@
 from setuptools import setup
 import os
-from glob import glob  ### <--- 1. IMPORTANT: We import 'glob' to find files
+from glob import glob
 
 package_name = 'plan'
 
 setup(
     name=package_name,
     version='0.0.0',
-    packages=['brain'], # This points to your 'brain' folder where code lives
+    packages=['brain'],
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        
-        ### <--- 2. ADD THIS LINE: Installs the launch folder
+        # Install launch files
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
-        
-        ### <--- 3. ADD THIS LINE: Installs the rviz folder
+        # Install rviz config files
         (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
     ],
     install_requires=['setuptools'],
@@ -30,6 +28,8 @@ setup(
         'console_scripts': [
             'simple_perception = brain.simple_perception:main',
             'astar_planner = brain.astar_planner:main',
+            # <--- THIS IS THE NEW LINE BELOW:
+            'mission_trigger = brain.mission_trigger:main',
         ],
     },
 )
