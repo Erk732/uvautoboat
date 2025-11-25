@@ -42,8 +42,9 @@
         <geometry>
           <mesh>
             <uri>model://cardboardbox/meshes/cardboard_box.dae</uri>
-            <scale>1.25931896 1.007455168 0.755591376</scale>
+            <scale>2 2 2</scale>
           </mesh>
+
         </geometry>
       </visual>
     </link>

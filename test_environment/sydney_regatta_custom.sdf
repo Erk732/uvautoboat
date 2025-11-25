@@ -341,7 +341,6 @@
       <direction>-0.5 0.1 -0.9</direction>
     </light>
 
-
     <include>
       <pose>0 0 0.2 0 0 0 </pose>
       <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/sydney_regatta</uri>
@@ -353,12 +352,10 @@
       <uri>coast_waves</uri>
     </include>
 
-
-
-<include>
+    <include>
   <name>cardboard_box_custom_1</name>
-  <pose>-470 200 0 0 0 0</pose> <!-- adjust x, y, z to place where you want -->
-  <uri>model://Cardboardbox</uri>
+  <pose>-523 200 0 0 0 0</pose> <!-- adjust x, y, z to place where you want -->
+  <uri>model://cardboardbox</uri>
 
   <plugin name="vrx::PolyhedraBuoyancyDrag"
           filename="libPolyhedraBuoyancyDrag.so">
@@ -394,11 +391,10 @@
   </plugin>
 </include>
 
-
-<include>
+    <include>
   <name>cardboard_box_custom_2</name>
-  <pose>-523 180 0 0 0 0</pose> <!-- adjust x, y, z to place where you want -->
-  <uri>model://Cardboardbox</uri>
+  <pose>-480 180 0 0 0 0</pose> <!-- adjust x, y, z to place where you want -->
+  <uri>model://cardboardbox</uri>
 
   <plugin name="vrx::PolyhedraBuoyancyDrag"
           filename="libPolyhedraBuoyancyDrag.so">
