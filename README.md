@@ -39,7 +39,7 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
 
 ### Setup
 
-❗ **Attention:** Please note that if you are expecting a relatively good reuslt, it is highly reommended to follow setup instructions strictly, and if any step is missed, the package may not work as intended.
+❗ **Attention:** Please note that if you are expecting a relatively good result, it is highly recommended to follow setup instructions strictly, and if any step is missed, the package may not work as intended.
 
 1. Clone the repository into your workspace `src` folder (workspace name example `seal_ws` in our case, and you can use your own workspace name):
 
@@ -75,40 +75,59 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
    . ~/seal_ws/install/setup.bash
    ```
 
-## How to Run (🚧 WORK IN PROGRESS 🚧)
+## How to Run
 
-Start the planner node:
+### Running the Demo
+
+Launch the complete navigation demo:
 
 ```bash
-ros2 run path simple_planner
+ros2 launch plan demo.launch.py
 ```
 
-## Using the Test Environment for path planning (⚠️End of Life)
+### Running Individual Nodes
 
-The `test_environment` folder contains `Gazebo` worlds and models for testing navigation algorithms.
+Start specific planner nodes:
 
-### Custom World (⚠️End of Life)
+```bash
+# A* planner
+ros2 run plan astar_planner
+
+# Time-stamped obstacle avoidance planner
+ros2 run plan avoidingobs_ts_planner
+
+# Simple controller
+ros2 run control simple_controller
+```
+
+## Using the Test Environment for path planning
+
+⚠️ **Note:** The custom test environment is deprecated. It is recommended to use the default Sydney Regatta world instead.
+
+The `test_environment` folder contains legacy `Gazebo` worlds and models for testing navigation algorithms.
+
+### Custom World (Deprecated)
 
 - **sydney_regatta_custom.sdf** - Modified Sydney Regatta environment with custom obstacles and test scenarios
 
-### Custom Models (⚠️End of Life)
+### Custom Models (Deprecated)
 
 - **cardboardbox** - Obstacle model for testing collision avoidance
 
 ### Setup and Launch (⚠️End of Life)
 
-1.Let `Gazebo` know you have a new environment to load.
+1. Let `Gazebo` know you have a new environment to load.
 
-```bash
-export GZ_SIM_RESOURCE_PATH=$HOME/seal_ws/src/uvautoboat/test_environment:$GZ_SIM_RESOURCE_PATH
-```
+   ```bash
+   export GZ_SIM_RESOURCE_PATH=$HOME/seal_ws/src/uvautoboat/test_environment:$GZ_SIM_RESOURCE_PATH
+   ```
 
-2.Source and launch the test environment.
+1. Source and launch the test environment.
 
-```bash
-source ~/seal_ws/install/setup.bash
-ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_custom
-```
+   ```bash
+   source ~/seal_ws/install/setup.bash
+   ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_custom
+   ```
 
 ❗ **Attention:** After testing it is recommended to directly use the default world which is the Sydney Regatta environment.
 
