@@ -1,23 +1,22 @@
 from setuptools import setup
 import os
-from glob import glob
+from glob import glob  ### <--- 1. IMPORTANT: We import 'glob' to find files
 
-package_name = 'plan'      # ROS package name is 'plan'
+package_name = 'plan'
 
 setup(
     name=package_name,
     version='0.0.0',
-    #  CHANGE: Tell python code is in the 'brain' folder
-    packages=['brain'], 
+    packages=['brain'], # This points to your 'brain' folder where code lives
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         
-        #  ADD THIS: Install launch files
+        ### <--- 2. ADD THIS LINE: Installs the launch folder
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         
-        # ADD THIS: Install rviz config files
+        ### <--- 3. ADD THIS LINE: Installs the rviz folder
         (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
     ],
     install_requires=['setuptools'],
@@ -29,7 +28,6 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            # CHANGE: Point to 'brain' module, not 'plan' or 'path'
             'simple_perception = brain.simple_perception:main',
             'astar_planner = brain.astar_planner:main',
         ],
