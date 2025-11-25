@@ -87,7 +87,7 @@ ros2 run path simple_planner
 1.Let `Gazebo` know you have a new environment to load.
 
 ```bash
-export GZ_SIM_RESOURCE_PATH=$HOME/seal_ws/src/uvautoboat/test_evironment:$GZ_SIM_RESOURCE_PATH
+ export GZ_SIM_RESOURCE_PATH=/home/bot/ht_ws/src/uvautoboat/test_environment:$GZ_SIM_RESOURCE_PATH
 ```
 
 2.Source and launch the test environment.
