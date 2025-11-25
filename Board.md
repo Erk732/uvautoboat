@@ -68,3 +68,45 @@
 - [ ] Implement Boustrophedon (Lawn-mower) pattern generator.
 - [ ] Ensure path stays strictly within boundaries. **Done when:** simulated tracks remain inside provided polygon.
 - [ ] Add test scenario with multiple obstacles to validate coverage completion without boundary violations.
+
+---
+
+## Phase 4: Integration & Testing
+
+> **Goal:** Ensure all components work together seamlessly.
+
+### Control Package Integration
+
+- [x] Create `control` ROS 2 package structure.
+- [x] Implement `simple_controller` node for basic thruster testing.
+- [x] Implement `path_follower` node for advanced path tracking.
+- [x] Add launch files for control nodes.
+- [ ] Integrate PID controller for precise waypoint following.
+- [ ] Test end-to-end: planner → controller → simulation.
+
+### System Validation
+
+- [ ] Test complete pipeline: odometry → goal → path planning → path following → thruster commands.
+- [ ] Verify TF tree is correct (map → odom → base_link).
+- [ ] Measure path following accuracy (position error < 0.5m, heading error < 5°).
+- [ ] Test with different scenarios (straight line, obstacle avoidance, coverage).
+
+### Documentation
+
+- [x] Update README.md with control package documentation.
+- [x] Add usage examples for all nodes.
+- [ ] Create parameter configuration guide.
+- [ ] Add troubleshooting section.
+
+---
+
+## Known Issues & Fixes
+
+### Git Issues
+
+- [x] **Fixed:** Invalid Windows paths (`path/path/**FREE**` and `path/path/**OUT`) renamed to `FREE.py` and `OUT.py`.
+- [x] **Fixed:** Sparse checkout preventing file visibility - disabled with `git sparse-checkout disable`.
+
+### Configuration
+
+- [x] **Fixed:** Markdown linting error MD046 - configured `.markdownlint.json` to use fenced code blocks.

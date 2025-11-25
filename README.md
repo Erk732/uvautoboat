@@ -96,3 +96,51 @@ export GZ_SIM_RESOURCE_PATH=$HOME/seal_ws/src/uvautoboat/test_evironment:$GZ_SIM
 source ~/seal_ws/install/setup.bash
 ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_custom
 ```
+
+---
+
+## Control Package
+
+The `control` package provides path following and thruster control capabilities for the WAM-V vessel.
+
+### Available Nodes
+
+#### 1. Simple Controller
+
+A basic controller node for testing thruster commands.
+
+**Run:**
+
+```bash
+ros2 run control simple_controller
+```
+
+**Launch file:**
+
+```bash
+ros2 launch control simple_controller.launch.py
+```
+
+#### 2. Path Follower
+
+Advanced controller that follows computed paths from the planner.
+
+**Run:**
+
+```bash
+ros2 run control path_follower
+```
+
+### Control Interfaces
+
+| Topic Name | Message Type | I/O | Description |
+| :--- | :--- | :--- | :--- |
+| `/planning/path` | `nav_msgs/Path` | Sub | Trajectory waypoints from planner. |
+| `/wamv/sensors/odometry` | `nav_msgs/Odometry` | Sub | Current boat state. |
+| `/wamv/thrusters/...` | (varies) | Pub | Thruster commands. |
+
+---
+
+## Project Status
+
+For detailed development status, milestones, and task tracking, see [Board.md](Board.md).
