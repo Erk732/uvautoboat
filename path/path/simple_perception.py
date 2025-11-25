@@ -28,7 +28,7 @@ class SimplePerception(Node):
             if dist == float('inf') or math.isnan(dist): continue
             
             # Detect objects 1m - 20m away
-            if 1.0 < dist < 20.0:
+            if 0.2 < dist < 20.0:
                 angle = msg.angle_min + (i * msg.angle_increment)
                 obs_x = dist * math.cos(angle)
                 obs_y = dist * math.sin(angle)
