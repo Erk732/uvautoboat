@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan, PointCloud2
 from geometry_msgs.msg import Twist, PoseStamped
-from std_msgs.msg import Float32
+from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry
 import numpy as np
 import math
@@ -51,8 +51,8 @@ class VRXObstacleAvoidance(Node):
         )
 
         # Publisher for thrust commands
-        self.left_pub = self.create_publisher(Float32, '/wamv/thrusters/left/thrust', 10)
-        self.right_pub = self.create_publisher(Float32, '/wamv/thrusters/right/thrust', 10)
+        self.left_pub = self.create_publisher(Float64, '/wamv/thrusters/left/thrust', 10)
+        self.right_pub = self.create_publisher(Float64, '/wamv/thrusters/right/thrust', 10)
         
         # Control timer
         self.timer = self.create_timer(0.1, self.control_loop)  # 10Hz
@@ -179,8 +179,8 @@ class VRXObstacleAvoidance(Node):
         left = max(min(left, 1.0), -1.0)
         right = max(min(right, 1.0), -1.0)
 
-        self.left_pub.publish(Float32(data=left))
-        self.right_pub.publish(Float32(data=right))
+        self.left_pub.publish(Float64(data=left))
+        self.right_pub.publish(Float64(data=right))
 
     def shutdown(self):
         """Stop the robot on shutdown"""
