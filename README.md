@@ -138,6 +138,9 @@ ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
 Put this command in the terminal and run it. If you have followed the previous instrucions carefully, you will most likely see this:
 
 [![VRX](images/sydney_regatta_gzsim.png)](https://vimeo.com/851696025 "Gazebo Virtual RobotX v. 2.3 - Click to Watch!")
+
+*Image source: [VRX Project](https://github.com/osrf/vrx/wiki/running_vrx_tutorial)*
+
 ![ROS 2 CI](https://github.com/osrf/vrx/workflows/ROS%202%20CI/badge.svg)
 
 ---
