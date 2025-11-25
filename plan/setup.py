@@ -28,7 +28,6 @@ setup(
         'console_scripts': [
             'simple_perception = brain.simple_perception:main',
             'astar_planner = brain.astar_planner:main',
-            # <--- THIS IS THE NEW LINE BELOW:
             'mission_trigger = brain.mission_trigger:main',
         ],
     },
