@@ -129,7 +129,7 @@ The `test_environment` folder contains legacy `Gazebo` worlds and models for tes
    ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_custom
    ```
 
-### ❗ **Attention:** After testing it is recommended to directly use the default world which is the Sydney Regatta environment.
+### ❗ **Attention:** After testing it is recommended to directly use the default world which is the Sydney Regatta environment
 
 ```bash
 ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
