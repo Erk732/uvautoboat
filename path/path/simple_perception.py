@@ -23,7 +23,7 @@ class SimplePerception(Node):
         pose_array = PoseArray()
         pose_array.header = msg.header
         
-        for i in range(0, len(msg.ranges), 5):
+        for i in range(0, len(msg.ranges), 1):# Process every point
             dist = msg.ranges[i]
             if dist == float('inf') or math.isnan(dist): continue
             
