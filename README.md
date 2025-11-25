@@ -6,9 +6,9 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
 
 ## Core Responsibilities
 
-- Point-to-point planning: Navigate efficiently from start pose A to goal pose B.
-- Coverage/search planning: Create systematic patterns (e.g., lawn-mower) to sweep a defined region for pollution or objects.
-- Obstacle avoidance: Detect and route around static obstacles (e.g., buoys, islands) using planners such as A*.
+- Point-to-point planning: Navigate efficiently from start point A to goal point B.
+- Coverage / search planning: Create systematic patterns (e.g., lawn-mower) to sweep a defined region for pollution or objects.
+- Obstacle avoidance: Detect and route around static obstacles (e.g., buoys, islands) using planners such as A* (Which is A-Star).
 
 ---
 
@@ -31,15 +31,17 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
 
 ### Prerequisites
 
+⚠️ **Warning:** It is strongly recommended to use ROS 2 (Jazzy) paired with Gazebo (Harmonic). If you plan to use other versions of these 2 setups, some unintended problems may occur.
+
 - [ROS 2 (Jazzy)](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
-- [Gazebo(Harmonic)](https://gazebosim.org/docs/harmonic/install_ubuntu/)
-- Python 3 (Google it if you don't know what it is)
+- [Gazebo (Harmonic)](https://gazebosim.org/docs/harmonic/install_ubuntu/)
+- Python 3
 
 ### Setup
 
-#### Please note that you should follow setup instructions strictly, and if any step is missed, the package may not work as intended
+⚠️ **Warning:** Please note that if you are expecting a relatively good reuslt, it is highly reommended to follow setup instructions strictly, and if any step is missed, the package may not work as intended.
 
-1. Clone the repository into your workspace `src` folder (workspace name example `seal_ws` in our case):
+1. Clone the repository into your workspace `src` folder (workspace name example `seal_ws` in our case, and you can use your own workspace name):
 
    ```bash
    mkdir -p ~/seal_ws/src
@@ -81,19 +83,19 @@ Start the planner node:
 ros2 run path simple_planner
 ```
 
-## Using the Test Environment for path planning
+## Using the Test Environment for path planning (⚠️End of Life)
 
-The `test_environment` folder contains custom Gazebo worlds and models for testing navigation algorithms.
+The `test_environment` folder contains `Gazebo` worlds and models for testing navigation algorithms.
 
-### Custom World
+### Custom World (⚠️End of Life)
 
 - **sydney_regatta_custom.sdf** - Modified Sydney Regatta environment with custom obstacles and test scenarios
 
-### Custom Models
+### Custom Models (⚠️End of Life)
 
 - **cardboardbox** - Obstacle model for testing collision avoidance
 
-### Setup and Launch
+### Setup and Launch (⚠️End of Life)
 
 1.Let `Gazebo` know you have a new environment to load.
 
