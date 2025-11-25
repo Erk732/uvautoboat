@@ -4,10 +4,9 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    # <--- UPDATED: Matches your folder name
     pkg_name = 'plan'
     
-    # Get path to the Rviz config we are about to save
+    # Get path to the Rviz config
     pkg_share = get_package_share_directory(pkg_name)
     rviz_config_path = os.path.join(pkg_share, 'rviz', 'default.rviz')
 
@@ -28,7 +27,15 @@ def generate_launch_description():
             output='screen'
         ),
 
-        # 3. Rviz2 (Visualization)
+        # 3. Mission Trigger (The Auto-Start) <--- THIS IS NEW
+        Node(
+            package=pkg_name,
+            executable='mission_trigger',
+            name='mission_trigger_node',
+            output='screen'
+        ),
+
+        # 4. Rviz2 (Visualization)
         Node(
             package='rviz2',
             executable='rviz2',
