@@ -29,6 +29,7 @@ setup(
             'simple_perception = brain.simple_perception:main',
             'astar_planner = brain.astar_planner:main',
             'mission_trigger = brain.mission_trigger:main',
+            'avoidingobs_ts_planner = brain.avoidingobs_ts_planner:main',
         ],
     },
 )
