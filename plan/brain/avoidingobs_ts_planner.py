@@ -44,7 +44,7 @@ class VRXObstacleAvoidance(Node):
         # Subscribe to odometry for current pose/velocity
         self.odom_sub = self.create_subscription(
             Odometry,
-            '/wamv/odom',
+            '/wamv/pose_gt',
             self.odom_callback,
             10
         )
