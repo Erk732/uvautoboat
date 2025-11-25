@@ -1,5 +1,4 @@
 from setuptools import find_packages
-from distutils.core import setup  # IMPORTANT: use distutils.setup for colcon / Python 3.12
 
 package_name = 'control'
 
