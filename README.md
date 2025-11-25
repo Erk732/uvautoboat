@@ -1,23 +1,36 @@
 # AutoBoat (uvautoboat)
 
+[![ROS 2 Version](https://img.shields.io/badge/ROS_2-Jazzy-blue)](https://docs.ros.org/en/jazzy/)
+[![Gazebo Version](https://img.shields.io/badge/Gazebo-Harmonic-orange)](https://gazebosim.org/)
+![ROS 2 CI](https://github.com/osrf/vrx/workflows/ROS%202%20CI/badge.svg)
+
+## Abstract
+
+This repository contains an autonomous navigation system for unmanned surface vehicles (USVs) designed for the Virtual RobotX (VRX) competition. The system implements path planning, obstacle avoidance, and control algorithms for the WAM-V maritime platform using ROS 2 and Gazebo simulation environments.
+
 ## Overview
 
-AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This ROS 2 node acts as the "brain" of the WAM-V surface vessel: it ingests the boat's current state and mission goals, processes environmental data (obstacles, boundaries), and generates safe trajectories for execution.
+AutoBoat is a comprehensive autonomous navigation framework developed for the VRX project. The system provides intelligent path planning capabilities for WAM-V surface vessels by integrating perception, planning, and control modules. The architecture processes real-time odometry data and mission objectives while accounting for environmental constraints such as static obstacles and operational boundaries to generate safe, optimal trajectories.
 
-## Core Responsibilities
+## Core Capabilities
 
-- Point-to-point planning: Navigate efficiently from start point A to goal point B.
-- Coverage / search planning: Create systematic patterns (e.g., lawn-mower) to sweep a defined region for pollution or objects.
-- Obstacle avoidance: Detect and route around static obstacles (e.g., buoys, islands) using planners such as A* (Which is A-Star).
+- **Point-to-Point Navigation**: Efficient trajectory generation between specified waypoints using optimization-based planning algorithms.
+- **Coverage Planning**: Systematic area coverage using boustrophedon (lawn-mower) patterns for search and surveillance missions.
+- **Obstacle Avoidance**: Dynamic path replanning using A* (A-Star) algorithm with grid-based environmental representation to avoid static obstacles including buoys, islands, and other maritime structures.
 
 ---
 
-## Architecture
+## System Architecture
 
-- Node name: `path_planner`
-- Role: Bridge between the Mission / Perception layer and the Control layer.
+The navigation system follows a hierarchical architecture with three primary layers:
 
-### Interfaces
+- **Mission Layer**: High-level task coordination and goal specification
+- **Planning Layer**: Path generation and obstacle avoidance (`plan` package)
+- **Control Layer**: Trajectory tracking and thruster control (`control` package)
+
+The planning module serves as the bridge between mission objectives and vehicle control, transforming high-level goals into executable trajectories.
+
+### ROS 2 Communication Interfaces
 
 | Topic Name | Message Type | I/O | Description |
 | :--- | :--- | :--- | :--- |
@@ -29,19 +42,39 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
 
 ## Installation
 
+### System Requirements
+
+- **Operating System**: Ubuntu 22.04 LTS or Ubuntu 24.04 LTS
+- **Python**: Version 3.10 or higher
+- **Memory**: Minimum 8GB RAM (16GB recommended)
+- **Storage**: At least 10GB available disk space
+
 ### Prerequisites
 
-❗ **Attention:** It is strongly recommended to use ROS 2 (Jazzy) paired with Gazebo (Harmonic). If you plan to use other versions of these 2 setups, some unintended problems may occur.
+⚠️ **Important**: This package has been tested with ROS 2 Jazzy and Gazebo Harmonic. Using different versions may result in compatibility issues or unexpected behavior.
 
-- [ROS 2 (Jazzy)](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
-- [Gazebo (Harmonic)](https://gazebosim.org/docs/harmonic/install_ubuntu/)
-- Python 3
+**Required Software:**
 
-### Setup
+- [ROS 2 Jazzy Jalisco](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html) - Robot Operating System 2
+- [Gazebo Harmonic](https://gazebosim.org/docs/harmonic/install_ubuntu/) - Physics-based simulation environment
+- [VRX Simulation](https://github.com/osrf/vrx) - Virtual RobotX competition environment
+- Python 3.10+ with pip
 
-❗ **Attention:** Please note that if you are expecting a relatively good result, it is highly recommended to follow setup instructions strictly, and if any step is missed, the package may not work as intended.
+**Python Dependencies:**
 
-1. Clone the repository into your workspace `src` folder (workspace name example `seal_ws` in our case, and you can use your own workspace name):
+The following Python packages are automatically installed during the build process:
+
+- `numpy` - Numerical computing
+- `matplotlib` - Visualization (optional)
+- Other dependencies specified in package configurations
+
+### Installation Instructions
+
+⚠️ **Note**: Please follow these instructions carefully. Skipping steps may result in build failures or runtime errors.
+
+1. **Create and initialize workspace**
+
+   Create a ROS 2 workspace and clone this repository into the `src` directory:
 
    ```bash
    mkdir -p ~/seal_ws/src
@@ -49,111 +82,156 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
    git clone https://github.com/Erk732/uvautoboat.git
    ```
 
-2. Clone VRX environment from the repository given below:
+2. **Clone VRX dependencies**
+
+   The VRX simulation environment is required for testing:
 
    ```bash
+   cd ~/seal_ws/src
    git clone https://github.com/osrf/vrx.git
    ```
 
-3. Source the main ROS 2 installation: (if you don't know where your ROS 2 is installed, most probably it is in `/opt/ros/<distro_name>/setup.bash`, in our case `jazzy`, and if you don't know what this sentence means, just copy the line below)
+3. **Source ROS 2 environment**
+
+   Source the ROS 2 installation (default location: `/opt/ros/jazzy/setup.bash`):
 
    ```bash
    source /opt/ros/jazzy/setup.bash
    ```
 
-4. Build your "seal" workspace: (Again `seal_ws` is just an example name, if you named your workspace differently, please change it accordingly)
+4. **Build the workspace**
+
+   Navigate to the workspace root and build all packages:
 
    ```bash
    cd ~/seal_ws
    colcon build --merge-install
    ```
 
-5. Set up the environment:
+   For parallel builds (faster compilation):
 
    ```bash
-   cd ~/seal_ws
-   . ~/seal_ws/install/setup.bash
+   colcon build --merge-install --parallel-workers 4
    ```
 
-## How to Run
+5. **Source the workspace**
 
-### Running the Demo
+   After successful build, source the workspace overlay:
 
-Launch the complete navigation demo:
+   ```bash
+   source ~/seal_ws/install/setup.bash
+   ```
+
+   **Tip**: Add this line to your `~/.bashrc` for automatic sourcing:
+
+   ```bash
+   echo "source ~/seal_ws/install/setup.bash" >> ~/.bashrc
+   ```
+
+## Usage
+
+### Quick Start
+
+Launch the complete navigation system with the default Sydney Regatta environment:
+
+```bash
+ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+```
+
+In a separate terminal, launch the navigation demo:
 
 ```bash
 ros2 launch plan demo.launch.py
 ```
 
-### Running Individual Nodes
+### Running Individual Components
 
-Start specific planner nodes:
+**Planning Nodes:**
 
 ```bash
-# A* planner
+# A* path planner with obstacle avoidance
 ros2 run plan astar_planner
 
-# Time-stamped obstacle avoidance planner
+# Time-stamped dynamic obstacle avoidance
 ros2 run plan avoidingobs_ts_planner
 
-# Simple controller
-ros2 run control simple_controller
+# Perception and obstacle detection
+ros2 run plan simple_perception
+
+# Mission coordination
+ros2 run plan mission_trigger
 ```
 
-## Using the Test Environment for path planning
+**Control Nodes:**
 
-⚠️ **Note:** The custom test environment is deprecated. It is recommended to use the default Sydney Regatta world instead.
+```bash
+# Simple thruster controller
+ros2 run control simple_controller
 
-The `test_environment` folder contains legacy `Gazebo` worlds and models for testing navigation algorithms.
+# Path following controller
+ros2 run control path_follower
+```
 
-### Custom World (Deprecated)
+## Simulation Environment
 
-- **sydney_regatta_custom.sdf** - Modified Sydney Regatta environment with custom obstacles and test scenarios
+### Default Environment
 
-### Custom Models (Deprecated)
+The system is designed to operate in the standard VRX Sydney Regatta environment:
 
-- **cardboardbox** - Obstacle model for testing collision avoidance
+```bash
+ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+```
 
-### Setup and Launch (⚠️End of Life)
+### Legacy Test Environment (Deprecated)
 
-1. Let `Gazebo` know you have a new environment to load.
+⚠️ **Deprecation Notice**: The custom test environment is maintained for backward compatibility but is no longer actively developed. Users are advised to utilize the default Sydney Regatta environment for current development and testing.
+
+The `test_environment` directory contains legacy simulation worlds and custom models:
+
+**Custom Worlds:**
+
+- `sydney_regatta_custom.sdf` - Modified environment with additional obstacles and test scenarios
+
+**Custom Models:**
+
+- `cardboardbox/` - Simple obstacle model for collision avoidance testing
+
+**Legacy Environment Launch** (Optional):
+
+1. Configure Gazebo resource path:
 
    ```bash
    export GZ_SIM_RESOURCE_PATH=$HOME/seal_ws/src/uvautoboat/test_environment:$GZ_SIM_RESOURCE_PATH
    ```
 
-1. Source and launch the test environment.
+2. Launch custom environment:
 
    ```bash
    source ~/seal_ws/install/setup.bash
    ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_custom
    ```
 
-### ❗ **Attention:** After testing it is recommended to directly use the default world which is the Sydney Regatta environment
+### Expected Output
 
-```bash
-ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
-```
+After launching the simulation environment, you should observe the following:
 
-Put this command in the terminal and run it. If you have followed the previous instrucions carefully, you will most likely see this:
+[![VRX Simulation Environment](images/sydney_regatta_gzsim.png)](https://vimeo.com/851696025 "Gazebo Virtual RobotX v. 2.3 - Click to Watch!")
 
-[![VRX](images/sydney_regatta_gzsim.png)](https://vimeo.com/851696025 "Gazebo Virtual RobotX v. 2.3 - Click to Watch!")
-
-*Image source: [VRX Project](https://github.com/osrf/vrx/wiki/running_vrx_tutorial)*
-
-![ROS 2 CI](https://github.com/osrf/vrx/workflows/ROS%202%20CI/badge.svg)
+*Figure 1: Sydney Regatta simulation environment in Gazebo. Source: [VRX Project](https://github.com/osrf/vrx/wiki/running_vrx_tutorial)*
 
 ---
 
-## Plan Package
+## Package Documentation
 
-The `plan` package contains the core path planning and perception logic for autonomous navigation.
+### Plan Package
 
-### Planning Nodes
+The `plan` package implements the planning and perception subsystems for autonomous navigation. This package provides multiple planning algorithms and supporting utilities for environment representation and obstacle detection.
 
-#### 1. A* Planner
+#### Planning Nodes
 
-Obstacle-avoiding path planner using A* algorithm with grid map representation.
+**1. A* Planner** (`astar_planner`)
+
+Implements the A* search algorithm for optimal path planning with obstacle avoidance. Uses grid-based environmental representation with configurable resolution and inflation radius.
 
 **Run:**
 
@@ -161,9 +239,9 @@ Obstacle-avoiding path planner using A* algorithm with grid map representation.
 ros2 run plan astar_planner
 ```
 
-#### 2. Avoiding Obstacles Planner (Time-Stamped)
+**2. Time-Stamped Obstacle Avoidance Planner** (`avoidingobs_ts_planner`)
 
-Advanced planner with temporal obstacle avoidance.
+Enhanced planning algorithm incorporating temporal information for dynamic obstacle prediction and avoidance.
 
 **Run:**
 
@@ -171,9 +249,9 @@ Advanced planner with temporal obstacle avoidance.
 ros2 run plan avoidingobs_ts_planner
 ```
 
-#### 3. Simple Perception
+**3. Perception Module** (`simple_perception`)
 
-Processes sensor data to detect obstacles and update the environment representation.
+Processes sensor data streams to construct environmental representations, including obstacle detection and classification.
 
 **Run:**
 
@@ -181,9 +259,9 @@ Processes sensor data to detect obstacles and update the environment representat
 ros2 run plan simple_perception
 ```
 
-#### 4. Mission Trigger
+**4. Mission Coordinator** (`mission_trigger`)
 
-Coordinates mission goals and triggers appropriate planning behaviors.
+High-level mission management node responsible for goal specification and planning behavior coordination.
 
 **Run:**
 
@@ -191,9 +269,9 @@ Coordinates mission goals and triggers appropriate planning behaviors.
 ros2 run plan mission_trigger
 ```
 
-#### 5. TF Broadcaster
+**5. Transform Broadcaster** (`tf_broadcaster`)
 
-Publishes coordinate frame transformations for the navigation stack.
+Manages coordinate frame transformations required for navigation stack operation.
 
 **Run:**
 
@@ -223,15 +301,15 @@ ros2 launch plan demo.launch.py
 
 ---
 
-## Control Package
+### Control Package
 
-The `control` package provides path following and thruster control capabilities for the WAM-V vessel.
+The `control` package implements trajectory tracking and low-level thruster control for the WAM-V platform.
 
-### Control Nodes
+#### Control Nodes
 
-#### 1. Simple Controller
+**1. Simple Controller** (`simple_controller`)
 
-A basic controller node for testing thruster commands.
+Baseline controller implementation for thruster command testing and validation.
 
 **Run:**
 
@@ -245,9 +323,9 @@ ros2 run control simple_controller
 ros2 launch control simple_controller.launch.py
 ```
 
-#### 2. Path Follower
+**2. Path Following Controller** (`path_follower`)
 
-Advanced controller that follows computed paths from the planner.
+Advanced trajectory tracking controller implementing waypoint following with feedback control for precise path execution.
 
 **Run:**
 
@@ -265,6 +343,30 @@ ros2 run control path_follower
 
 ---
 
-## Project Status
+## Development
 
-For detailed development status, milestones, and task tracking, see [Board.md](Board.md).
+### Project Status
+
+For detailed development status, milestones, and task tracking, refer to [Board.md](Board.md).
+
+### Contributing
+
+This project is part of an ROS 2 course at IMT Nord Europe. For contribution guidelines and development roadmap, please refer to the project board.
+
+## References
+
+- [Virtual RobotX (VRX) Competition](https://github.com/osrf/vrx)
+- [ROS 2 Documentation](https://docs.ros.org/en/jazzy/)
+- [Gazebo Simulation](https://gazebosim.org/)
+
+## Acknowledgments
+
+This project utilizes the Virtual RobotX (VRX) simulation environment developed by Open Source Robotics Foundation (OSRF). Simulation assets and base environment courtesy of the VRX project.
+
+## License
+
+This project is licensed under the Apache License 2.0 - see individual package files for details.
+
+## Contact
+
+For questions or issues, please open an issue on the [GitHub repository](https://github.com/Erk732/uvautoboat).
