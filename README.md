@@ -31,7 +31,7 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
 
 ### Prerequisites
 
-⚠️ **Warning:** It is strongly recommended to use ROS 2 (Jazzy) paired with Gazebo (Harmonic). If you plan to use other versions of these 2 setups, some unintended problems may occur.
+❗ **Attention:** It is strongly recommended to use ROS 2 (Jazzy) paired with Gazebo (Harmonic). If you plan to use other versions of these 2 setups, some unintended problems may occur.
 
 - [ROS 2 (Jazzy)](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
 - [Gazebo (Harmonic)](https://gazebosim.org/docs/harmonic/install_ubuntu/)
@@ -39,7 +39,7 @@ AutoBoat is the path planning module for the VRX (Virtual RobotX) project. This 
 
 ### Setup
 
-⚠️ **Warning:** Please note that if you are expecting a relatively good reuslt, it is highly reommended to follow setup instructions strictly, and if any step is missed, the package may not work as intended.
+❗ **Attention:** Please note that if you are expecting a relatively good reuslt, it is highly reommended to follow setup instructions strictly, and if any step is missed, the package may not work as intended.
 
 1. Clone the repository into your workspace `src` folder (workspace name example `seal_ws` in our case, and you can use your own workspace name):
 
@@ -109,6 +109,17 @@ export GZ_SIM_RESOURCE_PATH=$HOME/seal_ws/src/uvautoboat/test_environment:$GZ_SI
 source ~/seal_ws/install/setup.bash
 ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_custom
 ```
+
+❗ **Attention:** After testing it is recommended to directly use the default world which is the Sydney Regatta environment.
+
+```bash
+ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+```
+
+Put this command in the terminal and run it. If you have followed the previous instrucions carefully, you will most likely see this:
+
+[![VRX](images/sydney_regatta_gzsim.png)](https://vimeo.com/851696025 "Gazebo Virtual RobotX v. 2.3 - Click to Watch!")
+![ROS 2 CI](https://github.com/osrf/vrx/workflows/ROS%202%20CI/badge.svg)
 
 ---
 
