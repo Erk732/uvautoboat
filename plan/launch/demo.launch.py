@@ -42,5 +42,13 @@ def generate_launch_description():
             name='rviz2',
             arguments=['-d', rviz_config_path],
             output='screen'
-        )
+        ),
+
+        # 5. TF Broadcaster
+        Node(
+            package='plan',
+            executable='tf_broadcaster',
+            name='tf_broadcaster_node',
+            output='screen'
+        ),
     ])

@@ -1,51 +1,63 @@
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import PointCloud2
 from geometry_msgs.msg import PoseArray, Pose
-from rclpy.qos import qos_profile_sensor_data
+import struct
 import math
 
 class SimplePerception(Node):
     def __init__(self):
-        super().__init__('simple_perception_node')
+        super().__init__('perception_node')
         
-        # CORRECT TOPIC for your Sydney Regatta Custom world
-        self.sub_lidar = self.create_subscription(
-            LaserScan,
-            '/wamv/sensors/lidars/lidar_wamv_sensor/scan',
-            self.lidar_callback,
-            qos_profile_sensor_data)
+        # Subscribe to the 3D Lidar topic from your list
+        self.subscription = self.create_subscription(
+            PointCloud2,
+            '/wamv/sensors/lidars/lidar_wamv_sensor/points',
+            self.listener_callback,
+            rclpy.qos.qos_profile_sensor_data) # Best Effort is CRITICAL
         
-        self.pub_obstacles = self.create_publisher(PoseArray, '/perception/obstacles', 10)
-        self.get_logger().info('Perception Node Ready.')
+        self.obstacle_pub = self.create_publisher(PoseArray, '/perception/obstacles', 10)
+        self.get_logger().info('Perception Node Ready (3D Mode)')
 
-    def lidar_callback(self, msg):
-        pose_array = PoseArray()
-        pose_array.header = msg.header
+    def listener_callback(self, msg):
+        obstacles = PoseArray()
+        obstacles.header = msg.header
         
-        for i in range(0, len(msg.ranges), 1):# Process every point
-            dist = msg.ranges[i]
-            if dist == float('inf') or math.isnan(dist): continue
+        # Read the binary data from the point cloud
+        # We process every 10th point to keep it fast
+        point_step = msg.point_step
+        data = msg.data
+        
+        for i in range(0, len(data), point_step * 10):
+            try:
+                # Unpack x, y, z (assumes float32)
+                x, y, z = struct.unpack_from('fff', data, i)
+            except:
+                continue
+
+            dist = math.sqrt(x*x + y*y)
             
-            # Detect objects 1m - 20m away
-            if 0.2 < dist < 20.0:
-                angle = msg.angle_min + (i * msg.angle_increment)
-                obs_x = dist * math.cos(angle)
-                obs_y = dist * math.sin(angle)
+            # 1. Distance Filter: Ignore boat (<1m) and far mountains (>30m)
+            if dist < 1.0 or dist > 30.0:
+                continue
                 
-                p = Pose()
-                p.position.x = obs_x
-                p.position.y = obs_y
-                pose_array.poses.append(p)
+            # 2. Height Filter: Ignore water (z < -0.5) and sky (z > 1.5)
+            if z < -0.5 or z > 1.5:
+                continue
+            
+            pose = Pose()
+            pose.position.x = x
+            pose.position.y = y
+            pose.position.z = z
+            obstacles.poses.append(pose)
 
-        if len(pose_array.poses) > 0:
-            self.pub_obstacles.publish(pose_array)
+        if len(obstacles.poses) > 0:
+            self.obstacle_pub.publish(obstacles)
 
 def main(args=None):
     rclpy.init(args=args)
     node = SimplePerception()
     rclpy.spin(node)
-    node.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':
