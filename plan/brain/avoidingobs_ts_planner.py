@@ -28,7 +28,7 @@ class VRXObstacleAvoidance(Node):
         # Subscribe to sensor topics (adjust topic names for your VRX setup)
         self.lidar_sub = self.create_subscription(
             LaserScan,
-            '/wamv/sensors/lidars/lidar_wamv/scan',  # VRX lidar topic
+            '/wamv/sensors/lidars/lidar_wamv_sensor/scan',  # VRX lidar topic
             self.lidar_callback,
             10
         )
@@ -42,19 +42,27 @@ class VRXObstacleAvoidance(Node):
         # )
         
         # Subscribe to odometry for current pose/velocity
+
+        from geometry_msgs.msg import PoseStamped
+
         self.odom_sub = self.create_subscription(
-            Odometry,
-            '/wamv/pose_gt',
-            self.odom_callback,
+            PoseStamped,
+            '/wamv/pose',
+        self.odom_callback,
             10
         )
         
         # Publisher for velocity commands
-        self.cmd_vel_pub = self.create_publisher(
-            Twist,
-            '/wamv/cmd_vel',
-            10
-        )
+        # Convert Twist-like command into thrust commands
+        left = cmd.linear.x - cmd.angular.z
+        right = cmd.linear.x + cmd.angular.z
+
+        # Limit output to [-1, 1]
+        left = max(min(left, 1.0), -1.0)
+        right = max(min(right, 1.0), -1.0)
+
+        self.left_pub.publish(Float32(data=left))
+        self.right_pub.publish(Float32(data=right))
         
         # Control timer
         self.timer = self.create_timer(0.1, self.control_loop)  # 10Hz
@@ -113,7 +121,7 @@ class VRXObstacleAvoidance(Node):
     
     def odom_callback(self, msg):
         """Store current odometry data"""
-        self.current_odom = msg
+        self.current_pose = msg.pose
     
     def control_loop(self):
         """Main control loop for obstacle avoidance"""
