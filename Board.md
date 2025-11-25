@@ -40,14 +40,18 @@
 
 - [x] Understand how to add obstacles
 - [x] Download some obstacles from Fuel
-- [x] Create a class to convert (x, y) coordinates to Grid Map.
+- [x] Create a class to convert (x, y) coordinates to Grid Map (`grid_map.py`).
 - [x] Implement "Inflation" (pad obstacles so boat doesn't hit edges).
+- [x] Create custom test environment with obstacles (`test_environment/sydney_regatta_custom.sdf`).
+- [x] Add cardboardbox obstacle model for testing.
 
 ### Implement v2.0: A* Algorithm
 
 - [x] Implement Heuristic function (Euclidean distance).
 - [x] Implement core A* search loop.
-- [x] Integrate Grid Map with A* logic. **Done when:** generated paths avoid inflated obstacles in sim.
+- [x] Integrate Grid Map with A* logic (`astar_planner.py`).
+- [x] Create obstacle-aware planner (`avoidingOBS_planner.py`).
+- [x] Add time-stamped obstacle avoidance (`avoidingobs_ts_planner.py`). **Done when:** generated paths avoid inflated obstacles in sim.
 
 ### Path Smoothing
 
@@ -74,6 +78,17 @@
 ## Phase 4: Integration & Testing
 
 > **Goal:** Ensure all components work together seamlessly.
+
+### Plan Package Components
+
+- [x] Create `plan` ROS 2 package structure.
+- [x] Implement A* planner nodes (`astar_planner.py`, `avoidingOBS_planner.py`, `avoidingobs_ts_planner.py`).
+- [x] Implement perception node (`simple_perception.py`).
+- [x] Implement mission coordination (`mission_trigger.py`).
+- [x] Implement TF broadcasting (`tf_broadcaster.py`).
+- [x] Add utility modules (`grid_map.py`, `FREE.py`, `OUT.py`).
+- [x] Create demo launch file (`demo.launch.py`).
+- [x] Add RViz configuration (`default.rviz`).
 
 ### Control Package Integration
 

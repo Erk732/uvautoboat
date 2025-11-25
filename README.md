@@ -83,10 +83,22 @@ ros2 run path simple_planner
 
 ## Using the Test Environment for path planning
 
+The `test_environment` folder contains custom Gazebo worlds and models for testing navigation algorithms.
+
+### Custom World
+
+- **sydney_regatta_custom.sdf** - Modified Sydney Regatta environment with custom obstacles and test scenarios
+
+### Custom Models
+
+- **cardboardbox** - Obstacle model for testing collision avoidance
+
+### Setup and Launch
+
 1.Let `Gazebo` know you have a new environment to load.
 
 ```bash
- export GZ_SIM_RESOURCE_PATH=/home/bot/seal_ws/src/uvautoboat/test_environment:$GZ_SIM_RESOURCE_PATH
+export GZ_SIM_RESOURCE_PATH=$HOME/seal_ws/src/uvautoboat/test_environment:$GZ_SIM_RESOURCE_PATH
 ```
 
 2.Source and launch the test environment.
@@ -98,11 +110,89 @@ ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_custom
 
 ---
 
+## Plan Package
+
+The `plan` package contains the core path planning and perception logic for autonomous navigation.
+
+### Planning Nodes
+
+#### 1. A* Planner
+
+Obstacle-avoiding path planner using A* algorithm with grid map representation.
+
+**Run:**
+
+```bash
+ros2 run plan astar_planner
+```
+
+#### 2. Avoiding Obstacles Planner (Time-Stamped)
+
+Advanced planner with temporal obstacle avoidance.
+
+**Run:**
+
+```bash
+ros2 run plan avoidingobs_ts_planner
+```
+
+#### 3. Simple Perception
+
+Processes sensor data to detect obstacles and update the environment representation.
+
+**Run:**
+
+```bash
+ros2 run plan simple_perception
+```
+
+#### 4. Mission Trigger
+
+Coordinates mission goals and triggers appropriate planning behaviors.
+
+**Run:**
+
+```bash
+ros2 run plan mission_trigger
+```
+
+#### 5. TF Broadcaster
+
+Publishes coordinate frame transformations for the navigation stack.
+
+**Run:**
+
+```bash
+ros2 run plan tf_broadcaster
+```
+
+### Launch Files
+
+**Demo Launch:**
+
+```bash
+ros2 launch plan demo.launch.py
+```
+
+### Plan Package Modules
+
+- `astar_planner.py` - A* path planning implementation
+- `avoidingOBS_planner.py` - Obstacle avoidance planner
+- `avoidingobs_ts_planner.py` - Time-stamped obstacle avoidance
+- `grid_map.py` - Grid-based environment representation
+- `simple_perception.py` - Obstacle detection and processing
+- `mission_trigger.py` - Mission coordination
+- `tf_broadcaster.py` - Transform broadcasting
+- `FREE.py` - Free space utilities
+- `OUT.py` - Out-of-bounds detection
+
+---
+
 ## Control Package
 
 The `control` package provides path following and thruster control capabilities for the WAM-V vessel.
 
-### Available Nodes
+### Control Nodes
 
 #### 1. Simple Controller
 
