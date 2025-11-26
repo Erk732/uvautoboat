@@ -39,6 +39,7 @@ class ThrusterPathFollower(Node):
 
     def __init__(self) -> None:
         super().__init__('thruster_path_follower')
+        self.declare_parameter('use_sim_time', False)
 
         # Parameters (can be overridden from a launch file)
         self.declare_parameter('forward_thrust', 50.0)
