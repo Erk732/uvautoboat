@@ -15,6 +15,7 @@ from .grid_map import GridMap
 class AStarPlanner(Node):
     def __init__(self):
         super().__init__('astar_planner_node')
+        self.declare_parameter('use_sim_time', False)  # after adding this line must use this command from now on: ros2 run plan astar_planner --ros-args -p use_sim_time:=true
 
         # --- 1. TF Listener (THE ONLY SOURCE OF TRUTH) ---
         self.tf_buffer = Buffer()
