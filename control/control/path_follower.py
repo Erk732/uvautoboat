@@ -4,8 +4,8 @@
 # Simple waypoint-following controller for VRX WAM-V.
 #
 # Subscribes:
-#   - /planned_path : nav_msgs/Path          (from planning group)
-#   - /wamv/pose    : geometry_msgs/PoseStamped (boat pose from VRX / bridge)
+#   - /planning/path : nav_msgs/Path          (from planning group)
+#   - /wamv/pose     : geometry_msgs/PoseStamped (boat pose from VRX / bridge)
 #
 # Publishes:
 #   - /wamv/thrusters/left/thrust  : std_msgs/Float64
