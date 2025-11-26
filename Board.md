@@ -402,11 +402,11 @@
 
 #### Simulation Environment
 
-**Issue #6**: Limited world customization knowledge  
+**Issue #6**: Limited world customization expertise  
 **Status**: 🟡 **ACTIVE** | **Priority**: Medium  
-**Description**: Team has limited familiarity with Gazebo SDF file structure and world customization workflow. Successfully added cardboard box to default world but process not fully understood.  
-**Impact**: Slowing development of custom test environments for obstacle avoidance validation.  
-**Next Steps**: Study SDF documentation, practice with model integration, document customization workflow.  
+**Description**: Team requires additional familiarity with Gazebo SDF file structure and world customization workflow. Successfully added cardboard box to default world as proof-of-concept; comprehensive understanding of process still in development.  
+**Impact**: Reduced velocity in developing custom test environments for obstacle avoidance validation.  
+**Next Steps**: Study SDF documentation thoroughly, practice model integration techniques, document standardized customization workflow.  
 **Date Identified**: 26/11/2025
 
 ### Future Considerations
@@ -443,7 +443,7 @@
 3. **Modular architecture**: Separation of planning and control enables independent development and testing
 4. **Documentation early**: Comprehensive documentation from the start reduces technical debt
 5. **Iterative development approach** (26/11/2025): Starting with simple, working implementations before adding complexity proves valuable - allows verification of basic functionality before troubleshooting advanced features
-6. **Simulation environment learning curve** (26/11/2025): Gazebo world customization requires dedicated learning time - hands-on experimentation essential for understanding SDF structure
+6. **Simulation environment learning curve** (26/11/2025): Gazebo world customization requires dedicated learning investment; hands-on experimentation is essential for comprehensive understanding of SDF structure and model integration
 
 ### Technical Debt
 
@@ -460,20 +460,20 @@
 - ✅ Simple path follower successfully tested
 - ✅ Initial world customization experiments completed
 
-**Challenges:**
+**Current Challenges:**
 
-- ⚠️ Complex algorithm versions encountering failures
-- ⚠️ Team building expertise in Gazebo environment customization
-- ⚠️ Need debugging strategy for advanced implementations
+- ⚠️ Complex algorithm versions experiencing runtime failures
+- ⚠️ Team developing expertise in Gazebo environment customization
+- ⚠️ Debugging strategy required for advanced implementations
 
-**Focus Areas for Next Session:**
+**Focus Areas for Next Development Session:**
 
-- Debug complex planner and controller failures
-- Formalize world customization process
-- Document troubleshooting steps for current issues
+- Debug and resolve complex planner and controller failures
+- Formalize and document world customization workflow
+- Document troubleshooting procedures for identified issues
 
 ---
 
 **Document Version**: 2.1  
-**Maintained By**: AutoBoat Development Team composed by IMT Nord Europe Industry 4.0 students and professors
+**Maintained By**: AutoBoat Development Team (IMT Nord Europe Industry 4.0 students and faculty)
 **Review Frequency**: Bi-weekly

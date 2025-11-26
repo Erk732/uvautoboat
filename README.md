@@ -231,9 +231,16 @@ The `test_environment` directory contains legacy simulation worlds and custom mo
 
 ### Customizing the Simulation World
 
+⚠️ **Important Note**: The VRX repository (`~/seal_ws/src/vrx`) is itself a Git repository. If you modify VRX world files (e.g., `sydney_regatta.sdf`) or other VRX content and don't want to accidentally push changes to the upstream VRX repository, consider these options:
+
+- **Option 1**: Create custom world files in your own package (e.g., `test_environment/`) and reference them instead
+- **Option 2**: Add modified files to `.git/info/exclude` in the VRX directory to ignore them locally without affecting `.gitignore`
+- **Option 3**: Use `git update-index --assume-unchanged <file>` to tell Git to ignore changes to specific files
+- **Best Practice**: Keep VRX unmodified and create custom worlds in your own workspace directories
+
 #### Adding Models from Gazebo Fuel
 
-To add additional obstacles or objects to your simulation environment, you can download models from the Gazebo Fuel model repository (Which is a recommended source).
+To add additional obstacles or objects to your simulation environment, you can download models from the Gazebo Fuel model repository, which is the recommended source.
 
 **Model Repositories:**
 
@@ -288,6 +295,9 @@ To add additional obstacles or objects to your simulation environment, you can d
 
 **Note**: The `<pose>` tag specifies the model's position (x, y, z) and orientation (roll, pitch, yaw) in meters and radians respectively.
 
+![3D Cartesian Coordinate System](images/3d_coordinate_system.jpg)
+*Figure: 3D Cartesian coordinate system showing x, y, z axes. Image: [Primalshell](https://commons.wikimedia.org/wiki/File:3D_Cartesian_Coodinate_Handedness.jpg), [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/)*
+
 - **Position** (x, y, z): Coordinates in 3D space measured in **meters**
   - `x`: Forward/backward (正向/反向)
   - `y`: Left/right (左/右)
@@ -296,6 +306,8 @@ To add additional obstacles or objects to your simulation environment, you can d
   - `roll`: Rotation around x-axis (绕x轴旋转)
   - `pitch`: Rotation around y-axis (绕y轴旋转)
   - `yaw`: Rotation around z-axis (绕z轴旋转)
+  - **Common usage**: `0 0 0` for default upright orientation (no rotation)
+  - **Example**: `0 0 1.57` rotates 90° (π/2 radians) around z-axis
 
 **注意**: `<pose>` 标签指定模型的位置 (x, y, z) 和方向 (roll, pitch, yaw)，分别以米和弧度为单位。
 
@@ -307,6 +319,8 @@ To add additional obstacles or objects to your simulation environment, you can d
   - `roll`: 绕x轴旋转（翻滚）
   - `pitch`: 绕y轴旋转（俯仰）
   - `yaw`: 绕z轴旋转（偏航）
+  - **常用值**: `0 0 0` 表示默认直立方向（无旋转）
+  - **示例**: `0 0 1.57` 表示绕z轴旋转90°（π/2 弧度）
 
 ### Expected Output
 
@@ -314,7 +328,7 @@ After launching the simulation environment, you should observe the following:
 
 [![VRX Simulation Environment](images/sydney_regatta_gzsim.png)](https://vimeo.com/851696025 "Gazebo Virtual RobotX v. 2.3 - Click to Watch!")
 
-*Figure 1: Sydney Regatta simulation environment in Gazebo. Source: [VRX Project](https://github.com/osrf/vrx/wiki/running_vrx_tutorial)*
+*Figure: Sydney Regatta simulation environment in Gazebo. Source: [VRX Project](https://github.com/osrf/vrx/wiki/running_vrx_tutorial)*
 
 ---
 
