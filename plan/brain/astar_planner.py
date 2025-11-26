@@ -37,7 +37,7 @@ class AStarPlanner(Node):
 
     def control_loop(self):
         # Locate the boat on the map using TF
-        target_frame = 'wamv/base_link'
+        target_frame = 'wamv/wamv/base_link'
 
         if not self.tf_buffer.can_transform('world', target_frame, Time()):
             return

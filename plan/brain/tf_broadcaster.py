@@ -23,7 +23,7 @@ class TFBroadcaster(Node):
         # Set the header - use 'world' as the parent frame to match astar_planner expectations
         t.header.stamp = self.get_clock().now().to_msg()
         t.header.frame_id = 'world'
-        t.child_frame_id = 'wamv/base_link'
+        t.child_frame_id = 'wamv/wamv/base_link'
 
         # Copy position
         t.transform.translation.x = msg.pose.position.x
