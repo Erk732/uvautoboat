@@ -1,9 +1,9 @@
 # Project Development Board: AutoBoat Navigation System
 
-**Project**: Autonomous Navigation for Virtual RobotX Competition  
+**Project**: AutoBoat Navigation System
 **Repository**: [uvautoboat](https://github.com/Erk732/uvautoboat)  
-**Last Updated**: November 2025  
-**Status**: Phase 1 In Progress - Workspace Setup Complete
+**Last Updated**: 26/11/2025  
+**Status**: Phase 1 In Progress - Basic Navigation Implemented
 
 ---
 
@@ -11,8 +11,8 @@
 
 | Phase | Title | Status | Completion |
 |-------|-------|--------|------------|
-| 1 | Architecture & MVP | 🔄 In Progress | 50% |
-| 2 | Obstacle Avoidance (A*) | ⏸️ Not Started | 0% |
+| 1 | Architecture & MVP | 🔄 In Progress | 70% |
+| 2 | Obstacle Avoidance (A*) | 🔄 In Progress | 10% |
 | 3 | Coverage & Search | ⏸️ Not Started | 0% |
 | 4 | Integration & Testing | ⏸️ Not Started | 0% |
 
@@ -22,7 +22,7 @@
 
 **Objective**: Establish foundational architecture and demonstrate basic straight-line navigation.
 
-**Status**: 🔄 **IN PROGRESS** | **Priority**: High | **Completion**: 50%
+**Status**: 🔄 **IN PROGRESS** | **Priority**: High | **Completion**: 70%
 
 ### 1.1 Interface Definition
 
@@ -48,38 +48,57 @@
 
 **Goal**: Implement basic point-to-point navigation without obstacle consideration.
 
-**Status**: ⏸️ **NOT STARTED** | **Priority**: High
+**Status**: 🔄 **IN PROGRESS** | **Priority**: High
+
+**Last Updated**: 26/11/2025
 
 **Implementation Tasks:**
 
-- [ ] Implement odometry subscriber (`nav_msgs/Odometry`)
-- [ ] Implement goal pose subscriber (`geometry_msgs/PoseStamped`)
-- [ ] Develop linear interpolation algorithm for waypoint generation
-- [ ] Integrate RViz visualization for path display
+- [x] Implement odometry subscriber (`nav_msgs/Odometry`)
+- [x] Implement goal pose subscriber (`geometry_msgs/PoseStamped`)
+- [x] Develop linear interpolation algorithm for waypoint generation (simple version)
+- [x] Integrate RViz visualization for path display
+- [ ] Refine complex version with advanced features (currently failing)
+
+**Progress Notes:**
+
+- ✅ Simple version working successfully in trials
+- ⚠️ More complex version encounters failures - requires debugging
 
 **Acceptance Criteria:**
 
-- [ ] Generated path appears as straight line between start and goal
-- [ ] Endpoint accuracy within specified tolerance (±0.5m)
-- [ ] Path successfully visualized in RViz
+- [x] Generated path appears as straight line between start and goal
+- [x] Endpoint accuracy within specified tolerance (±0.5m)
+- [x] Path successfully visualized in RViz
+- [ ] Complex version stable and reliable
 
 ### 1.4 Path Following Controller (v1.1)
 
 **Goal**: Implement trajectory tracking for autonomous navigation.
 
-**Status**: ⏸️ **NOT STARTED** | **Priority**: High
+**Status**: 🔄 **IN PROGRESS** | **Priority**: High
+
+**Last Updated**: 26/11/2025
 
 **Implementation Tasks:**
 
-- [ ] Implement path subscriber (`nav_msgs/Path`)
-- [ ] Configure TF tree transformations (`map` → `odom` → `base_link`)
-- [ ] Develop waypoint selection algorithm with look-ahead distance
-- [ ] Implement PID controller for heading and velocity control
+- [x] Implement path subscriber (`nav_msgs/Path`)
+- [x] Configure basic TF tree transformations (`map` → `odom` → `base_link`)
+- [x] Develop simple waypoint selection algorithm
+- [x] Implement basic controller for heading and velocity control
 - [ ] Add RViz markers for next waypoint visualization
+- [ ] Refine advanced controller with PID tuning (complex version failing)
+
+**Progress Notes:**
+
+- ✅ Simple path follower working well in trials
+- ⚠️ Advanced version with complex control logic experiencing failures
+- Need to debug and stabilize complex controller implementation
 
 **Acceptance Criteria:**
 
-- [ ] Vessel follows generated path with position error < 0.5m
+- [x] Basic vessel navigation along generated path
+- [ ] Position error consistently < 0.5m
 - [ ] Heading error maintained below 5°
 - [ ] Smooth transitions between waypoints without oscillation
 
@@ -89,15 +108,38 @@
 
 **Objective**: Implement intelligent path planning with static obstacle avoidance using A* algorithm.
 
-**Status**: ⏸️ **NOT STARTED** | **Priority**: Medium
+**Status**: 🔄 **IN PROGRESS** | **Priority**: Medium | **Completion**: 10%
 
 ### 2.1 Environment Representation
 
 **Goal**: Develop grid-based environmental model for obstacle mapping.
 
+**Status**: 🔄 **IN PROGRESS**
+
+**Last Updated**: 26/11/2025
+
 **Implementation Tasks:**
 
-- [ ] Research and understand Gazebo obstacle integration
+- [x] Research and understand Gazebo obstacle integration
+- [x] Experiment with world customization (adding cardboard box to default world)
+- [ ] Source obstacle models from Gazebo Fuel library
+- [ ] Implement `GridMap` class for coordinate-to-grid conversion (`grid_map.py`)
+- [ ] Develop obstacle inflation algorithm for safety margins
+- [ ] Create custom simulation environment (`test_environment/sydney_regatta_custom.sdf`)
+- [ ] Integrate obstacle models for testing
+
+**Progress Notes:**
+
+- 🛠️ Experimental work on world customization in progress
+- ⚠️ Team still learning Gazebo world customization workflow
+- Successfully added cardboard box to default world as proof-of-concept
+- Need more practice with SDF file structure and model integration
+
+**Next Steps:**
+
+- Formalize world customization process
+- Document steps for adding obstacles
+- Build comprehensive test environment
 - [ ] Source obstacle models from Gazebo Fuel library
 - [ ] Implement `GridMap` class for coordinate-to-grid conversion (`grid_map.py`)
 - [ ] Develop obstacle inflation algorithm for safety margins
@@ -342,7 +384,30 @@
 
 ### Active Issues
 
-*No active issues at this time.*
+#### Navigation Implementation
+
+**Issue #4**: Complex planner version failures  
+**Status**: 🔴 **ACTIVE** | **Priority**: High  
+**Description**: While simple straight-line planner works successfully, the more complex version with advanced features encounters runtime failures.  
+**Impact**: Blocking progression to advanced planning features.  
+**Next Steps**: Debug complex planner implementation, isolate failure points, review algorithm logic.  
+**Date Identified**: 26/11/2025
+
+**Issue #5**: Advanced path follower instability  
+**Status**: 🔴 **ACTIVE** | **Priority**: High  
+**Description**: Basic path following controller operates correctly, but advanced version with complex control logic experiences failures during operation.  
+**Impact**: Limiting trajectory tracking accuracy and reliability.  
+**Next Steps**: Review PID tuning, check controller state transitions, validate control loop timing.  
+**Date Identified**: 26/11/2025
+
+#### Simulation Environment
+
+**Issue #6**: Limited world customization knowledge  
+**Status**: 🟡 **ACTIVE** | **Priority**: Medium  
+**Description**: Team has limited familiarity with Gazebo SDF file structure and world customization workflow. Successfully added cardboard box to default world but process not fully understood.  
+**Impact**: Slowing development of custom test environments for obstacle avoidance validation.  
+**Next Steps**: Study SDF documentation, practice with model integration, document customization workflow.  
+**Date Identified**: 26/11/2025
 
 ### Future Considerations
 
@@ -357,12 +422,15 @@
 
 | Milestone | Target Date | Status |
 |-----------|-------------|--------|
-| Phase 1 Complete | ✅ Completed | Done |
-| Phase 2 Complete | ✅ Completed | Done |
-| Phase 3 Complete | TBD | Pending |
-| Phase 4 Complete | TBD | 60% |
+| Phase 1.1-1.2 Complete | ✅ Completed | Done |
+| Phase 1.3-1.4 Basic Implementation | ✅ 26/11/2025 | Done |
+| Phase 1.3-1.4 Advanced Versions | TBD | Debugging |
+| Phase 2.1 Environment Setup | TBD | In Progress |
+| Phase 2 Complete | TBD | 10% |
+| Phase 3 Complete | TBD | Not Started |
+| Phase 4 Complete | TBD | Not Started |
 | System Demo Ready | TBD | Pending |
-| Documentation Finalized | TBD | 70% |
+| Documentation Finalized | TBD | 30% |
 
 ---
 
@@ -374,15 +442,38 @@
 2. **Coordinate frame management**: Proper TF tree configuration is critical for navigation accuracy
 3. **Modular architecture**: Separation of planning and control enables independent development and testing
 4. **Documentation early**: Comprehensive documentation from the start reduces technical debt
+5. **Iterative development approach** (26/11/2025): Starting with simple, working implementations before adding complexity proves valuable - allows verification of basic functionality before troubleshooting advanced features
+6. **Simulation environment learning curve** (26/11/2025): Gazebo world customization requires dedicated learning time - hands-on experimentation essential for understanding SDF structure
 
 ### Technical Debt
 
 - Parameter configuration currently hardcoded - needs migration to ROS 2 parameter server
 - Limited unit test coverage - should implement automated testing framework
-- Custom test environment deprecated - consider full migration to standard VRX worlds
+- Complex planner and controller versions need debugging and stabilization
+- World customization workflow needs formalization and documentation
+
+### Recent Progress Summary (26/11/2025)
+
+**Achievements:**
+
+- ✅ Basic straight-line planner operational
+- ✅ Simple path follower successfully tested
+- ✅ Initial world customization experiments completed
+
+**Challenges:**
+
+- ⚠️ Complex algorithm versions encountering failures
+- ⚠️ Team building expertise in Gazebo environment customization
+- ⚠️ Need debugging strategy for advanced implementations
+
+**Focus Areas for Next Session:**
+
+- Debug complex planner and controller failures
+- Formalize world customization process
+- Document troubleshooting steps for current issues
 
 ---
 
-**Document Version**: 2.0  
+**Document Version**: 2.1  
 **Maintained By**: AutoBoat Development Team composed by IMT Nord Europe Industry 4.0 students and professors
 **Review Frequency**: Bi-weekly

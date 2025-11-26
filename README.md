@@ -229,6 +229,65 @@ The `test_environment` directory contains legacy simulation worlds and custom mo
    ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_custom
    ```
 
+### Customizing the Simulation World
+
+#### Adding Models from Gazebo Fuel
+
+To add additional obstacles or objects to your simulation environment, you can download models from the Gazebo Fuel model repository (Which is a recommended source).
+
+**Model Repositories:**
+
+- **General Models**: [Gazebo Fuel Collections](https://app.gazebosim.org/OpenRobotics/fuel/collections)
+- **VRX-Specific Models**: [VRX Model Collection](https://app.gazebosim.org/OpenRobotics/fuel/collections/VRX)
+
+**Steps to Add Models to Your World:**
+
+1. **Browse and select a model** from Gazebo Fuel (e.g., `cardboard_box`, `construction_barrel`, etc.)
+
+2. **Download the model** (optional - Gazebo can auto-download):
+   
+   Models are automatically downloaded when referenced in your SDF file, or you can manually download them to your local model path.
+
+3. **Add the model to your world file**:
+
+   Open your world SDF file (e.g., `sydney_regatta.sdf` or create a custom one) and add the model using the `<include>` tag:
+
+   ```xml
+   <world name="sydney_regatta">
+     <!-- Existing world content -->
+     
+     <!-- Add your custom model -->
+     <include>
+       <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/cardboard_box</uri>
+       <name>obstacle_box_1</name>
+       <pose>10 5 0 0 0 0</pose>  <!-- x y z roll pitch yaw -->
+     </include>
+     
+     <!-- Add multiple instances with different names and positions -->
+     <include>
+       <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/cardboard_box</uri>
+       <name>obstacle_box_2</name>
+       <pose>15 -3 0 0 0 1.57</pose>
+     </include>
+   </world>
+   ```
+
+4. **Launch with your customized world**:
+
+   ```bash
+   ros2 launch vrx_gz competition.launch.py world:=your_custom_world
+   ```
+
+**Common Useful Models:**
+
+- `cardboard_box` - Simple box obstacle
+- `construction_barrel` - Traffic barrel
+- `jersey_barrier` - Concrete barrier
+- `brick_wall` - Wall obstacle
+- `wooden_peg` - Small marker
+
+**Note**: The `<pose>` tag specifies the model's position (x, y, z) and orientation (roll, pitch, yaw) in meters and radians respectively.
+
 ### Expected Output
 
 After launching the simulation environment, you should observe the following:
