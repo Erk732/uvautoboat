@@ -153,11 +153,11 @@ ros2 launch plan demo.launch.py
 **Planning Nodes:**
 
 
-***A* path planner with obstacle avoidance***
+***A star path planner with obstacle avoidance***
 ```bash
 ros2 run plan astar_planner --ros-args -p use_sim_time:=true
 ```
-***Time-stamped dynamic obstacle avoidance ***
+***Time-stamped dynamic obstacle avoidance***
 ```bash
 ros2 run plan avoidingobs_ts_planner --ros-args -p use_sim_time:=true
 ```
