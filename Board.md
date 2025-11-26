@@ -476,4 +476,4 @@
 
 **Document Version**: 2.1  
 **Maintained By**: AutoBoat Development Team (IMT Nord Europe Industry 4.0 students and faculty)
-**Review Frequency**: Bi-weekly
+**Review Frequency**: Weekly
