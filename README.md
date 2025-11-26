@@ -245,7 +245,7 @@ To add additional obstacles or objects to your simulation environment, you can d
 1. **Browse and select a model** from Gazebo Fuel (e.g., `cardboard_box`, `construction_barrel`, etc.)
 
 2. **Download the model** (optional - Gazebo can auto-download):
-   
+
    Models are automatically downloaded when referenced in your SDF file, or you can manually download them to your local model path.
 
 3. **Add the model to your world file**:
