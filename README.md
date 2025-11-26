@@ -131,20 +131,20 @@ The following Python packages are automatically installed during the build proce
 ## Usage
 **Planning Nodes:**
 
-```bash
 # A* path planner (Note: use_sim_time is required to sync with Gazebo)
+```bash
 ros2 run plan astar_planner --ros-args -p use_sim_time:=true
 ```
-```bash
 # Time-stamped dynamic obstacle avoidance
+```bash
 ros2 run plan avoidingobs_ts_planner --ros-args -p use_sim_time:=true
 ```
-```bash
 # Perception and obstacle detection
+```bash
 ros2 run plan simple_perception --ros-args -p use_sim_time:=true
 ```
-```bash
 # Mission coordination
+```bash
 ros2 run plan mission_trigger
 ```
 ### Quick Start
