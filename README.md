@@ -296,7 +296,7 @@ To add additional obstacles or objects to your simulation environment, you can d
 **Note**: The `<pose>` tag specifies the model's position (x, y, z) and orientation (roll, pitch, yaw) in meters and radians respectively.
 
 ![3D Cartesian Coordinate System](images/3d_coordinate_system.jpg)
-*Figure: 3D Cartesian coordinate system showing x, y, z axes. Image: [Primalshell](https://commons.wikimedia.org/wiki/File:3D_Cartesian_Coodinate_Handedness.jpg), [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/)*
+*Figure: 3D Cartesian coordinate system showing x, y, z axes. Image: [Primalshell](https://commons.wikimedia.org/wiki/File:3D_Cartesian_Coodinate_Handedness.jpg), [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)*
 
 - **Position** (x, y, z): Coordinates in 3D space measured in **meters**
   - `x`: Forward/backward (正向/反向)
@@ -343,6 +343,25 @@ The `plan` package implements the planning and perception subsystems for autonom
 **1. A* Planner** (`astar_planner`)
 
 Implements the A* search algorithm for optimal path planning with obstacle avoidance. Uses grid-based environmental representation with configurable resolution and inflation radius.
+
+**Algorithm Overview:**
+
+A* (A-star) is an informed search algorithm that finds the shortest path between two points while avoiding obstacles. It combines two key metrics:
+
+- **g(n)**: Actual cost from start to current node
+- **h(n)**: Estimated cost (heuristic) from current node to goal
+- **f(n) = g(n) + h(n)**: Total estimated cost through current node
+
+The algorithm maintains a priority queue of nodes to explore, always expanding the node with the lowest f(n) value. This ensures both optimality (finding the shortest path) and efficiency (exploring fewer nodes than uninformed search methods like Dijkstra's algorithm).
+
+**Further Reading:** [A* Search Algorithm - Wikipedia](https://en.wikipedia.org/wiki/A*_search_algorithm)
+
+**Key Features:**
+
+- Guaranteed to find the optimal path if one exists
+- Grid-based discretization of the environment
+- Obstacle inflation for safety margins
+- Euclidean distance heuristic for maritime navigation
 
 **Run:**
 
@@ -437,6 +456,10 @@ ros2 launch control simple_controller.launch.py
 **2. Path Following Controller** (`path_follower`)
 
 Advanced trajectory tracking controller implementing waypoint following with feedback control for precise path execution.
+
+**Current Implementation:**
+
+⚠️ **Note**: The current path follower uses a simplified control strategy rather than full PID control. The controller employs direct y-axis adjustment for heading correction, setting the y-axis value in the final goal command sent to the boat. This approach provides basic trajectory tracking functionality while more advanced PID-based control methods are under development.
 
 **Run:**
 

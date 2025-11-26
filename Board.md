@@ -93,6 +93,8 @@
 
 - ✅ Simple path follower working well in trials
 - ⚠️ Advanced version with complex control logic experiencing failures
+- 📝 Current implementation uses simplified y-axis turning approach instead of PID control
+- 📝 Controller directly adjusts y-axis value in goal commands for heading correction
 - Need to debug and stabilize complex controller implementation
 
 **Acceptance Criteria:**
