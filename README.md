@@ -152,32 +152,40 @@ ros2 launch plan demo.launch.py
 
 **Planning Nodes:**
 
-
 ***A star path planner with obstacle avoidance***
+
 ```bash
 ros2 run plan astar_planner --ros-args -p use_sim_time:=true
 ```
+
 ***Time-stamped dynamic obstacle avoidance***
+
 ```bash
 ros2 run plan avoidingobs_ts_planner --ros-args -p use_sim_time:=true
 ```
+
 ***Perception and obstacle detection***
+
 ```bash
 ros2 run plan simple_perception --ros-args -p use_sim_time:=true
 ```
+
 ***Mission coordination***
+
 ```bash
 ros2 run plan mission_trigger
 ```
 
 **Control Nodes:**
 
-
 ***Simple thruster controller***
+
 ```bash
 ros2 run control simple_controller --ros-args -p use_sim_time:=true
 ```
+
 ***Path following controller***
+
 ```bash
 ros2 run control path_follower --ros-args -p use_sim_time:=true
 ```
