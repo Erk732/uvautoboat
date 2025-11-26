@@ -34,7 +34,7 @@ The planning module serves as the bridge between mission objectives and vehicle 
 
 | Topic Name | Message Type | I/O | Description |
 | :--- | :--- | :--- | :--- |
-| `/wamv/sensors/odometry` | `nav_msgs/Odometry` | Sub | Current boat position/orientation. |
+| `/wamv/pose` | `geometry_msgs/PoseStamped` | Sub | Current boat position/orientation. |
 | `/planning/goal` | `geometry_msgs/PoseStamped` | Sub | Desired destination. |
 | `/planning/path` | `nav_msgs/Path` | Pub | Computed trajectory (waypoints). |
 
@@ -129,24 +129,7 @@ The following Python packages are automatically installed during the build proce
    ```
 
 ## Usage
-**Planning Nodes:**
 
-# A* path planner (Note: use_sim_time is required to sync with Gazebo)
-```bash
-ros2 run plan astar_planner --ros-args -p use_sim_time:=true
-```
-# Time-stamped dynamic obstacle avoidance
-```bash
-ros2 run plan avoidingobs_ts_planner --ros-args -p use_sim_time:=true
-```
-# Perception and obstacle detection
-```bash
-ros2 run plan simple_perception --ros-args -p use_sim_time:=true
-```
-# Mission coordination
-```bash
-ros2 run plan mission_trigger
-```
 ### Quick Start
 
 Launch the complete navigation system with the default Sydney Regatta environment:
@@ -163,17 +146,19 @@ ros2 launch plan demo.launch.py
 
 ### Running Individual Components
 
+⚠️ **Important**: When running nodes with Gazebo simulation, you must use the `use_sim_time` parameter to synchronize with simulation time.
+
 **Planning Nodes:**
 
 ```bash
 # A* path planner with obstacle avoidance
-ros2 run plan astar_planner
+ros2 run plan astar_planner --ros-args -p use_sim_time:=true
 
 # Time-stamped dynamic obstacle avoidance
-ros2 run plan avoidingobs_ts_planner
+ros2 run plan avoidingobs_ts_planner --ros-args -p use_sim_time:=true
 
 # Perception and obstacle detection
-ros2 run plan simple_perception
+ros2 run plan simple_perception --ros-args -p use_sim_time:=true
 
 # Mission coordination
 ros2 run plan mission_trigger
@@ -183,10 +168,10 @@ ros2 run plan mission_trigger
 
 ```bash
 # Simple thruster controller
-ros2 run control simple_controller
+ros2 run control simple_controller --ros-args -p use_sim_time:=true
 
 # Path following controller
-ros2 run control path_follower
+ros2 run control path_follower --ros-args -p use_sim_time:=true
 ```
 
 ## Simulation Environment
@@ -253,7 +238,7 @@ Implements the A* search algorithm for optimal path planning with obstacle avoid
 **Run:**
 
 ```bash
-ros2 run plan astar_planner
+ros2 run plan astar_planner --ros-args -p use_sim_time:=true
 ```
 
 **2. Time-Stamped Obstacle Avoidance Planner** (`avoidingobs_ts_planner`)
@@ -263,7 +248,7 @@ Enhanced planning algorithm incorporating temporal information for dynamic obsta
 **Run:**
 
 ```bash
-ros2 run plan avoidingobs_ts_planner
+ros2 run plan avoidingobs_ts_planner --ros-args -p use_sim_time:=true
 ```
 
 **3. Perception Module** (`simple_perception`)
@@ -347,7 +332,7 @@ Advanced trajectory tracking controller implementing waypoint following with fee
 **Run:**
 
 ```bash
-ros2 run control path_follower
+ros2 run control path_follower --ros-args -p use_sim_time:=true
 ```
 
 ### Control Interfaces
@@ -355,8 +340,9 @@ ros2 run control path_follower
 | Topic Name | Message Type | I/O | Description |
 | :--- | :--- | :--- | :--- |
 | `/planning/path` | `nav_msgs/Path` | Sub | Trajectory waypoints from planner. |
-| `/wamv/sensors/odometry` | `nav_msgs/Odometry` | Sub | Current boat state. |
-| `/wamv/thrusters/...` | (varies) | Pub | Thruster commands. |
+| `/wamv/pose` | `geometry_msgs/PoseStamped` | Sub | Current boat state. |
+| `/wamv/thrusters/left/thrust` | `std_msgs/Float64` | Pub | Left thruster command. |
+| `/wamv/thrusters/right/thrust` | `std_msgs/Float64` | Pub | Right thruster command. |
 
 ---
 
