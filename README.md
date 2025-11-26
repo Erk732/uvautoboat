@@ -288,6 +288,26 @@ To add additional obstacles or objects to your simulation environment, you can d
 
 **Note**: The `<pose>` tag specifies the model's position (x, y, z) and orientation (roll, pitch, yaw) in meters and radians respectively.
 
+- **Position** (x, y, z): Coordinates in 3D space measured in **meters**
+  - `x`: Forward/backward (正向/反向)
+  - `y`: Left/right (左/右)
+  - `z`: Up/down (上/下)
+- **Orientation** (roll, pitch, yaw): Rotation angles measured in **radians**
+  - `roll`: Rotation around x-axis (绕x轴旋转)
+  - `pitch`: Rotation around y-axis (绕y轴旋转)
+  - `yaw`: Rotation around z-axis (绕z轴旋转)
+
+**注意**: `<pose>` 标签指定模型的位置 (x, y, z) 和方向 (roll, pitch, yaw)，分别以米和弧度为单位。
+
+- **位置** (x, y, z): 三维空间中的坐标，单位为**米**
+  - `x`: 前进/后退方向
+  - `y`: 左/右方向
+  - `z`: 上/下方向
+- **方向** (roll, pitch, yaw): 旋转角度，单位为**弧度**
+  - `roll`: 绕x轴旋转（翻滚）
+  - `pitch`: 绕y轴旋转（俯仰）
+  - `yaw`: 绕z轴旋转（偏航）
+
 ### Expected Output
 
 After launching the simulation environment, you should observe the following:
