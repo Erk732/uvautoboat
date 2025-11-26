@@ -6,17 +6,19 @@
 
 ## Abstract
 
-This repository contains an autonomous navigation system for unmanned surface vehicles (USVs) designed for the Virtual RobotX (VRX) competition. The system implements path planning, obstacle avoidance, and control algorithms for the WAM-V maritime platform using ROS 2 and Gazebo simulation environments.
+AutoBoat is an autonomous navigation system for unmanned surface vehicles (USVs) developed for the Virtual RobotX (VRX) competition. The system integrates advanced path planning, real-time obstacle avoidance, and precise trajectory tracking algorithms optimized for the WAM-V maritime platform. Built on ROS 2 Jazzy and Gazebo Harmonic, the framework provides a robust foundation for autonomous maritime navigation in simulated environments.
 
 ## Overview
 
-AutoBoat is a comprehensive autonomous navigation framework developed for the VRX project. The system provides intelligent path planning capabilities for WAM-V surface vessels by integrating perception, planning, and control modules. The architecture processes real-time odometry data and mission objectives while accounting for environmental constraints such as static obstacles and operational boundaries to generate safe, optimal trajectories.
+AutoBoat implements a hierarchical autonomous navigation framework designed for maritime surface vehicles operating in complex environments. The system combines perception, planning, and control subsystems to enable intelligent waypoint navigation while dynamically responding to environmental constraints. By processing sensor data streams and mission objectives in real-time, the architecture generates collision-free trajectories that account for static obstacles, operational boundaries, and vehicle dynamics, ensuring safe and efficient autonomous operation.
 
 ## Core Capabilities
 
-- **Point-to-Point Navigation**: Efficient trajectory generation between specified waypoints using optimization-based planning algorithms.
-- **Coverage Planning**: Systematic area coverage using boustrophedon (lawn-mower) patterns for search and surveillance missions.
-- **Obstacle Avoidance**: Dynamic path replanning using A* (A-Star) algorithm with grid-based environmental representation to avoid static obstacles including buoys, islands, and other maritime structures.
+- **Point-to-Point Navigation**: Generates efficient trajectories between specified waypoints using optimization-based planning algorithms, enabling precise autonomous navigation in structured maritime environments.
+
+- **Coverage Planning**: Implements systematic area coverage using boustrophedon (lawn-mower) patterns optimized for search and surveillance missions, ensuring complete environmental exploration.
+
+- **Obstacle Avoidance**: Provides dynamic path replanning capabilities using the A* search algorithm with grid-based environmental representation to safely navigate around static obstacles including buoys, islands, and other maritime structures.
 
 ---
 
@@ -316,7 +318,7 @@ Baseline controller implementation for thruster command testing and validation.
 **Run:**
 
 ```bash
-ros2 run control simple_controller
+ros2 run control simple_controller --ros-args -p use_sim_time:=true
 ```
 
 **Launch file:**
@@ -346,6 +348,213 @@ ros2 run control path_follower --ros-args -p use_sim_time:=true
 
 ---
 
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### Issue: Boat Not Moving in Simulation
+
+**Symptoms**: Nodes are running but the WAM-V boat remains stationary.
+
+**Solutions**:
+
+1. **Verify `use_sim_time` parameter**:
+   - Ensure all nodes are launched with `--ros-args -p use_sim_time:=true`
+   - This synchronizes node time with Gazebo simulation time
+
+2. **Check topic connections**:
+
+   ```bash
+   # Verify thrust commands are being published
+   ros2 topic echo /wamv/thrusters/left/thrust
+   ros2 topic echo /wamv/thrusters/right/thrust
+
+   # Check if path is being generated
+   ros2 topic echo /planning/path
+
+   # Verify pose data is available
+   ros2 topic echo /wamv/pose
+   ```
+
+3. **Verify TF transforms**:
+
+   ```bash
+   # Check if required transforms are available
+   ros2 run tf2_ros tf2_echo map wamv/base_link
+   ```
+
+4. **Check node status**:
+
+   ```bash
+   # List active nodes
+   ros2 node list
+
+   # Check specific node info
+   ros2 node info /astar_planner_node
+   ros2 node info /thruster_path_follower
+   ```
+
+#### Issue: A* Planner Not Publishing Path
+
+**Symptoms**: No path messages on `/planning/path` topic after sending a goal.
+
+**Solutions**:
+
+1. **Verify goal message**:
+
+   ```bash
+   # Ensure goal is in correct frame
+   ros2 topic pub --once /planning/goal geometry_msgs/msg/PoseStamped \
+   "{header: {frame_id: 'map'}, pose: {position: {x: -520.0, y: 190.0, z: 0.0}}}"
+   ```
+
+2. **Check planner logs**:
+   - Look for warnings like "Start or Goal outside Grid Map!"
+   - Verify TF is available: "Waiting for TF..."
+
+3. **Verify grid map configuration**:
+   - Default grid: 300m × 300m
+   - Ensure goal coordinates are within grid bounds
+
+#### Issue: Build Failures
+
+**Symptoms**: `colcon build` fails with errors.
+
+**Solutions**:
+
+1. **Missing dependencies**:
+
+   ```bash
+   # Install ROS 2 dependencies
+   cd ~/seal_ws
+   rosdep install --from-paths src --ignore-src -r -y
+   ```
+
+2. **Clean build**:
+
+   ```bash
+   # Remove build artifacts and rebuild
+   rm -rf build install log
+   colcon build --merge-install
+   ```
+
+3. **Python import errors**:
+   - Ensure `grid_map.py` exists in `plan/brain/` directory
+   - Verify relative imports use correct syntax
+
+#### Issue: Simulation Crashes or Freezes
+
+**Symptoms**: Gazebo becomes unresponsive or crashes.
+
+**Solutions**:
+
+1. **Check system resources**:
+   - Verify sufficient RAM (minimum 8GB, recommended 16GB)
+   - Monitor CPU usage
+
+2. **Reduce graphics quality**:
+   - Lower rendering settings in Gazebo
+   - Disable shadows and reflections
+
+3. **Use headless mode** (for testing without GUI):
+
+   ```bash
+   ros2 launch vrx_gz competition.launch.py world:=sydney_regatta headless:=true
+   ```
+
+### Getting Help
+
+If you encounter issues not covered here:
+
+1. **Check logs**: Review terminal output for error messages and warnings
+2. **Verify configuration**: Ensure all parameters match the documentation
+3. **Consult VRX documentation**: [VRX Wiki](https://github.com/osrf/vrx/wiki)
+4. **Report issues**: Open an issue on the [GitHub repository](https://github.com/Erk732/uvautoboat/issues)
+
+---
+
+## Testing
+
+### Unit Testing
+
+The project includes unit tests for critical components:
+
+```bash
+# Run all tests
+cd ~/seal_ws
+colcon test --packages-select plan control
+
+# View test results
+colcon test-result --verbose
+```
+
+### Integration Testing
+
+### Test 1: Path Planning and Following
+
+1. Launch simulation:
+
+   ```bash
+   ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+   ```
+
+2. Start navigation stack:
+
+   ```bash
+   # Terminal 2
+   ros2 run plan astar_planner --ros-args -p use_sim_time:=true
+
+   # Terminal 3
+   ros2 run control path_follower --ros-args -p use_sim_time:=true
+   ```
+
+3. Send test goal:
+
+   ```bash
+   # Terminal 4
+   ros2 topic pub --once /planning/goal geometry_msgs/msg/PoseStamped \
+   "{header: {frame_id: 'map'}, pose: {position: {x: -520.0, y: 190.0, z: 0.0}}}"
+   ```
+
+4. **Expected behavior**:
+   - A* planner computes path within 1-2 seconds
+   - Path follower begins tracking waypoints
+   - Boat moves smoothly toward goal
+   - Boat stops within 2m of goal position
+
+### Test 2: Obstacle Avoidance
+
+1. Launch simulation with custom world:
+
+   ```bash
+   export GZ_SIM_RESOURCE_PATH=$HOME/seal_ws/src/uvautoboat/test_environment:$GZ_SIM_RESOURCE_PATH
+   gz sim ~/seal_ws/src/uvautoboat/test_environment/sydney_regatta_custom.sdf
+   ```
+
+2. Start obstacle avoidance node:
+
+   ```bash
+   ros2 run plan avoidingobs_ts_planner --ros-args -p use_sim_time:=true
+   ```
+
+3. **Expected behavior**:
+   - Node detects cardboard box obstacles
+   - Boat adjusts trajectory to avoid collisions
+   - Thrust commands modulate based on obstacle proximity
+
+### Performance Metrics
+
+Expected system performance benchmarks:
+
+| Metric | Target | Description |
+|:-------|:-------|:------------|
+| Planning Time | < 2s | Time to compute initial path |
+| Control Loop Rate | 10 Hz | Path follower update frequency |
+| Position Error | < 2m | Distance to goal at completion |
+| Collision Avoidance | 100% | Success rate in test scenarios |
+
+---
+
 ## Development
 
 ### Project Status
@@ -354,7 +563,14 @@ For detailed development status, milestones, and task tracking, refer to [Board.
 
 ### Contributing
 
-This project is part of an ROS 2 course at IMT Nord Europe. For contribution guidelines and development roadmap, please refer to the project board.
+This project is developed as part of the ROS 2 Autonomous Systems course at IMT Nord Europe. Contributions are welcome from the community.
+
+**Development Guidelines**:
+
+1. **Code Style**: Follow PEP 8 for Python code
+2. **Documentation**: Update README and inline comments for significant changes
+3. **Testing**: Include unit tests for new functionality
+4. **Pull Requests**: Provide clear descriptions of changes and their purpose
 
 ## References
 
