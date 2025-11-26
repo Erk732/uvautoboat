@@ -63,7 +63,7 @@ class ThrusterPathFollower(Node):
         # Subscribers
         self.path_sub = self.create_subscription(
             Path,
-            '/planned_path',       # Must match planning group topic name
+            '/planning/path',       # Must match planning group topic name
             self.path_callback,
             10
         )
