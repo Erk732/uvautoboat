@@ -46,10 +46,10 @@ The planning module serves as the bridge between mission objectives and vehicle 
 
 ### System Requirements
 
-- **Operating System**: Ubuntu 22.04 LTS or Ubuntu 24.04 LTS
+- **Operating System**: Ubuntu 24.04 LTS
 - **Python**: Version 3.10 or higher
-- **Memory**: Minimum 8GB RAM (16GB recommended)
-- **Storage**: At least 10GB available disk space
+- **Memory**: Minimum 8GB RAM (16GB or 32GB recommended)
+- **Storage**: At least 40GB available disk space
 
 ### Prerequisites
 
