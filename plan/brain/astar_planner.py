@@ -40,12 +40,12 @@ class AStarPlanner(Node):
         # Locate the boat on the map using TF
         target_frame = 'wamv/base_link'
 
-        if not self.tf_buffer.can_transform('map', target_frame, Time()):
+        if not self.tf_buffer.can_transform('world', target_frame, Time()):
             return
 
         try:
             # Use Time() (zero) to get the latest available transform
-            t = self.tf_buffer.lookup_transform('map', target_frame, Time())
+            t = self.tf_buffer.lookup_transform('world', target_frame, Time())
 
             self.current_pose = Pose()
             self.current_pose.position.x = t.transform.translation.x
@@ -59,14 +59,14 @@ class AStarPlanner(Node):
 
         if len(msg.poses) > 0:
             try:
-                if not self.tf_buffer.can_transform('map', msg.header.frame_id, Time()):
+                if not self.tf_buffer.can_transform('world', msg.header.frame_id, Time()):
                     return
 
                 for pose in msg.poses:
                     p_stamped = PoseStamped()
-                    p_stamped.header = msg.header 
+                    p_stamped.header = msg.header
                     p_stamped.pose = pose
-                    p_in_map = self.tf_buffer.transform(p_stamped, 'map')
+                    p_in_map = self.tf_buffer.transform(p_stamped, 'world')
 
                     self.grid.set_obstacle(p_in_map.pose.position.x, p_in_map.pose.position.y, radius=3.0)
 
@@ -143,7 +143,7 @@ class AStarPlanner(Node):
     def publish_path(self, points):
         msg = Path()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "map"
+        msg.header.frame_id = "world"
         for x,y in points:
             p = PoseStamped()
             p.header = msg.header
