@@ -12,6 +12,106 @@ AutoBoat is an autonomous navigation system for unmanned surface vehicles (USVs)
 
 AutoBoat implements a hierarchical autonomous navigation framework designed for maritime surface vehicles operating in complex environments. The system combines perception, planning, and control subsystems to enable intelligent waypoint navigation while dynamically responding to environmental constraints. By processing sensor data streams and mission objectives in real-time, the architecture generates collision-free trajectories that account for static obstacles, operational boundaries, and vehicle dynamics, ensuring safe and efficient autonomous operation.
 
+## Background Concepts for New Users
+
+If you're new to ROS 2 or autonomous navigation, here are some key concepts that will help you understand this system:
+
+### What is ROS 2?
+
+**ROS 2 (Robot Operating System 2)** is a framework for building robot software. Think of it as a communication system that allows different parts of a robot (sensors, planning algorithms, controllers) to talk to each other.
+
+**Key ROS 2 Concepts:**
+
+- **Node**: An independent program that performs a specific task (e.g., path planning, motor control)
+- **Topic**: A named channel where nodes send and receive messages (like `/wamv/pose` for boat position)
+- **Message**: Data structure sent over topics (e.g., position coordinates, sensor readings)
+- **Package**: A collection of related nodes and code organized together
+
+**Example**: In this system, the `astar_planner` node publishes path messages to the `/planning/path` topic, and the `path_follower` node subscribes to that topic to receive the path.
+
+### What are Coordinate Frames (TF)?
+
+**Coordinate frames** define where things are in 3D space. Different parts of the robot have their own reference frames.
+
+**In this system:**
+
+- `world` or `map`: The global reference frame (like GPS coordinates)
+- `wamv/base_link`: The boat's center point
+- `wamv/imu_wamv_link`: Where the IMU sensor is located
+
+**Why it matters**: To plan a path, the system needs to know where the boat is relative to the world. The TF (Transform) system automatically converts between these different frames.
+
+### What is use_sim_time?
+
+When running in simulation (Gazebo), time moves differently than real-world time. The simulation can be paused, slowed down, or sped up.
+
+**The `use_sim_time` parameter** tells ROS 2 nodes to use simulation time instead of your computer's clock. This keeps everything synchronized.
+
+**Always use** `--ros-args -p use_sim_time:=true` when running nodes alongside Gazebo simulation.
+
+### What is Gazebo?
+
+**Gazebo** is a 3D physics simulator that creates realistic virtual environments for testing robots. It simulates:
+
+- Physics (gravity, buoyancy, collisions)
+- Sensors (cameras, GPS, IMU)
+- Actuators (thrusters, motors)
+
+**Why simulate?** Testing on real boats is expensive and dangerous. Gazebo lets you test your algorithms safely before deploying to hardware.
+
+### How Does Path Planning Work?
+
+Path planning is like using Google Maps for your robot:
+
+1. **Input**: Current position + Goal position
+2. **Process**: Algorithm finds obstacle-free path
+3. **Output**: Series of waypoints to follow
+
+**A* Algorithm** (used in this system):
+
+- Searches through a grid of possible positions
+- Finds the shortest path while avoiding obstacles
+- Uses a "heuristic" (educated guess) to search efficiently
+
+### How Does the Control System Work?
+
+The control system is like a driver following GPS directions:
+
+1. **Input**: Desired path from planner
+2. **Process**: Calculate steering and throttle commands
+3. **Output**: Thruster commands (left/right thrust)
+
+**Differential Thrust Control**:
+
+- Two independent thrusters (left and right)
+- To go straight: Both thrusters equal power
+- To turn left: Right thruster more power than left
+- To turn right: Left thruster more power than right
+
+### Topic Communication Example
+
+```text
+┌─────────────┐         /planning/goal        ┌──────────────┐
+│    User     │ ──────────────────────────────>│ astar_planner│
+└─────────────┘                                 └──────────────┘
+                                                       │
+                                                       │ /planning/path
+                                                       ↓
+                                                ┌──────────────┐
+                                                │path_follower │
+                                                └──────────────┘
+                                                       │
+                                          ┌────────────┴──────────────┐
+                                          ↓                           ↓
+                                /wamv/thrusters/left    /wamv/thrusters/right
+                                          ↓                           ↓
+                                    ┌─────────────────────────────────┐
+                                    │   WAM-V Boat (Gazebo)           │
+                                    └─────────────────────────────────┘
+```
+
+This visualization shows how messages flow from goal input to boat movement.
+
 ## Core Capabilities
 
 - **Point-to-Point Navigation**: Generates efficient trajectories between specified waypoints using optimization-based planning algorithms, enabling precise autonomous navigation in structured maritime environments.
