@@ -92,8 +92,8 @@ The control system is like a driver following GPS directions:
 
 ```text
 ┌─────────────┐         /planning/goal        ┌──────────────┐
-│    User     │ ──────────────────────────────>│ astar_planner│
-└─────────────┘                                 └──────────────┘
+│    User     │ ──────────────────────────────│ astar_planner│
+└─────────────┘                               └──────────────┘
                                                        │
                                                        │ /planning/path
                                                        ↓
