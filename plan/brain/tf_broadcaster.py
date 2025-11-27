@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import TransformStamped, PoseStamped
 
@@ -8,20 +9,36 @@ class TFBroadcaster(Node):
         super().__init__('tf_broadcaster')
         self.br = TransformBroadcaster(self)
 
-        # Subscribe to the simulation's pose topic
+        # Create QoS profile matching VRX's PoseStamped publisher
+        qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10
+        )
+
+        # Subscribe to the simulation's pose topic with explicit QoS
+        # Note: /wamv/pose has multiple message types published by different nodes
+        # We specifically want the PoseStamped messages from ros_gz_bridge
         self.subscription = self.create_subscription(
             PoseStamped,
             '/wamv/pose',
             self.listener_callback,
-            10)
-        self.get_logger().info('TF Broadcaster: Broadcasting world -> wamv/base_link transform from /wamv/pose')
+            qos_profile)
+        self.get_logger().info('TF Broadcaster: Broadcasting world -> wamv/wamv/base_link transform from /wamv/pose (PoseStamped)')
 
     def listener_callback(self, msg):
         # Create a TransformStamped message from the PoseStamped
         t = TransformStamped()
 
         # Set the header - use 'world' as the parent frame to match astar_planner expectations
-        t.header.stamp = self.get_clock().now().to_msg()
+        # Use message timestamp if available, otherwise use current time
+        if msg.header.stamp.sec == 0 and msg.header.stamp.nanosec == 0:
+            # Empty timestamp - use current simulation time
+            t.header.stamp = self.get_clock().now().to_msg()
+        else:
+            # Use the message timestamp to maintain time consistency
+            t.header.stamp = msg.header.stamp
+
         t.header.frame_id = 'world'
         t.child_frame_id = 'wamv/wamv/base_link'
 
