@@ -2,59 +2,62 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from tf2_ros import TransformBroadcaster
-from geometry_msgs.msg import TransformStamped, PoseStamped
+from geometry_msgs.msg import TransformStamped
+from tf2_msgs.msg import TFMessage
 
 class TFBroadcaster(Node):
     def __init__(self):
         super().__init__('tf_broadcaster')
         self.br = TransformBroadcaster(self)
 
-        # Create QoS profile matching VRX's PoseStamped publisher
+        # Create QoS profile matching VRX's TF publisher
         qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             history=HistoryPolicy.KEEP_LAST,
             depth=10
         )
 
-        # Subscribe to the simulation's pose topic with explicit QoS
-        # Note: /wamv/pose has multiple message types published by different nodes
-        # We specifically want the PoseStamped messages from ros_gz_bridge
+        # Subscribe to VRX's /wamv/pose topic which publishes TFMessage
+        # VRX publishes the boat pose as transforms, not PoseStamped
         self.subscription = self.create_subscription(
-            PoseStamped,
+            TFMessage,
             '/wamv/pose',
             self.listener_callback,
             qos_profile)
-        self.get_logger().info('TF Broadcaster: Broadcasting world -> wamv/wamv/base_link transform from /wamv/pose (PoseStamped)')
+
+        self.get_logger().info('TF Broadcaster: Listening to /wamv/pose (TFMessage) to create world frame')
 
     def listener_callback(self, msg):
-        # Create a TransformStamped message from the PoseStamped
-        t = TransformStamped()
+        # VRX publishes transforms with frame_id as the boat frame
+        # We need to republish them with 'world' as the parent frame
+        for transform in msg.transforms:
+            # Create a new transform with 'world' as parent
+            t = TransformStamped()
 
-        # Set the header - use 'world' as the parent frame to match astar_planner expectations
-        # Use message timestamp if available, otherwise use current time
-        if msg.header.stamp.sec == 0 and msg.header.stamp.nanosec == 0:
-            # Empty timestamp - use current simulation time
-            t.header.stamp = self.get_clock().now().to_msg()
-        else:
-            # Use the message timestamp to maintain time consistency
-            t.header.stamp = msg.header.stamp
+            # Use message timestamp if available, otherwise use current time
+            if transform.header.stamp.sec == 0 and transform.header.stamp.nanosec == 0:
+                t.header.stamp = self.get_clock().now().to_msg()
+            else:
+                t.header.stamp = transform.header.stamp
 
-        t.header.frame_id = 'world'
-        t.child_frame_id = 'wamv/wamv/base_link'
+            # Set parent frame to 'world' instead of original frame
+            t.header.frame_id = 'world'
 
-        # Copy position
-        t.transform.translation.x = msg.pose.position.x
-        t.transform.translation.y = msg.pose.position.y
-        t.transform.translation.z = msg.pose.position.z
+            # Keep the child frame (should be wamv/wamv/base_link or similar)
+            t.child_frame_id = transform.child_frame_id
 
-        # Copy orientation
-        t.transform.rotation.x = msg.pose.orientation.x
-        t.transform.rotation.y = msg.pose.orientation.y
-        t.transform.rotation.z = msg.pose.orientation.z
-        t.transform.rotation.w = msg.pose.orientation.w
+            # Copy the transform data
+            t.transform = transform.transform
 
-        # Broadcast it to the global TF system
-        self.br.sendTransform(t)
+            # Broadcast to TF
+            self.br.sendTransform(t)
+
+            # Log only the base_link transform to avoid spam
+            if 'base_link' in transform.child_frame_id:
+                self.get_logger().debug(
+                    f'Broadcasting: world -> {transform.child_frame_id}',
+                    throttle_duration_sec=5.0
+                )
 
 def main(args=None):
     rclpy.init(args=args)
