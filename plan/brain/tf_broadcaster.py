@@ -1,63 +1,52 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
-from tf2_ros import TransformBroadcaster
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
+from tf2_ros import TransformBroadcaster, Buffer, TransformListener
 from geometry_msgs.msg import TransformStamped
-from tf2_msgs.msg import TFMessage
+from builtin_interfaces.msg import Time
 
 class TFBroadcaster(Node):
     def __init__(self):
         super().__init__('tf_broadcaster')
         self.br = TransformBroadcaster(self)
 
-        # Create QoS profile matching VRX's TF publisher
-        qos_profile = QoSProfile(
-            reliability=ReliabilityPolicy.RELIABLE,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=10
-        )
+        # Create TF buffer and listener to read existing transforms
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # Subscribe to VRX's /wamv/pose topic which publishes TFMessage
-        # VRX publishes the boat pose as transforms, not PoseStamped
-        self.subscription = self.create_subscription(
-            TFMessage,
-            '/wamv/pose',
-            self.listener_callback,
-            qos_profile)
+        # Create timer to periodically create world -> base_link transform
+        # We need to create a static transform from world to the robot's base
+        self.timer = self.create_timer(0.05, self.publish_world_transform)  # 20 Hz
 
-        self.get_logger().info('TF Broadcaster: Listening to /wamv/pose (TFMessage) to create world frame')
+        self.get_logger().info('TF Broadcaster: Creating world frame as root of TF tree')
 
-    def listener_callback(self, msg):
-        # VRX publishes transforms with frame_id as the boat frame
-        # We need to republish them with 'world' as the parent frame
-        for transform in msg.transforms:
-            # Create a new transform with 'world' as parent
-            t = TransformStamped()
+    def publish_world_transform(self):
+        """
+        Creates a world -> wamv/wamv/base_link transform.
+        Since VRX doesn't provide global position, we create a static identity transform.
+        The boat's wamv/wamv/base_link becomes our global reference.
+        """
+        t = TransformStamped()
 
-            # Use message timestamp if available, otherwise use current time
-            if transform.header.stamp.sec == 0 and transform.header.stamp.nanosec == 0:
-                t.header.stamp = self.get_clock().now().to_msg()
-            else:
-                t.header.stamp = transform.header.stamp
+        # Set timestamp to current time
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = 'world'
+        t.child_frame_id = 'wamv/wamv/base_link'
 
-            # Set parent frame to 'world' instead of original frame
-            t.header.frame_id = 'world'
+        # Identity transform (world aligns with boat's initial position)
+        # In a real deployment, this would come from GPS or other global localization
+        t.transform.translation.x = 0.0
+        t.transform.translation.y = 0.0
+        t.transform.translation.z = 0.0
 
-            # Keep the child frame (should be wamv/wamv/base_link or similar)
-            t.child_frame_id = transform.child_frame_id
+        # No rotation (identity quaternion)
+        t.transform.rotation.x = 0.0
+        t.transform.rotation.y = 0.0
+        t.transform.rotation.z = 0.0
+        t.transform.rotation.w = 1.0
 
-            # Copy the transform data
-            t.transform = transform.transform
-
-            # Broadcast to TF
-            self.br.sendTransform(t)
-
-            # Log only the base_link transform to avoid spam
-            if 'base_link' in transform.child_frame_id:
-                self.get_logger().debug(
-                    f'Broadcasting: world -> {transform.child_frame_id}',
-                    throttle_duration_sec=5.0
-                )
+        # Broadcast the transform
+        self.br.sendTransform(t)
 
 def main(args=None):
     rclpy.init(args=args)
