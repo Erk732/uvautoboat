@@ -18,8 +18,8 @@ class Apollo11(Node):
         self.speed = 1000.0        # Normal speed
         
         # --- STUCK DETECTION SETTINGS ---
-        self.check_interval = 2.0 # Check for stuck every 5 seconds
-        self.min_move_dist = 0.50  # Must move at least 1 meter every 5 sec
+        self.check_interval = 5.0 # Check for stuck every 5 seconds
+        self.min_move_dist = 1.0  # Must move at least 1 meter every 5 sec
         
         # --- STATE ---
         self.start_gps = None
