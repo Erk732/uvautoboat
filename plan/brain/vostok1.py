@@ -1,8 +1,9 @@
 import rclpy
 from rclpy.node import Node
 import math
+import numpy as np
 
-from sensor_msgs.msg import NavSatFix, Imu
+from sensor_msgs.msg import NavSatFix, Imu, LaserScan
 from std_msgs.msg import Float64
 
 class Vostok1(Node):
@@ -11,16 +12,21 @@ class Vostok1(Node):
 
         # --- CONFIGURATION PARAMETERS ---
         self.declare_parameter('scan_length', 100.0)
-        self.declare_parameter('scan_width', 10.0)  # Fixed: was 100, now 10 for proper coverage
+        self.declare_parameter('scan_width', 10.0)
         self.declare_parameter('lanes', 10)
         self.declare_parameter('base_speed', 500.0)
         self.declare_parameter('max_speed', 800.0)
-        self.declare_parameter('waypoint_tolerance', 2.0)  # Tighter tolerance
+        self.declare_parameter('waypoint_tolerance', 2.0)
 
         # PID Controller gains
         self.declare_parameter('kp', 400.0)
-        self.declare_parameter('ki', 20.0)   # Integral term
-        self.declare_parameter('kd', 100.0)  # Derivative term
+        self.declare_parameter('ki', 20.0)
+        self.declare_parameter('kd', 100.0)
+
+        # Obstacle avoidance parameters
+        self.declare_parameter('min_safe_distance', 5.0)
+        self.declare_parameter('critical_distance', 2.5)
+        self.declare_parameter('obstacle_slow_factor', 0.3)
 
         # Get parameters
         self.scan_length = self.get_parameter('scan_length').value
@@ -34,6 +40,10 @@ class Vostok1(Node):
         self.ki = self.get_parameter('ki').value
         self.kd = self.get_parameter('kd').value
 
+        self.min_safe_distance = self.get_parameter('min_safe_distance').value
+        self.critical_distance = self.get_parameter('critical_distance').value
+        self.obstacle_slow_factor = self.get_parameter('obstacle_slow_factor').value
+
         # --- STATE VARIABLES ---
         self.start_gps = None
         self.current_gps = None
@@ -44,6 +54,14 @@ class Vostok1(Node):
         self.waypoints = []
         self.current_wp_index = 0
         self.state = "INIT"  # INIT -> DRIVING -> FINISHED
+
+        # Obstacle avoidance state
+        self.obstacle_detected = False
+        self.min_obstacle_distance = float('inf')
+        self.front_clear = float('inf')
+        self.left_clear = float('inf')
+        self.right_clear = float('inf')
+        self.avoidance_mode = False
 
         # Statistics
         self.total_distance = 0.0
@@ -62,6 +80,12 @@ class Vostok1(Node):
             self.imu_callback,
             10
         )
+        self.create_subscription(
+            LaserScan,
+            '/wamv/sensors/lidars/lidar_wamv_sensor/scan',
+            self.lidar_callback,
+            10
+        )
 
         # --- PUBLISHERS ---
         self.pub_left = self.create_publisher(Float64, '/wamv/thrusters/left/thrust', 10)
@@ -72,12 +96,13 @@ class Vostok1(Node):
         self.create_timer(self.dt, self.control_loop)
 
         self.get_logger().info("=" * 60)
-        self.get_logger().info("Vostok 1 - GPS Lawn Mower Navigator")
+        self.get_logger().info("Vostok 1 - GPS Navigator with Obstacle Avoidance")
         self.get_logger().info("=" * 60)
         self.get_logger().info(f"Scan Area: {self.scan_length}m × {self.scan_width * self.lanes}m")
         self.get_logger().info(f"Lanes: {self.lanes}, Width: {self.scan_width}m")
         self.get_logger().info(f"Speed: {self.base_speed} (max: {self.max_speed})")
         self.get_logger().info(f"PID: Kp={self.kp}, Ki={self.ki}, Kd={self.kd}")
+        self.get_logger().info(f"Obstacle Avoidance: Safe={self.min_safe_distance}m, Critical={self.critical_distance}m")
         self.get_logger().info("Waiting for GPS fix...")
         self.get_logger().info("=" * 60)
 
@@ -100,6 +125,40 @@ class Vostok1(Node):
         cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
         self.current_yaw = math.atan2(siny_cosp, cosy_cosp)
 
+    def lidar_callback(self, msg):
+        """Process LIDAR scan for obstacle detection"""
+        ranges = np.array(msg.ranges)
+
+        # Filter out invalid readings
+        valid_indices = np.isfinite(ranges)
+        if not np.any(valid_indices):
+            return
+
+        valid_ranges = ranges[valid_indices]
+
+        # Get minimum distance
+        self.min_obstacle_distance = np.min(valid_ranges)
+
+        # Check if obstacle is within safety threshold
+        self.obstacle_detected = self.min_obstacle_distance < self.min_safe_distance
+
+        # Analyze sectors for navigation
+        self.analyze_scan_sectors(ranges)
+
+    def analyze_scan_sectors(self, ranges):
+        """Divide scan into sectors to determine best direction"""
+        num_ranges = len(ranges)
+
+        # Divide into front, left, right sectors
+        front_sector = ranges[int(num_ranges*0.4):int(num_ranges*0.6)]
+        left_sector = ranges[int(num_ranges*0.6):]
+        right_sector = ranges[:int(num_ranges*0.4)]
+
+        # Calculate average distance in each sector
+        self.front_clear = np.mean(front_sector[np.isfinite(front_sector)]) if np.any(np.isfinite(front_sector)) else float('inf')
+        self.left_clear = np.mean(left_sector[np.isfinite(left_sector)]) if np.any(np.isfinite(left_sector)) else float('inf')
+        self.right_clear = np.mean(right_sector[np.isfinite(right_sector)]) if np.any(np.isfinite(right_sector)) else float('inf')
+
     def latlon_to_meters(self, lat, lon):
         """Convert GPS coordinates to local meters (Equirectangular projection)"""
         R = 6371000.0  # Earth radius in meters
@@ -121,12 +180,8 @@ class Vostok1(Node):
         for i in range(self.lanes):
             # Alternate direction each lane
             if i % 2 == 0:
-                # Go forward (East)
-                x_start = 0.0
                 x_end = self.scan_length
             else:
-                # Go backward (West)
-                x_start = self.scan_length
                 x_end = 0.0
 
             y_pos = i * self.scan_width
@@ -134,7 +189,7 @@ class Vostok1(Node):
             # Lane endpoint
             self.waypoints.append((x_end, y_pos))
 
-            # Add transition to next lane (move North)
+            # Add transition to next lane
             if i < self.lanes - 1:
                 next_y = (i + 1) * self.scan_width
                 self.waypoints.append((x_end, next_y))
@@ -173,11 +228,20 @@ class Vostok1(Node):
             )
             self.current_wp_index += 1
             self.total_distance += dist
-            # Reset integral error on new waypoint
             self.integral_error = 0.0
             return
 
-        # Calculate desired heading
+        # --- OBSTACLE AVOIDANCE LOGIC ---
+        if self.min_obstacle_distance < self.critical_distance:
+            # CRITICAL: Stop or reverse
+            self.get_logger().warn(
+                f"CRITICAL OBSTACLE at {self.min_obstacle_distance:.2f}m - Stopping/Reversing!"
+            )
+            self.send_thrust(-200.0, -200.0)  # Reverse slowly
+            self.avoidance_mode = True
+            return
+
+        # Calculate desired heading to waypoint
         target_angle = math.atan2(dy, dx)
 
         # Calculate heading error
@@ -189,14 +253,38 @@ class Vostok1(Node):
         while angle_error < -math.pi:
             angle_error += 2.0 * math.pi
 
+        # Obstacle avoidance: modify heading if obstacle detected
+        if self.obstacle_detected:
+            self.avoidance_mode = True
+            # Determine which direction to turn
+            if self.left_clear > self.right_clear:
+                # More space on left, bias turn left
+                avoidance_bias = 0.5  # Positive = turn left
+                direction = "LEFT"
+            else:
+                # More space on right, bias turn right
+                avoidance_bias = -0.5  # Negative = turn right
+                direction = "RIGHT"
+
+            # Add avoidance bias to angle error
+            angle_error += avoidance_bias
+
+            self.get_logger().info(
+                f"OBSTACLE {self.min_obstacle_distance:.1f}m - Turning {direction} "
+                f"(L:{self.left_clear:.1f}m R:{self.right_clear:.1f}m)",
+                throttle_duration_sec=1.0
+            )
+        else:
+            if self.avoidance_mode:
+                self.get_logger().info("Path clear - Resuming waypoint navigation")
+                self.avoidance_mode = False
+
         # PID Controller
         self.integral_error += angle_error * self.dt
-        # Anti-windup: limit integral term
         self.integral_error = max(-0.5, min(0.5, self.integral_error))
 
         derivative_error = (angle_error - self.previous_error) / self.dt
 
-        # PID output
         turn_power = (
             self.kp * angle_error +
             self.ki * self.integral_error +
@@ -208,18 +296,22 @@ class Vostok1(Node):
         # Limit turn power
         turn_power = max(-800.0, min(800.0, turn_power))
 
-        # Adaptive speed: slow down for sharp turns
+        # Adaptive speed
         angle_error_deg = abs(math.degrees(angle_error))
         if angle_error_deg > 45:
-            speed = self.base_speed * 0.5  # 50% speed for sharp turns
+            speed = self.base_speed * 0.5
         elif angle_error_deg > 20:
-            speed = self.base_speed * 0.75  # 75% speed for medium turns
+            speed = self.base_speed * 0.75
         else:
-            speed = self.base_speed  # Full speed for straight
+            speed = self.base_speed
 
-        # Distance-based speed adjustment: slow down near waypoint
+        # Distance-based speed adjustment
         if dist < 5.0:
             speed *= 0.7
+
+        # Obstacle-based speed adjustment
+        if self.obstacle_detected:
+            speed *= self.obstacle_slow_factor
 
         # Differential thrust
         left_thrust = speed - turn_power
@@ -232,7 +324,7 @@ class Vostok1(Node):
         # Send commands
         self.send_thrust(left_thrust, right_thrust)
 
-        # Periodic status update (every 2 seconds)
+        # Periodic status update
         if self.current_wp_index % 4 == 0 and hasattr(self, '_last_log_time'):
             now = self.get_clock().now()
             if (now - self._last_log_time).nanoseconds / 1e9 > 2.0:
@@ -244,12 +336,14 @@ class Vostok1(Node):
     def log_status(self, curr_x, curr_y, target_x, target_y, dist, error):
         """Log current navigation status"""
         wp_progress = f"{self.current_wp_index + 1}/{len(self.waypoints)}"
+        obs_status = f"OBS:{self.min_obstacle_distance:.1f}m" if self.obstacle_detected else "CLEAR"
         self.get_logger().info(
             f"WP {wp_progress} | "
             f"Pos: ({curr_x:.1f}, {curr_y:.1f}) | "
             f"Target: ({target_x:.1f}, {target_y:.1f}) | "
             f"Dist: {dist:.1f}m | "
-            f"Error: {math.degrees(error):.1f}°"
+            f"Error: {math.degrees(error):.1f}° | "
+            f"{obs_status}"
         )
 
     def finish_mission(self, final_x, final_y):
