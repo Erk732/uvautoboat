@@ -33,6 +33,7 @@ setup(
             'tf_broadcaster = brain.tf_broadcaster:main',
             'apollo11 = brain.apollo11:main',
             'lawn_mower = brain.lawn_mower:main',
+            'vostok1 = brain.vostok1:main',
         ],
     },
 )
