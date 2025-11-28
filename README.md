@@ -508,13 +508,13 @@ To add additional obstacles or objects to your simulation environment, you can d
 - **Position** (x, y, z): Coordinates in 3D space in **m**.
   - `x`: Used for going forward (all engines ahead) or backward (all engines sternway)
   - `y`: Left hand turning or righr hand turning
-  - `z`: Up or down 
+  - `z`: Up or down
 - **Orientation** (roll, pitch, yaw): Rotation angle in **rad**.
   - `roll`: Rotation around the x-axis (roll to port side or starboard side)
   - `pitch`: Rotation around the y-axis（pitch up or pitch down）
   - `yaw`: Rotation around the z-axis（yaw to port direction or starboard direction ）
   - **Common Values**: `0 0 0` These values are default upright orinetation of the boat
-  - **For better understanding**: `0 0 1.57` values will show a 90° (π/2 in radians) rotation around z-axis(a simple yaw) 
+  - **For better understanding**: `0 0 1.57` values will show a 90° (π/2 in radians) rotation around z-axis(a simple yaw)
 
 ### Expected Output
 
