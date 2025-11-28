@@ -1,0 +1,17 @@
+name,x,y,z
+unnamed,0.0,0.0,0.2
+Coast Waves,0.0,0.0,0.0
+mb_marker_buoy_red,-528.0,191.0,0.0
+mb_marker_buoy_black,-528.0,190.0,0.0
+mb_marker_buoy_green,-528.0,189.0,0.0
+mb_marker_buoy_white,-528.0,188.0,0.0
+mb_round_buoy_orange,-528.0,187.0,0.0
+mb_round_buoy_black,-528.0,186.0,0.0
+post_0,-535.916809,154.362869,0.675884
+post_1,-527.48999,153.854782,0.425844
+post_2,-544.832825,156.671951,0.499025
+unnamed,-531.063721,147.668579,1.59471
+ground_station_0,-540.796448,146.493744,1.671421
+ground_station_1,-537.622681,145.827896,1.681931
+ground_station_2,-534.550537,144.9104,1.720474
+blue_projectile,-545.0,60.0,0.03
