@@ -31,6 +31,7 @@ setup(
             'mission_trigger = brain.mission_trigger:main',
             'avoidingobs_ts_planner = brain.avoidingobs_ts_planner:main',
             'tf_broadcaster = brain.tf_broadcaster:main',
+            'path_follower = control.path_follower:main',
         ],
     },
 )

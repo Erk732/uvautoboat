@@ -38,7 +38,6 @@ class AStarPlanner(Node):
         self.grid = GridMap(width_m=1200, height_m=600, resolution=1.0)
         
         # --- FRAME SETTINGS ---
-        # FIX: Changed to 'world' to match your README and VRX simulation
         self.global_frame = 'world'
         self.robot_frame = 'wamv/wamv/base_link' # there shoud 3 layers not 2 so there should be wamv/wamv/base_link
 
