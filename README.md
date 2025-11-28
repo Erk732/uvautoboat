@@ -409,18 +409,18 @@ To add additional obstacles or objects to your simulation environment, you can d
   - **Common usage**: `0 0 0` for default upright orientation (no rotation)
   - **Example**: `0 0 1.57` rotates 90° (π/2 radians) around z-axis
 
-**注意**: `<pose>` 标签指定模型的位置 (x, y, z) 和方向 (roll, pitch, yaw)，分别以米和弧度为单位。
+**Note**: The `<pose>` tag specifies the model's position in (x, y, z) and orientation (roll, pitch, yaw)，in meters and radians respectively.
 
-- **位置** (x, y, z): 三维空间中的坐标，单位为**米**
-  - `x`: 前进/后退方向
-  - `y`: 左/右方向
-  - `z`: 上/下方向
-- **方向** (roll, pitch, yaw): 旋转角度，单位为**弧度**
-  - `roll`: 绕x轴旋转（翻滚）
-  - `pitch`: 绕y轴旋转（俯仰）
-  - `yaw`: 绕z轴旋转（偏航）
-  - **常用值**: `0 0 0` 表示默认直立方向（无旋转）
-  - **示例**: `0 0 1.57` 表示绕z轴旋转90°（π/2 弧度）
+- **Position** (x, y, z): Coordinates in 3D space in**m**
+  - `x`: Used for going forward (all engines ahead) or backward (all engines sternway)
+  - `y`: Left hand turning or righr hand turning
+  - `z`: Up or down 
+- **Orientation** (roll, pitch, yaw): Rotation angle in**rad**
+  - `roll`: Rotation around the x-axis (roll to port side or starboard side)
+  - `pitch`: Rotation around the y-axis（pitch up or pitch down）
+  - `yaw`: Rotation around the z-axis（yaw to port direction or starboard direction ）
+  - **Common Values**: `0 0 0` These values are default upright orinetation of the boat（无旋转）
+  - **For better understanding**: `0 0 1.57` values will show a 90° (π/2 in radians) rotation around z-axis(a simple yaw) 
 
 ### Expected Output
 
