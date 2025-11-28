@@ -2,8 +2,9 @@ import rclpy
 from rclpy.node import Node
 import math
 import numpy as np
+import struct
 
-from sensor_msgs.msg import NavSatFix, Imu, LaserScan
+from sensor_msgs.msg import NavSatFix, Imu, PointCloud2
 from std_msgs.msg import Float64
 
 class Vostok1(Node):
@@ -102,10 +103,10 @@ class Vostok1(Node):
             10
         )
         self.create_subscription(
-            LaserScan,
-            '/wamv/sensors/lidars/lidar_wamv_sensor/scan',
+            PointCloud2,
+            '/wamv/sensors/lidars/lidar_wamv_sensor/points',
             self.lidar_callback,
-            10
+            rclpy.qos.qos_profile_sensor_data
         )
 
         # --- PUBLISHERS ---
@@ -147,18 +148,60 @@ class Vostok1(Node):
         self.current_yaw = math.atan2(siny_cosp, cosy_cosp)
 
     def lidar_callback(self, msg):
-        """Process LIDAR scan for obstacle detection"""
-        ranges = np.array(msg.ranges)
-
-        # Filter out invalid readings
-        valid_indices = np.isfinite(ranges)
-        if not np.any(valid_indices):
+        """Process 3D LIDAR point cloud for obstacle detection"""
+        # Extract points from PointCloud2 using proper iteration
+        points = []
+        
+        # PointCloud2 structure: each point has x, y, z (and possibly intensity)
+        # Assuming xyz fields are first 12 bytes (3 floats * 4 bytes each)
+        point_step = msg.point_step
+        row_step = msg.row_step
+        data = msg.data
+        
+        # Process points - sample every 5th point for better coverage
+        for i in range(0, len(data) - point_step, point_step * 5):
+            try:
+                # Extract x, y, z from point cloud data
+                x, y, z = struct.unpack_from('fff', data, i)
+                
+                # Skip invalid points
+                if math.isnan(x) or math.isnan(y) or math.isnan(z):
+                    continue
+                if math.isinf(x) or math.isinf(y) or math.isinf(z):
+                    continue
+                
+                # Filter by height - obstacles are between -0.2m (water surface) and 3.0m
+                if z < -0.2 or z > 3.0:
+                    continue
+                
+                # Calculate horizontal distance
+                dist = math.sqrt(x*x + y*y)
+                
+                # Focus on relevant range: ignore boat itself and very far objects
+                if dist < 0.3 or dist > 50.0:
+                    continue
+                
+                # Only consider points in front hemisphere (x > -2.0)
+                if x > -2.0:
+                    points.append((x, y, z, dist))
+                    
+            except struct.error:
+                continue
+            except Exception:
+                continue
+        
+        if not points:
+            # No valid points - assume clear but be cautious
+            self.min_obstacle_distance = 30.0
+            if not self.obstacle_detected:  # Don't immediately clear if we were detecting
+                self.front_clear = 30.0
+                self.left_clear = 30.0
+                self.right_clear = 30.0
             return
-
-        valid_ranges = ranges[valid_indices]
-
-        # Get minimum distance
-        self.min_obstacle_distance = np.min(valid_ranges)
+        
+        # Get minimum distance from all valid points
+        distances = [p[3] for p in points]
+        self.min_obstacle_distance = min(distances)
 
         # Hysteresis for obstacle detection (prevents flickering)
         if self.obstacle_detected:
@@ -170,23 +213,58 @@ class Vostok1(Node):
             self.obstacle_detected = self.min_obstacle_distance < self.min_safe_distance
 
         # Analyze sectors for navigation
-        self.analyze_scan_sectors(ranges)
+        self.analyze_scan_sectors_3d(points)
 
-    def analyze_scan_sectors(self, ranges):
-        """Divide scan into sectors to determine best direction"""
-        num_ranges = len(ranges)
-
-        # Divide into front, left, right sectors
-        front_sector = ranges[int(num_ranges*0.4):int(num_ranges*0.6)]
-        left_sector = ranges[int(num_ranges*0.6):]
-        right_sector = ranges[:int(num_ranges*0.4)]
-
-        # Calculate median distance in each sector (more robust than mean)
-        # Cap maximum distance to avoid infinity bias
+    def analyze_scan_sectors_3d(self, points):
+        """Divide 3D point cloud into sectors to determine best direction"""
+        # Divide points into sectors based on angle from boat's perspective
+        # Front: -45° to +45°, Left: +45° to +135°, Right: -135° to -45°
+        front_points = []
+        left_points = []
+        right_points = []
+        
+        for x, y, z, dist in points:
+            angle = math.atan2(y, x)  # Angle in radians from boat's forward axis
+            
+            # Wider front sector for better obstacle detection ahead
+            if -math.pi/4 < angle < math.pi/4:  # Front sector ±45°
+                front_points.append(dist)
+            elif math.pi/4 <= angle <= 3*math.pi/4:  # Left sector 45° to 135°
+                left_points.append(dist)
+            elif -3*math.pi/4 <= angle < -math.pi/4:  # Right sector -135° to -45°
+                right_points.append(dist)
+        
+        # For each sector, find the minimum distance (closest obstacle)
+        # Use 10th percentile for robustness against noise
         max_range = 50.0  # meters
-        self.front_clear = np.median(np.clip(front_sector[np.isfinite(front_sector)], 0, max_range)) if np.any(np.isfinite(front_sector)) else max_range
-        self.left_clear = np.median(np.clip(left_sector[np.isfinite(left_sector)], 0, max_range)) if np.any(np.isfinite(left_sector)) else max_range
-        self.right_clear = np.median(np.clip(right_sector[np.isfinite(right_sector)], 0, max_range)) if np.any(np.isfinite(right_sector)) else max_range
+        
+        if front_points:
+            sorted_front = sorted(front_points)
+            # Use 10th percentile or minimum if few points
+            if len(sorted_front) > 10:
+                self.front_clear = min(max_range, sorted_front[len(sorted_front)//10])
+            else:
+                self.front_clear = min(max_range, sorted_front[0])
+        else:
+            self.front_clear = max_range
+            
+        if left_points:
+            sorted_left = sorted(left_points)
+            if len(sorted_left) > 10:
+                self.left_clear = min(max_range, sorted_left[len(sorted_left)//10])
+            else:
+                self.left_clear = min(max_range, sorted_left[0])
+        else:
+            self.left_clear = max_range
+            
+        if right_points:
+            sorted_right = sorted(right_points)
+            if len(sorted_right) > 10:
+                self.right_clear = min(max_range, sorted_right[len(sorted_right)//10])
+            else:
+                self.right_clear = min(max_range, sorted_right[0])
+        else:
+            self.right_clear = max_range
 
     def latlon_to_meters(self, lat, lon):
         """Convert GPS coordinates to local meters (Equirectangular projection)"""
