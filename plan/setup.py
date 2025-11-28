@@ -31,11 +31,8 @@ setup(
             'mission_trigger = brain.mission_trigger:main',
             'avoidingobs_ts_planner = brain.avoidingobs_ts_planner:main',
             'tf_broadcaster = brain.tf_broadcaster:main',
-            'path_follower = control.path_follower:main',
             'apollo11 = brain.apollo11:main',
             'lawn_mower = brain.lawn_mower:main',
-            'simple_controller = control.simple_controller:main',
-            'path_follower = control.path_follower:main',
         ],
     },
 )
