@@ -115,8 +115,8 @@ class Apollo11(Node):
         # --- LOGIC BLOCK: RECOVERY MODE ---
         if self.state == "REVERSING":
             # 1. Reverse for 3.0 seconds
-            self.send_thrust(-800.0, -800.0) # Full reverse
-            if (time.time() - self.recovery_start_time) > 3.0:
+            self.send_thrust(-1000.0, -1000.0) # Full reverse
+            if (time.time() - self.recovery_start_time) > 10.0:
                 self.state = "TURNING"
                 self.recovery_start_time = time.time() # Reset timer for turn
             return
@@ -151,7 +151,7 @@ class Apollo11(Node):
             dist = math.hypot(dx, dy)
 
             if dist < 4.0:
-                self.get_logger().info(f"✅ Waypoint {self.current_wp_index + 1} Reached")
+                self.get_logger().info(f"Waypoint {self.current_wp_index + 1} Reached")
                 self.current_wp_index += 1
                 return
 
