@@ -1,8 +1,6 @@
 import rclpy
 from rclpy.node import Node
 import math
-
-# Messages
 from sensor_msgs.msg import NavSatFix, Imu
 from std_msgs.msg import Float64
 
@@ -11,7 +9,7 @@ class LawnMower(Node):
         super().__init__('lawn_mower_node')
 
         # --- CONFIGURATION ---
-        self.scan_length = 100.0  # Go forward 
+        self.scan_length = 30.0  # Go forward 
         self.scan_width = 100.0   # Move sideways 
         self.lanes = 10           # How many times to go back and forth
         self.speed = 500.0       # Thrust power set 
