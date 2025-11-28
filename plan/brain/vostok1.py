@@ -11,8 +11,8 @@ class Vostok1(Node):
         super().__init__('vostok1_node')
 
         # --- CONFIGURATION PARAMETERS ---
-        self.declare_parameter('scan_length', 100.0)
-        self.declare_parameter('scan_width', 10.0)
+        self.declare_parameter('scan_length', 30.0)
+        self.declare_parameter('scan_width', 100.0)
         self.declare_parameter('lanes', 10)
         self.declare_parameter('base_speed', 500.0)
         self.declare_parameter('max_speed', 800.0)
@@ -27,6 +27,12 @@ class Vostok1(Node):
         self.declare_parameter('min_safe_distance', 5.0)
         self.declare_parameter('critical_distance', 2.5)
         self.declare_parameter('obstacle_slow_factor', 0.3)
+        self.declare_parameter('hysteresis_distance', 1.0)  # Exit threshold offset
+        self.declare_parameter('reverse_timeout', 3.0)  # Max seconds to reverse
+
+        # Stuck detection parameters
+        self.declare_parameter('stuck_timeout', 5.0)  # Seconds without movement to detect stuck
+        self.declare_parameter('stuck_threshold', 0.5)  # Minimum movement in meters to not be stuck
 
         # Get parameters
         self.scan_length = self.get_parameter('scan_length').value
@@ -43,6 +49,11 @@ class Vostok1(Node):
         self.min_safe_distance = self.get_parameter('min_safe_distance').value
         self.critical_distance = self.get_parameter('critical_distance').value
         self.obstacle_slow_factor = self.get_parameter('obstacle_slow_factor').value
+        self.hysteresis_distance = self.get_parameter('hysteresis_distance').value
+        self.reverse_timeout = self.get_parameter('reverse_timeout').value
+
+        self.stuck_timeout = self.get_parameter('stuck_timeout').value
+        self.stuck_threshold = self.get_parameter('stuck_threshold').value
 
         # --- STATE VARIABLES ---
         self.start_gps = None
@@ -62,6 +73,16 @@ class Vostok1(Node):
         self.left_clear = float('inf')
         self.right_clear = float('inf')
         self.avoidance_mode = False
+        self.reverse_start_time = None
+
+        # Stuck detection state
+        self.last_position = None
+        self.stuck_check_time = None
+        self.is_stuck = False
+        self.escape_mode = False
+        self.escape_start_time = None
+        self.consecutive_stuck_count = 0
+        self.last_stuck_waypoint = None
 
         # Statistics
         self.total_distance = 0.0
@@ -139,8 +160,14 @@ class Vostok1(Node):
         # Get minimum distance
         self.min_obstacle_distance = np.min(valid_ranges)
 
-        # Check if obstacle is within safety threshold
-        self.obstacle_detected = self.min_obstacle_distance < self.min_safe_distance
+        # Hysteresis for obstacle detection (prevents flickering)
+        if self.obstacle_detected:
+            # Already in obstacle mode - need to be farther to exit
+            exit_threshold = self.min_safe_distance + self.hysteresis_distance
+            self.obstacle_detected = self.min_obstacle_distance < exit_threshold
+        else:
+            # Not in obstacle mode - enter if too close
+            self.obstacle_detected = self.min_obstacle_distance < self.min_safe_distance
 
         # Analyze sectors for navigation
         self.analyze_scan_sectors(ranges)
@@ -154,10 +181,12 @@ class Vostok1(Node):
         left_sector = ranges[int(num_ranges*0.6):]
         right_sector = ranges[:int(num_ranges*0.4)]
 
-        # Calculate average distance in each sector
-        self.front_clear = np.mean(front_sector[np.isfinite(front_sector)]) if np.any(np.isfinite(front_sector)) else float('inf')
-        self.left_clear = np.mean(left_sector[np.isfinite(left_sector)]) if np.any(np.isfinite(left_sector)) else float('inf')
-        self.right_clear = np.mean(right_sector[np.isfinite(right_sector)]) if np.any(np.isfinite(right_sector)) else float('inf')
+        # Calculate median distance in each sector (more robust than mean)
+        # Cap maximum distance to avoid infinity bias
+        max_range = 50.0  # meters
+        self.front_clear = np.median(np.clip(front_sector[np.isfinite(front_sector)], 0, max_range)) if np.any(np.isfinite(front_sector)) else max_range
+        self.left_clear = np.median(np.clip(left_sector[np.isfinite(left_sector)], 0, max_range)) if np.any(np.isfinite(left_sector)) else max_range
+        self.right_clear = np.median(np.clip(right_sector[np.isfinite(right_sector)], 0, max_range)) if np.any(np.isfinite(right_sector)) else max_range
 
     def latlon_to_meters(self, lat, lon):
         """Convert GPS coordinates to local meters (Equirectangular projection)"""
@@ -207,6 +236,14 @@ class Vostok1(Node):
         # Get current position in meters
         curr_x, curr_y = self.latlon_to_meters(self.current_gps[0], self.current_gps[1])
 
+        # Initialize stuck detection on first run
+        if self.last_position is None:
+            self.last_position = (curr_x, curr_y)
+            self.stuck_check_time = self.get_clock().now()
+
+        # Check for stuck condition
+        self.check_stuck_condition(curr_x, curr_y)
+
         # Check if mission complete
         if self.current_wp_index >= len(self.waypoints):
             self.finish_mission(curr_x, curr_y)
@@ -231,43 +268,66 @@ class Vostok1(Node):
             self.integral_error = 0.0
             return
 
+        # --- STUCK ESCAPE LOGIC ---
+        if self.is_stuck and self.escape_mode:
+            self.execute_escape_maneuver()
+            return
+
         # --- OBSTACLE AVOIDANCE LOGIC ---
         if self.min_obstacle_distance < self.critical_distance:
             # CRITICAL: Stop or reverse
-            self.get_logger().warn(
-                f"CRITICAL OBSTACLE at {self.min_obstacle_distance:.2f}m - Stopping/Reversing!"
-            )
-            self.send_thrust(-200.0, -200.0)  # Reverse slowly
-            self.avoidance_mode = True
-            return
+            if self.reverse_start_time is None:
+                # Just entered reverse mode
+                self.reverse_start_time = self.get_clock().now()
+                self.integral_error = 0.0  # Reset integral on mode change
+                self.get_logger().warn(
+                    f"CRITICAL OBSTACLE at {self.min_obstacle_distance:.2f}m - Reversing!"
+                )
 
-        # Calculate desired heading to waypoint
-        target_angle = math.atan2(dy, dx)
+            # Check if we've been reversing too long
+            elapsed = (self.get_clock().now() - self.reverse_start_time).nanoseconds / 1e9
+            if elapsed > self.reverse_timeout:
+                # Timeout - stop reversing and try turning instead
+                self.get_logger().warn(f"Reverse timeout ({elapsed:.1f}s) - Switching to turn mode")
+                self.reverse_start_time = None
+                # Fall through to normal avoidance
+            else:
+                # Reverse harder in critical zone
+                self.send_thrust(-400.0, -400.0)
+                self.avoidance_mode = True
+                return
+        else:
+            # Not in critical zone - reset reverse timer
+            self.reverse_start_time = None
 
-        # Calculate heading error
-        angle_error = target_angle - self.current_yaw
-
-        # Normalize to [-pi, pi]
-        while angle_error > math.pi:
-            angle_error -= 2.0 * math.pi
-        while angle_error < -math.pi:
-            angle_error += 2.0 * math.pi
-
-        # Obstacle avoidance: modify heading if obstacle detected
+        # OBSTACLE AVOIDANCE MODE: Override waypoint navigation
         if self.obstacle_detected:
+            # Reset integral error when entering avoidance mode
+            if not self.avoidance_mode:
+                self.integral_error = 0.0
+                self.previous_error = 0.0
+                self.get_logger().info("Entering obstacle avoidance mode - PID reset")
+
             self.avoidance_mode = True
-            # Determine which direction to turn
+
+            # Determine which direction has more clearance
             if self.left_clear > self.right_clear:
-                # More space on left, bias turn left
-                avoidance_bias = 0.5  # Positive = turn left
+                # Turn hard left (90 degrees from current heading)
+                avoidance_heading = self.current_yaw + math.pi / 2
                 direction = "LEFT"
             else:
-                # More space on right, bias turn right
-                avoidance_bias = -0.5  # Negative = turn right
+                # Turn hard right (90 degrees from current heading)
+                avoidance_heading = self.current_yaw - math.pi / 2
                 direction = "RIGHT"
 
-            # Add avoidance bias to angle error
-            angle_error += avoidance_bias
+            # Calculate error to avoidance heading
+            angle_error = avoidance_heading - self.current_yaw
+
+            # Normalize to [-pi, pi]
+            while angle_error > math.pi:
+                angle_error -= 2.0 * math.pi
+            while angle_error < -math.pi:
+                angle_error += 2.0 * math.pi
 
             self.get_logger().info(
                 f"OBSTACLE {self.min_obstacle_distance:.1f}m - Turning {direction} "
@@ -275,9 +335,24 @@ class Vostok1(Node):
                 throttle_duration_sec=1.0
             )
         else:
+            # NORMAL WAYPOINT NAVIGATION MODE
             if self.avoidance_mode:
                 self.get_logger().info("Path clear - Resuming waypoint navigation")
                 self.avoidance_mode = False
+                self.integral_error = 0.0
+                self.previous_error = 0.0  # Reset PID when exiting avoidance
+
+            # Calculate desired heading to waypoint
+            target_angle = math.atan2(dy, dx)
+
+            # Calculate heading error
+            angle_error = target_angle - self.current_yaw
+
+            # Normalize to [-pi, pi]
+            while angle_error > math.pi:
+                angle_error -= 2.0 * math.pi
+            while angle_error < -math.pi:
+                angle_error += 2.0 * math.pi
 
         # PID Controller
         self.integral_error += angle_error * self.dt
@@ -373,6 +448,127 @@ class Vostok1(Node):
         msg_r.data = float(right)
         self.pub_left.publish(msg_l)
         self.pub_right.publish(msg_r)
+
+    def check_stuck_condition(self, curr_x, curr_y):
+        """Detect if boat is stuck and hasn't moved significantly"""
+        # Don't check if already in escape mode
+        if self.escape_mode:
+            return
+
+        # Calculate distance moved since last check
+        dx = curr_x - self.last_position[0]
+        dy = curr_y - self.last_position[1]
+        distance_moved = math.hypot(dx, dy)
+
+        # Check elapsed time
+        elapsed = (self.get_clock().now() - self.stuck_check_time).nanoseconds / 1e9
+
+        if elapsed >= self.stuck_timeout:
+            # Time to check if stuck
+            if distance_moved < self.stuck_threshold:
+                if not self.is_stuck:
+                    self.is_stuck = True
+                    self.escape_mode = True
+                    self.escape_start_time = self.get_clock().now()
+                    self.integral_error = 0.0  # Reset PID
+                    
+                    # Track consecutive stuck events at same waypoint
+                    if self.last_stuck_waypoint == self.current_wp_index:
+                        self.consecutive_stuck_count += 1
+                    else:
+                        self.consecutive_stuck_count = 1
+                        self.last_stuck_waypoint = self.current_wp_index
+                    
+                    self.get_logger().warn(
+                        f"STUCK DETECTED! Moved only {distance_moved:.2f}m in {elapsed:.1f}s. "
+                        f"Initiating escape maneuver! (Attempt {self.consecutive_stuck_count})"
+                    )
+                    
+                    # Skip waypoint if stuck too many times
+                    if self.consecutive_stuck_count >= 3:
+                        self.get_logger().error(
+                            f"Stuck {self.consecutive_stuck_count} times at waypoint {self.current_wp_index + 1}. "
+                            f"Skipping to next waypoint!"
+                        )
+                        self.current_wp_index += 1
+                        self.consecutive_stuck_count = 0
+                        self.is_stuck = False
+                        self.escape_mode = False
+            else:
+                # Moved enough - not stuck
+                if self.is_stuck:
+                    self.get_logger().info("No longer stuck - resuming normal operation")
+                self.is_stuck = False
+                self.escape_mode = False
+
+            # Reset tracking
+            self.last_position = (curr_x, curr_y)
+            self.stuck_check_time = self.get_clock().now()
+
+    def execute_escape_maneuver(self):
+        """Execute escape sequence when stuck"""
+        elapsed = (self.get_clock().now() - self.escape_start_time).nanoseconds / 1e9
+
+        # Escape sequence: reverse for 5s, then turn hard for 3s, then try forward
+        if elapsed < 5.0:
+            # Phase 1: Reverse longer and harder to create more distance
+            self.send_thrust(-500.0, -500.0)
+            self.get_logger().info(f"Escape Phase 1: Reversing ({elapsed:.1f}s)", throttle_duration_sec=1.0)
+        elif elapsed < 8.0:
+            # Phase 2: Turn hard (choose direction based on LIDAR clearance)
+            # Bias towards the significantly clearer side
+            clearance_diff = self.left_clear - self.right_clear
+            if abs(clearance_diff) > 2.0:  # Significant difference
+                if clearance_diff > 0:
+                    self.send_thrust(-400.0, 400.0)  # Turn left
+                    direction = "LEFT"
+                else:
+                    self.send_thrust(400.0, -400.0)  # Turn right
+                    direction = "RIGHT"
+            else:
+                # Similar clearance - turn toward waypoint if possible
+                if self.current_wp_index < len(self.waypoints):
+                    curr_x, curr_y = self.latlon_to_meters(self.current_gps[0], self.current_gps[1])
+                    target_x, target_y = self.waypoints[self.current_wp_index]
+                    target_bearing = math.atan2(target_y - curr_y, target_x - curr_x)
+                    heading_diff = target_bearing - self.current_yaw
+                    # Normalize
+                    while heading_diff > math.pi:
+                        heading_diff -= 2.0 * math.pi
+                    while heading_diff < -math.pi:
+                        heading_diff += 2.0 * math.pi
+                    
+                    if heading_diff > 0:
+                        self.send_thrust(-400.0, 400.0)  # Turn left
+                        direction = "LEFT (toward waypoint)"
+                    else:
+                        self.send_thrust(400.0, -400.0)  # Turn right
+                        direction = "RIGHT (toward waypoint)"
+                else:
+                    # Default: turn left
+                    self.send_thrust(-400.0, 400.0)
+                    direction = "LEFT (default)"
+            
+            self.get_logger().info(
+                f"Escape Phase 2: Turning {direction} ({elapsed:.1f}s)",
+                throttle_duration_sec=1.0
+            )
+        elif elapsed < 10.0:
+            # Phase 3: Try moving forward slowly
+            self.send_thrust(300.0, 300.0)
+            self.get_logger().info(f"Escape Phase 3: Forward test ({elapsed:.1f}s)", throttle_duration_sec=1.0)
+        else:
+            # Escape complete - exit escape mode
+            self.get_logger().info("Escape maneuver complete - resuming navigation")
+            self.escape_mode = False
+            self.is_stuck = False
+            self.integral_error = 0.0
+            self.previous_error = 0.0
+            # Don't reset consecutive counter yet - wait to see if we're truly free
+            # Reset position tracking
+            curr_x, curr_y = self.latlon_to_meters(self.current_gps[0], self.current_gps[1])
+            self.last_position = (curr_x, curr_y)
+            self.stuck_check_time = self.get_clock().now()
 
     def stop_boat(self):
         """Stop all thrusters"""
