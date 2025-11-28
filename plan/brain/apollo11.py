@@ -46,7 +46,7 @@ class LawnMower(Node):
         # If this is the first time we see GPS, save it as "Home"
         if self.start_gps is None:
             self.start_gps = (msg.latitude, msg.longitude)
-            self.get_logger().info(f"🏠 Home Base Set: {self.start_gps}")
+            self.get_logger().info(f"Home Base Set: {self.start_gps}")
             self.generate_lawnmower_path()
             self.state = "DRIVING"
 
@@ -90,7 +90,7 @@ class LawnMower(Node):
                 next_y = (i + 1) * self.scan_width
                 self.waypoints.append((x_dist, next_y))
 
-        self.get_logger().info(f"📋 Generated {len(self.waypoints)} waypoints for scanning.")
+        self.get_logger().info(f"Generated {len(self.waypoints)} waypoints for scanning.")
 
     def control_loop(self):
         if self.state != "DRIVING" or self.current_gps is None:
@@ -103,7 +103,7 @@ class LawnMower(Node):
         if self.current_wp_index >= len(self.waypoints):
             self.state = "FINISHED"
             self.stop_boat()
-            self.get_logger().info("🏁 Scanning Complete!")
+            self.get_logger().info("Scanning Complete!")
             return
 
         target_x, target_y = self.waypoints[self.current_wp_index]
@@ -115,7 +115,7 @@ class LawnMower(Node):
 
         # Check if we reached the waypoint (within 3 meters)
         if dist < 3.0:
-            self.get_logger().info(f"✅ Reached Waypoint {self.current_wp_index}")
+            self.get_logger().info(f"Reached Waypoint {self.current_wp_index}")
             self.current_wp_index += 1
             return
 
