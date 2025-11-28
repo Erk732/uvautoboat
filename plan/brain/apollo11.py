@@ -160,7 +160,7 @@ class Apollo11(Node):
                 self.last_check_pos = (curr_x, curr_y)
             return
 
-        # --- Obstacle Avoidance ---
+        # --- Obstacle Avoidance --- CHANGE IT
         if self.state == "AVOIDING":
             turn_power = 600.0
             if self.obstacle_state == 1:   # more space on left → turn left
