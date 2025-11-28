@@ -30,7 +30,7 @@ class TFBroadcaster(Node):
         
         # 2. Frame Names (The "Name Game" Fix)
         t.header.frame_id = 'world'          # The Global Map
-        t.child_frame_id = 'wamv/base_link'  # The Boat (Standard VRX name)
+        t.child_frame_id = 'wamv/wamv/base_link'  # The Boat (Standard VRX name)
 
         # 3. Copy Position from Simulator (Dynamic!)
         # This allows the map to update as the boat moves
