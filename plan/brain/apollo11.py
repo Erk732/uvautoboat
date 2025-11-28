@@ -11,10 +11,10 @@ class LawnMower(Node):
         super().__init__('lawn_mower_node')
 
         # --- CONFIGURATION ---
-        self.scan_length = 3000.0  # Go forward what meters you want between lanes
-        self.scan_width = 1000.0   # Move sideways what meters you want between lanes
+        self.scan_length = 400.0  # Go forward 
+        self.scan_width = 400.0   # Move sideways 
         self.lanes = 10           # How many times to go back and forth
-        self.speed = 500.0       # Thrust power
+        self.speed = 500.0       # Thrust power set 
 
         # --- STATE ---
         self.start_gps = None    # Will store (lat, lon) where we started
@@ -38,7 +38,7 @@ class LawnMower(Node):
         # --- CONTROL LOOP (10Hz) ---
         self.create_timer(0.1, self.control_loop)
         
-        self.get_logger().info("🚜 Lawn Mower Mode: Waiting for GPS...")
+        self.get_logger().info("Lawn Mower Mode: Waiting for GPS...")
 
     def gps_callback(self, msg):
         self.current_gps = (msg.latitude, msg.longitude)
