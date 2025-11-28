@@ -1,59 +1,51 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
-from tf2_ros import TransformBroadcaster
-from geometry_msgs.msg import TransformStamped, PoseStamped
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
+from tf2_ros import TransformBroadcaster, Buffer, TransformListener
+from geometry_msgs.msg import TransformStamped
+from builtin_interfaces.msg import Time
 
 class TFBroadcaster(Node):
     def __init__(self):
         super().__init__('tf_broadcaster')
         self.br = TransformBroadcaster(self)
 
-        # Create QoS profile matching VRX's PoseStamped publisher
-        qos_profile = QoSProfile(
-            reliability=ReliabilityPolicy.RELIABLE,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=10
-        )
+        # Create TF buffer and listener to read existing transforms
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # Subscribe to the simulation's pose topic with explicit QoS
-        # Note: /wamv/pose has multiple message types published by different nodes
-        # We specifically want the PoseStamped messages from ros_gz_bridge
-        self.subscription = self.create_subscription(
-            PoseStamped,
-            '/wamv/pose',
-            self.listener_callback,
-            qos_profile)
-        self.get_logger().info('TF Broadcaster: Broadcasting world -> wamv/wamv/base_link transform from /wamv/pose (PoseStamped)')
+        # Create timer to periodically create world -> base_link transform
+        # We need to create a static transform from world to the robot's base
+        self.timer = self.create_timer(0.05, self.publish_world_transform)  # 20 Hz
 
-    def listener_callback(self, msg):
-        # Create a TransformStamped message from the PoseStamped
+        self.get_logger().info('TF Broadcaster: Creating world frame as root of TF tree')
+
+    def publish_world_transform(self):
+        """
+        Creates a world -> wamv/wamv/base_link transform.
+        Since VRX doesn't provide global position, we create a static identity transform.
+        The boat's wamv/wamv/base_link becomes our global reference.
+        """
         t = TransformStamped()
 
-        # Set the header - use 'world' as the parent frame to match astar_planner expectations
-        # Use message timestamp if available, otherwise use current time
-        if msg.header.stamp.sec == 0 and msg.header.stamp.nanosec == 0:
-            # Empty timestamp - use current simulation time
-            t.header.stamp = self.get_clock().now().to_msg()
-        else:
-            # Use the message timestamp to maintain time consistency
-            t.header.stamp = msg.header.stamp
-
+        # Set timestamp to current time
+        t.header.stamp = self.get_clock().now().to_msg()
         t.header.frame_id = 'world'
         t.child_frame_id = 'wamv/wamv/base_link'
 
-        # Copy position
-        t.transform.translation.x = msg.pose.position.x
-        t.transform.translation.y = msg.pose.position.y
-        t.transform.translation.z = msg.pose.position.z
+        # Identity transform (world aligns with boat's initial position)
+        # In a real deployment, this would come from GPS or other global localization
+        t.transform.translation.x = 0.0
+        t.transform.translation.y = 0.0
+        t.transform.translation.z = 0.0
 
-        # Copy orientation
-        t.transform.rotation.x = msg.pose.orientation.x
-        t.transform.rotation.y = msg.pose.orientation.y
-        t.transform.rotation.z = msg.pose.orientation.z
-        t.transform.rotation.w = msg.pose.orientation.w
+        # No rotation (identity quaternion)
+        t.transform.rotation.x = 0.0
+        t.transform.rotation.y = 0.0
+        t.transform.rotation.z = 0.0
+        t.transform.rotation.w = 1.0
 
-        # Broadcast it to the global TF system
+        # Broadcast the transform
         self.br.sendTransform(t)
 
 def main(args=None):

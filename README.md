@@ -3,10 +3,94 @@
 [![ROS 2 Version](https://img.shields.io/badge/ROS_2-Jazzy-blue)](https://docs.ros.org/en/jazzy/)
 [![Gazebo Version](https://img.shields.io/badge/Gazebo-Harmonic-orange)](https://gazebosim.org/)
 ![ROS 2 CI](https://github.com/osrf/vrx/workflows/ROS%202%20CI/badge.svg)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+> An autonomous navigation system for unmanned surface vehicles (USVs) developed for the Virtual RobotX (VRX) competition.
+
+## Table of Contents
+
+- [Abstract](#abstract)
+- [Quick Start](#quick-start)
+- [Features](#features)
+- [Background Concepts for New Users](#background-concepts-for-new-users)
+- [System Architecture](#system-architecture)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Simulation Environment](#simulation-environment)
+- [Package Documentation](#package-documentation)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [References](#references)
+
+---
 
 ## Abstract
 
 AutoBoat is an autonomous navigation system for unmanned surface vehicles (USVs) developed for the Virtual RobotX (VRX) competition. The system integrates advanced path planning, real-time obstacle avoidance, and precise trajectory tracking algorithms optimized for the WAM-V maritime platform. Built on ROS 2 Jazzy and Gazebo Harmonic, the framework provides a robust foundation for autonomous maritime navigation in simulated environments.
+
+---
+
+## Quick Start
+
+**Prerequisites**: ROS 2 Jazzy, Gazebo Harmonic, and VRX installed ([Installation Guide](#installation))
+
+```bash
+# Terminal 1 - Launch simulation
+ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+
+# Terminal 2 - Start TF broadcaster (CRITICAL)
+ros2 run plan tf_broadcaster --ros-args -p use_sim_time:=true
+
+# Terminal 3 - Start planner
+ros2 run plan astar_planner --ros-args -p use_sim_time:=true
+
+# Terminal 4 - Start controller
+ros2 run control path_follower --ros-args -p use_sim_time:=true
+
+# Terminal 5 - Send navigation goal
+ros2 topic pub --once /planning/goal geometry_msgs/msg/PoseStamped \
+"{header: {frame_id: 'world'}, pose: {position: {x: 50.0, y: 50.0, z: 0.0}}}"
+```
+
+**Expected Result**: The WAM-V boat autonomously navigates to the goal position (50, 50).
+
+For detailed testing instructions, see [Integration Testing](#integration-testing).
+
+---
+
+## Features
+
+### Core Capabilities
+
+✅ **Autonomous Navigation** - Fully operational point-to-point navigation system tested on ROS 2 Jazzy + Gazebo Harmonic
+
+✅ **A* Path Planning** - Grid-based optimal path planning with configurable environment size (300m to 2000m)
+
+✅ **Obstacle Avoidance** - Static obstacle detection and dynamic replanning capabilities
+
+✅ **Differential Thrust Control** - Precise trajectory tracking using independent left/right thruster control
+
+✅ **Transform Management** - Comprehensive TF system for coordinate frame handling
+
+### Technical Highlights
+
+- **Modular Architecture**: Separation of perception, planning, and control subsystems
+- **Grid-Based Planning**: Configurable resolution and environment size for different scenarios
+- **VRX Integration**: Full compatibility with Virtual RobotX simulation environment
+- **Simulation Time Support**: Proper synchronization with Gazebo physics simulation
+- **Extensible Framework**: Easy integration of additional planning algorithms and controllers
+
+### Current Status
+
+- ✅ **Phase 1**: Architecture & MVP - **100% Complete**
+- ✅ **Phase 2**: Obstacle Avoidance (A*) - **100% Complete**
+- ⏸️ **Phase 3**: Coverage & Search - Not Started
+- 🔄 **Phase 4**: Integration & Testing - **60% Complete**
+
+See [Board.md](Board.md) for detailed project status and milestones.
+
+---
 
 ## Overview
 
@@ -112,14 +196,6 @@ The control system is like a driver following GPS directions:
 
 This visualization shows how messages flow from goal input to boat movement.
 
-## Core Capabilities
-
-- **Point-to-Point Navigation**: Generates efficient trajectories between specified waypoints using optimization-based planning algorithms, enabling precise autonomous navigation in structured maritime environments.
-
-- **Coverage Planning**: Implements systematic area coverage using boustrophedon (lawn-mower) patterns optimized for search and surveillance missions, ensuring complete environmental exploration.
-
-- **Obstacle Avoidance**: Provides dynamic path replanning capabilities using the A* search algorithm with grid-based environmental representation to safely navigate around static obstacles including buoys, islands, and other maritime structures.
-
 ---
 
 ## System Architecture
@@ -134,11 +210,29 @@ The planning module serves as the bridge between mission objectives and vehicle 
 
 ### ROS 2 Communication Interfaces
 
-| Topic Name | Message Type | I/O | Description |
+#### Planning Topics
+
+| Topic Name | Message Type | Direction | Description |
 | :--- | :--- | :--- | :--- |
-| `/wamv/pose` | `geometry_msgs/PoseStamped` | Sub | Current boat position/orientation. |
-| `/planning/goal` | `geometry_msgs/PoseStamped` | Sub | Desired destination. |
-| `/planning/path` | `nav_msgs/Path` | Pub | Computed trajectory (waypoints). |
+| `/planning/goal` | `geometry_msgs/PoseStamped` | Input | Target destination in `world` frame |
+| `/planning/path` | `nav_msgs/Path` | Output | Computed collision-free trajectory |
+| `/perception/obstacles` | `geometry_msgs/PoseArray` | Input | Detected obstacle positions |
+
+#### Control Topics
+
+| Topic Name | Message Type | Direction | Description |
+| :--- | :--- | :--- | :--- |
+| `/planning/path` | `nav_msgs/Path` | Input | Trajectory waypoints from planner |
+| `/wamv/thrusters/left/thrust` | `std_msgs/Float64` | Output | Left thruster command (-1000 to 1000 N) |
+| `/wamv/thrusters/right/thrust` | `std_msgs/Float64` | Output | Right thruster command (-1000 to 1000 N) |
+
+#### Transform Frames
+
+| Frame ID | Parent Frame | Description |
+| :--- | :--- | :--- |
+| `world` | - | Global reference frame (root) |
+| `wamv/wamv/base_link` | `world` | Boat center point |
+| `wamv/wamv/imu_wamv_link` | `wamv/wamv/base_link` | IMU sensor location |
 
 ---
 
@@ -232,19 +326,19 @@ The following Python packages are automatically installed during the build proce
 
 ## Usage
 
-### Quick Start
+### Launch Demo (Alternative Method)
 
-Launch the complete navigation system with the default Sydney Regatta environment:
+Launch the complete navigation system using the provided demo launch file:
 
 ```bash
+# Terminal 1 - Launch VRX simulation
 ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
-```
 
-In a separate terminal, launch the navigation demo:
-
-```bash
+# Terminal 2 - Launch navigation demo
 ros2 launch plan demo.launch.py
 ```
+
+**Note**: For step-by-step component launch, see the [Quick Start](#quick-start) section above.
 
 ### Running Individual Components
 
@@ -409,18 +503,18 @@ To add additional obstacles or objects to your simulation environment, you can d
   - **Common usage**: `0 0 0` for default upright orientation (no rotation)
   - **Example**: `0 0 1.57` rotates 90° (π/2 radians) around z-axis
 
-**注意**: `<pose>` 标签指定模型的位置 (x, y, z) 和方向 (roll, pitch, yaw)，分别以米和弧度为单位。
+**Note**: The `<pose>` tag specifies the model's position in (x, y, z) and orientation (roll, pitch, yaw)，in meters and radians respectively.
 
-- **位置** (x, y, z): 三维空间中的坐标，单位为**米**
-  - `x`: 前进/后退方向
-  - `y`: 左/右方向
-  - `z`: 上/下方向
-- **方向** (roll, pitch, yaw): 旋转角度，单位为**弧度**
-  - `roll`: 绕x轴旋转（翻滚）
-  - `pitch`: 绕y轴旋转（俯仰）
-  - `yaw`: 绕z轴旋转（偏航）
-  - **常用值**: `0 0 0` 表示默认直立方向（无旋转）
-  - **示例**: `0 0 1.57` 表示绕z轴旋转90°（π/2 弧度）
+- **Position** (x, y, z): Coordinates in 3D space in **m**.
+  - `x`: Used for going forward (all engines ahead) or backward (all engines sternway)
+  - `y`: Left hand turning or righr hand turning
+  - `z`: Up or down 
+- **Orientation** (roll, pitch, yaw): Rotation angle in **rad**.
+  - `roll`: Rotation around the x-axis (roll to port side or starboard side)
+  - `pitch`: Rotation around the y-axis（pitch up or pitch down）
+  - `yaw`: Rotation around the z-axis（yaw to port direction or starboard direction ）
+  - **Common Values**: `0 0 0` These values are default upright orinetation of the boat
+  - **For better understanding**: `0 0 1.57` values will show a 90° (π/2 in radians) rotation around z-axis(a simple yaw) 
 
 ### Expected Output
 
@@ -705,6 +799,8 @@ If you encounter issues not covered here:
 
 ## Testing
 
+This section provides comprehensive testing procedures to validate the AutoBoat navigation system.
+
 ### Unit Testing
 
 The project includes unit tests for critical components:
@@ -720,57 +816,137 @@ colcon test-result --verbose
 
 ### Integration Testing
 
-### Test 1: Path Planning and Following
+Integration tests validate the complete navigation stack with all components working together.
 
-1. Launch simulation:
+#### Test 1: Path Planning and Following ✅
+
+**Status**: Verified working on ROS 2 Jazzy + Gazebo Harmonic (27/11/2025)
+
+**Objective**: Validate end-to-end autonomous navigation from goal specification to boat movement.
+
+**Prerequisites:**
+
+- Ensure all packages are built: `cd ~/seal_ws && colcon build --merge-install`
+- Source the workspace: `source ~/seal_ws/install/setup.bash` (If already sourced in bashrc, skip this step)
+
+**Step-by-Step Testing:**
+
+1. **Terminal 1 - Launch VRX Simulation:**
 
    ```bash
    ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
    ```
 
-2. Start navigation stack:
+   Wait for Gazebo to fully load and the WAM-V boat to appear in the water.
+
+2. **Terminal 2 - Start TF Broadcaster (CRITICAL):**
 
    ```bash
-   # Terminal 2
-   ros2 run plan astar_planner --ros-args -p use_sim_time:=true
+   ros2 run plan tf_broadcaster --ros-args -p use_sim_time:=true
+   ```
 
-   # Terminal 3
+   This creates the `world` frame required for navigation. You should see:
+
+   ```text
+   [INFO] [tf_broadcaster]: TF Broadcaster: Creating world frame as root of TF tree
+   ```
+
+3. **Terminal 3 - Verify TF is Working:**
+
+   ```bash
+   ros2 run tf2_ros tf2_echo world wamv/wamv/base_link
+   ```
+
+   You should see transform data updating continuously. Press Ctrl+C after verification.
+
+4. **Terminal 4 - Start Astar Planner:**
+
+   ```bash
+   ros2 run plan astar_planner --ros-args -p use_sim_time:=true
+   ```
+
+   You should see:
+
+   ```text
+   [INFO] [astar_planner_node]: A* Planner Ready. Waiting for TF...
+   ```
+
+5. **Terminal 5 - Start Path Follower:**
+
+   ```bash
    ros2 run control path_follower --ros-args -p use_sim_time:=true
    ```
 
-3. Send test goal:
+6. **Terminal 6 - Send Test Goal:**
+
+   **Small goal (quick test):**
 
    ```bash
-   # Terminal 4
    ros2 topic pub --once /planning/goal geometry_msgs/msg/PoseStamped \
-   "{header: {frame_id: 'map'}, pose: {position: {x: -520.0, y: 190.0, z: 0.0}}}"
+   "{header: {frame_id: 'world'}, pose: {position: {x: 50.0, y: 50.0, z: 0.0}}}"
    ```
 
-4. **Expected behavior**:
-   - A* planner computes path within 1-2 seconds
-   - Path follower begins tracking waypoints
-   - Boat moves smoothly toward goal
-   - Boat stops within 2m of goal position
+   **Large goal (full Sydney Regatta world):**
 
-### Test 2: Obstacle Avoidance
+   ```bash
+   ros2 topic pub --once /planning/goal geometry_msgs/msg/PoseStamped \
+   "{header: {frame_id: 'world'}, pose: {position: {x: -520.0, y: 190.0, z: 0.0}}}"
+   ```
 
-1. Launch simulation with custom world:
+**Expected Behavior:**
+
+- A* planner logs: `[INFO] Goal received: X, Y`
+- A* planner computes path within 1-2 seconds
+- Path published to `/planning/path` topic
+- Path follower begins tracking waypoints
+- Thrusters activate (check with `ros2 topic echo /wamv/thrusters/left/thrust`)
+- Boat moves smoothly toward goal in Gazebo
+- Boat stops within 2m of goal position
+
+**Valid Goal Coordinates:**
+
+- With default grid (1200m × 600m): X ∈ [-600, 600], Y ∈ [-300, 300]
+- With reduced grid (300m × 300m): X ∈ [-150, 150], Y ∈ [-150, 150]
+- Adjust grid size in `astar_planner.py` if needed
+
+**Troubleshooting:**
+
+- If "Start or Goal outside Grid Map!" appears, goal is outside grid bounds
+- If "Waiting for Boat Position (TF)..." persists, ensure tf_broadcaster is running
+- If boat doesn't move, check thrust commands: `ros2 topic echo /wamv/thrusters/left/thrust`
+
+#### Test 2: Obstacle Avoidance ⚠️
+
+**Status**: Legacy test - requires custom environment setup
+
+**Objective**: Validate dynamic obstacle detection and avoidance capabilities.
+
+**Steps:**
+
+1. **Configure environment**:
 
    ```bash
    export GZ_SIM_RESOURCE_PATH=$HOME/seal_ws/src/uvautoboat/test_environment:$GZ_SIM_RESOURCE_PATH
+   ```
+
+2. **Launch custom world**:
+
+   ```bash
    gz sim ~/seal_ws/src/uvautoboat/test_environment/sydney_regatta_custom.sdf
    ```
 
-2. Start obstacle avoidance node:
+3. **Start obstacle avoidance planner**:
 
    ```bash
    ros2 run plan avoidingobs_ts_planner --ros-args -p use_sim_time:=true
    ```
 
-3. **Expected behavior**:
-   - Node detects cardboard box obstacles
-   - Boat adjusts trajectory to avoid collisions
-   - Thrust commands modulate based on obstacle proximity
+**Expected Behavior**:
+
+- Perception node detects cardboard box obstacles
+- Planner generates collision-free paths around obstacles
+- Boat adjusts trajectory dynamically to avoid collisions
+- Thrust commands modulate based on obstacle proximity
 
 ### Performance Metrics
 

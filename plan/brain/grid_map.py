@@ -1,7 +1,7 @@
 import math
 
 class GridMap:
-    def __init__(self, width_m=300, height_m=300, resolution=1.0):
+    def __init__(self, width_m=1200, height_m=600, resolution=1.0):
         self.resolution = resolution
         self.width_m = width_m
         self.height_m = height_m
