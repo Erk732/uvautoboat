@@ -46,7 +46,7 @@ class Apollo11(Node):
         self.pub_right = self.create_publisher(Float64, '/wamv/thrusters/right/thrust', 10)
 
         self.create_timer(0.1, self.control_loop)
-        self.get_logger().info("Apollo 11: Systems Initialized with Anti-Stuck Technology.")
+        self.get_logger().info("Apollo 11: Systems Initialized with Anti-Stuck Logic.")
 
     def gps_callback(self, msg):
         self.current_gps = (msg.latitude, msg.longitude)
@@ -100,7 +100,7 @@ class Apollo11(Node):
             # If we haven't moved enough, we are stuck!
             if dist_moved < self.min_move_dist:
                 self.get_logger().warn(f"WAMV IS STUCK! Moved only {dist_moved:.2f}m in 5s.")
-                self.get_logger().warn("Initiating Recovery Maneuver...")
+                self.get_logger().warn("Initiating Reverse Maneuver...")
                 self.state = "REVERSING"
                 self.recovery_start_time = time.time()
             
