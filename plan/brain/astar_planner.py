@@ -30,8 +30,18 @@ class AStarPlanner(Node):
         self.current_pose = None
         self.goal_pose = None
 
-        # Grid with offset logic
-        self.grid = GridMap(width_m=300, height_m=300, resolution=1.0)
+        # Grid Map Configuration
+        # The grid is centered at (0,0), so valid coordinates are:
+        # X: [-width_m/2, +width_m/2], Y: [-height_m/2, +height_m/2]
+        #
+        # Recommended configurations:
+        # - Small testing (fast):     width_m=300,  height_m=300  (±150m range)
+        # - Sydney Regatta (default): width_m=1200, height_m=600  (±600m X, ±300m Y)
+        # - Large world:              width_m=2000, height_m=1000 (±1000m X, ±500m Y)
+        #
+        # Note: Larger grids use more memory and slow down planning
+        # Memory usage ≈ (width_m × height_m / resolution²) cells
+        self.grid = GridMap(width_m=1200, height_m=600, resolution=1.0)
 
         self.get_logger().info('A* Planner Ready. Waiting for TF...')
 
