@@ -38,8 +38,8 @@ class AStarPlanner(Node):
         self.grid = GridMap(width_m=1200, height_m=600, resolution=1.0)
         
         # --- FRAME SETTINGS ---
-        # Based on our previous work, the global frame is 'map'
-        self.global_frame = 'map'
+        # FIX: Changed to 'world' to match your README and VRX simulation
+        self.global_frame = 'world'
         self.robot_frame = 'wamv/base_link'
 
         self.get_logger().info('A* Planner Ready. Planning every 2.0 seconds.')
@@ -95,9 +95,13 @@ class AStarPlanner(Node):
         start = self.grid.world_to_grid(self.current_pose.position.x, self.current_pose.position.y)
         goal = self.grid.world_to_grid(self.goal_pose.position.x, self.goal_pose.position.y)
 
-        if not start or not goal: 
-            # Silent return to avoid console spam if boat is slightly out of bounds
+        # FIX: Added better logging and fixed the 'elf' typo
+        if not start: 
+            self.get_logger().warn(f" Start Pos ({self.current_pose.position.x:.2f}, {self.current_pose.position.y:.2f}) is OUTSIDE GridMap!")
             return
+        if not goal: 
+            self.get_logger().warn(f"Goal Pos ({self.goal_pose.position.x:.2f}, {self.goal_pose.position.y:.2f}) is OUTSIDE GridMap!")
+            return  
 
         # 2. Run A*
         path_indices = self.run_astar(start, goal)
