@@ -9,8 +9,8 @@ class LawnMower(Node):
         super().__init__('lawn_mower_node')
 
         # --- CONFIGURATION ---
-        self.scan_length = 30.0  # Go forward 
-        self.scan_width = 100.0   # Move sideways 
+        self.scan_length = 30.0  # Go forward (change to adjust area size)
+        self.scan_width = 100.0   # Move sideways (change to adjust area size)
         self.lanes = 10           # How many times to go back and forth
         self.speed = 500.0       # Thrust power set 
 
