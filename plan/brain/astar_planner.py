@@ -8,20 +8,24 @@ from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped, PoseArray, Pose
 from rclpy.time import Time 
 
-# --- FIXED IMPORT FOR YOUR FOLDER STRUCTURE ---
-# The dot (.) means "look in the current folder"
+# Assuming grid_map is in the same folder
 from .grid_map import GridMap 
 
 class AStarPlanner(Node):
     def __init__(self):
         super().__init__('astar_planner_node')
 
-        # --- 1. TF Listener (THE ONLY SOURCE OF TRUTH) ---
+        # --- 1. TF Listener ---
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # This timer updates the boat position AND checks for replanning
-        self.create_timer(0.1, self.control_loop)
+        # --- 2. Timers ---
+        # Timer A: High speed loop to update boat position (10Hz)
+        self.create_timer(0.1, self.update_pose)
+        
+        # Timer B: SLOW loop to Plan Path (0.5Hz = every 2 seconds)
+        # This prevents the "Circling" behavior
+        self.create_timer(2.0, self.plan_path)
 
         self.sub_goal = self.create_subscription(PoseStamped, '/planning/goal', self.goal_callback, 10)
         self.sub_obstacles = self.create_subscription(PoseArray, '/perception/obstacles', self.obstacle_callback, 10)
@@ -30,90 +34,87 @@ class AStarPlanner(Node):
         self.current_pose = None
         self.goal_pose = None
 
-        # Grid Map Configuration
-        # The grid is centered at (0,0), so valid coordinates are:
-        # X: [-width_m/2, +width_m/2], Y: [-height_m/2, +height_m/2]
-        #
-        # Recommended configurations:
-        # - Small testing (fast):     width_m=300,  height_m=300  (±150m range)
-        # - Sydney Regatta (default): width_m=1200, height_m=600  (±600m X, ±300m Y)
-        # - Large world:              width_m=2000, height_m=1000 (±1000m X, ±500m Y)
-        #
-        # Note: Larger grids use more memory and slow down planning
-        # Memory usage ≈ (width_m × height_m / resolution²) cells
+        # Setup Grid
         self.grid = GridMap(width_m=1200, height_m=600, resolution=1.0)
+        
+        # --- FRAME SETTINGS ---
+        # Based on our previous work, the global frame is 'map'
+        self.global_frame = 'map'
+        self.robot_frame = 'wamv/base_link'
 
-        self.get_logger().info('A* Planner Ready. Waiting for TF...')
+        self.get_logger().info('A* Planner Ready. Planning every 2.0 seconds.')
 
-    def control_loop(self):
+    def update_pose(self):
         # Locate the boat on the map using TF
-        target_frame = 'wamv/wamv/base_link'
-
-        if not self.tf_buffer.can_transform('world', target_frame, Time()):
+        if not self.tf_buffer.can_transform(self.global_frame, self.robot_frame, Time()):
             return
 
         try:
-            # Use Time() (zero) to get the latest available transform
-            t = self.tf_buffer.lookup_transform('world', target_frame, Time())
-
+            t = self.tf_buffer.lookup_transform(self.global_frame, self.robot_frame, Time())
             self.current_pose = Pose()
             self.current_pose.position.x = t.transform.translation.x
             self.current_pose.position.y = t.transform.translation.y
-
         except TransformException:
             pass 
 
     def obstacle_callback(self, msg):
+        # We UPDATE the map instantly, but we DO NOT plan here.
         self.grid.reset() 
 
         if len(msg.poses) > 0:
             try:
-                if not self.tf_buffer.can_transform('world', msg.header.frame_id, Time()):
+                # Ensure we can transform obstacles to map frame
+                if not self.tf_buffer.can_transform(self.global_frame, msg.header.frame_id, Time()):
                     return
 
                 for pose in msg.poses:
                     p_stamped = PoseStamped()
                     p_stamped.header = msg.header
                     p_stamped.pose = pose
-                    p_in_map = self.tf_buffer.transform(p_stamped, 'world')
+                    
+                    # Transform obstacle to map frame
+                    p_in_map = self.tf_buffer.transform(p_stamped, self.global_frame)
 
                     self.grid.set_obstacle(p_in_map.pose.position.x, p_in_map.pose.position.y, radius=3.0)
-
-                if self.goal_pose and self.current_pose:
-                    self.plan_path()
 
             except TransformException as e:
                 self.get_logger().warn(f'Obstacle TF Error: {e}')
 
     def goal_callback(self, msg):
         self.goal_pose = msg.pose
-        self.get_logger().info(f"Goal received: {msg.pose.position.x}, {msg.pose.position.y}")
-        if self.current_pose:
-            self.plan_path()
-        else:
-            self.get_logger().warn('Waiting for Boat Position (TF)...')
+        self.get_logger().info(f"Goal received. Planning starts in next cycle.")
+        # We can force a plan immediately on new goal, that's safe.
+        self.plan_path()
 
     def plan_path(self):
-        if not self.current_pose or not self.goal_pose: return
+        # Guard clauses
+        if not self.current_pose or not self.goal_pose: 
+            return
 
+        # 1. Convert World Coords -> Grid Coords
         start = self.grid.world_to_grid(self.current_pose.position.x, self.current_pose.position.y)
         goal = self.grid.world_to_grid(self.goal_pose.position.x, self.goal_pose.position.y)
 
         if not start or not goal: 
-            self.get_logger().warn("Start or Goal outside Grid Map!")
+            # Silent return to avoid console spam if boat is slightly out of bounds
             return
 
+        # 2. Run A*
         path_indices = self.run_astar(start, goal)
 
+        # 3. Publish
         if path_indices:
             points = [self.grid.grid_to_world(r,c) for r,c in path_indices]
             smoothed = self.smooth_path(points)
             self.publish_path(smoothed)
+        else:
+            self.get_logger().warn("A* failed to find a path!")
 
     def smooth_path(self, path):
         if len(path) < 3: return path
         new_path = list(path)
-        for _ in range(3):
+        # Increased smoothing iterations slightly for straighter lines
+        for _ in range(5):
             for i in range(1, len(path) - 1):
                 prev, curr, next_p = new_path[i-1], new_path[i], new_path[i+1]
                 new_path[i] = ((prev[0]+curr[0]+next_p[0])/3.0, (prev[1]+curr[1]+next_p[1])/3.0)
@@ -137,22 +138,29 @@ class AStarPlanner(Node):
 
             for dr, dc in [(0,1),(0,-1),(1,0),(-1,0),(1,1),(1,-1),(-1,1),(-1,-1)]:
                 neighbor = (current[0]+dr, current[1]+dc)
+                
+                # Check Bounds and Obstacles
                 if self.grid.is_blocked(neighbor[0], neighbor[1]): continue
 
+                # Cost Calculation
                 dist = 1.414 if abs(dr)+abs(dc)==2 else 1.0
                 tentative_g = g_score[current] + dist
 
                 if neighbor not in g_score or tentative_g < g_score[neighbor]:
                     came_from[neighbor] = current
                     g_score[neighbor] = tentative_g
-                    f_score = tentative_g + math.sqrt((neighbor[0]-goal[0])**2 + (neighbor[1]-goal[1])**2)
-                    heapq.heappush(open_list, (f_score, neighbor))
+                    
+                    # Heuristic (Euclidean Distance)
+                    h_score = math.sqrt((neighbor[0]-goal[0])**2 + (neighbor[1]-goal[1])**2)
+                    
+                    # F = G + H
+                    heapq.heappush(open_list, (tentative_g + h_score, neighbor))
         return None
 
     def publish_path(self, points):
         msg = Path()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "world"
+        msg.header.frame_id = self.global_frame
         for x,y in points:
             p = PoseStamped()
             p.header = msg.header
