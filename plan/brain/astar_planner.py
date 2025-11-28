@@ -40,7 +40,7 @@ class AStarPlanner(Node):
         # --- FRAME SETTINGS ---
         # FIX: Changed to 'world' to match your README and VRX simulation
         self.global_frame = 'world'
-        self.robot_frame = 'wamv/base_link'
+        self.robot_frame = 'wamv/wamv/base_link' # there shoud 3 layers not 2 so there should be wamv/wamv/base_link
 
         self.get_logger().info('A* Planner Ready. Planning every 2.0 seconds.')
 
