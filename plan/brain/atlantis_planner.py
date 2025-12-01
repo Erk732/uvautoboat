@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# atlanis_planner.py for only planning with dynamic reconfigure feature
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult # FOR DYNAMIC PARAMETERS
@@ -71,7 +72,7 @@ class AtlantisPlanner(Node):
 
         if regenerate and self.start_gps:
             self.generate_waypoints()
-            self.get_logger().warn(" MISSION ROUTE RECALCULATED!")
+            self.get_logger().warn("MISSION ROUTE RECALCULATED!")
             # Optional: Reset progress if parameters change drastically
             # self.current_wp_index = 0 
 
