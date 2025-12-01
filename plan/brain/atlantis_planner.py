@@ -5,6 +5,7 @@ from nav_msgs.msg import Path
 from std_msgs.msg import Empty
 import math
 import threading
+from rcl_interfaces.msg import SetParametersResult
 
 class AtlantisPlanner(Node):
     def __init__(self):
@@ -54,7 +55,7 @@ class AtlantisPlanner(Node):
         # Regenerate path immediately on parameter change
         if self.ready_to_plan:
             self.generate_lawnmower_path()
-        return rclpy.rcl_interfaces.msg.SetParametersResult(successful=True)
+        return SetParametersResult(successful=True)
 
     def replan_callback(self, msg):
         if self.ready_to_plan:
