@@ -14,9 +14,9 @@ class Vostok1(Node):
         super().__init__('vostok1_node')
 
         # --- CONFIGURATION PARAMETERS ---
-        self.declare_parameter('scan_length', 15.0)
-        self.declare_parameter('scan_width', 30.0)
-        self.declare_parameter('lanes', 10)
+        self.declare_parameter('scan_length', 150.0)
+        self.declare_parameter('scan_width', 50.0)
+        self.declare_parameter('lanes', 8)
         self.declare_parameter('base_speed', 500.0)
         self.declare_parameter('max_speed', 800.0)
         self.declare_parameter('waypoint_tolerance', 2.0)
