@@ -1,124 +1,169 @@
-#!/usr/bin/env python3
-# AGAIN ITS ONLY PSEUDO CODE CHANGE WHAT IS NECESSARY!
-# YINPU AND LEO PLEASE CHANGE THE CODE AS WHAT YOU NEED WHAT DO YOU WANT TO CHANGE
 import rclpy
 from rclpy.node import Node
-from rcl_interfaces.msg import SetParametersResult
+from nav_msgs.msg import Path
+from sensor_msgs.msg import NavSatFix, Imu, PointCloud2
+from std_msgs.msg import Float64, String
 import math
-
-# Messages
-from sensor_msgs.msg import NavSatFix, Imu
-from geometry_msgs.msg import Point
-from std_msgs.msg import Float64
+import struct
+import json
 
 class AtlantisController(Node):
     def __init__(self):
         super().__init__('atlantis_controller')
 
-        # --- 1. DECLARE PARAMETERS ---
-        self.declare_parameter('kp', 400.0)       # Steering aggression
-        self.declare_parameter('base_speed', 600.0) # Cruising speed I used 500 before maybe we can use another value
+        # --- CONTROL PARAMETERS ---
+        self.declare_parameter('base_speed', 500.0)
+        self.declare_parameter('max_speed', 800.0)
+        self.declare_parameter('waypoint_tolerance', 2.0)
+        self.declare_parameter('kp', 400.0)
+        self.declare_parameter('ki', 20.0)
+        self.declare_parameter('kd', 100.0)
         
-        # --- 2. LOAD INITIAL VALUES ---
-        self.kp = self.get_parameter('kp').value
+        # Obstacle & Stuck parameters (Same as before)
+        self.declare_parameter('min_safe_distance', 15.0)
+        self.declare_parameter('critical_distance', 5.0)
+        self.declare_parameter('obstacle_slow_factor', 0.3)
+        self.declare_parameter('stuck_timeout', 3.0)
+        self.declare_parameter('stuck_threshold', 0.5)
+
+        # Get values
         self.base_speed = self.get_parameter('base_speed').value
-
-        # --- 3. DYNAMIC RECONFIGURE ---
-        self.add_on_set_parameters_callback(self.parameter_callback)
-
+        self.waypoint_tolerance = self.get_parameter('waypoint_tolerance').value
+        self.kp = self.get_parameter('kp').value
+        self.ki = self.get_parameter('ki').value
+        self.kd = self.get_parameter('kd').value
+        # ... (Get other parameters as needed) ...
+        
         # --- STATE ---
-        self.target = None # (x, y, mode)
-        self.current_gps = None
         self.start_gps = None
+        self.current_gps = None
         self.current_yaw = 0.0
-
-        # --- PUBS/SUBS ---
-        self.create_subscription(Point, '/atlantis/target', self.target_callback, 10)
+        self.waypoints = [] # Format: [(x,y), (x,y)]
+        self.current_wp_index = 0
+        self.state = "WAITING_FOR_PATH" 
+        
+        # PID & Navigation State
+        self.previous_error = 0.0
+        self.integral_error = 0.0
+        
+        # Obstacle & Stuck State (simplified for brevity, keep your original logic here)
+        self.min_obstacle_distance = float('inf')
+        self.obstacle_detected = False
+        
+        # --- SUBSCRIBERS ---
+        self.create_subscription(Path, '/atlantis/path', self.path_callback, 10)
         self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, 10)
         self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_callback, 10)
+        self.create_subscription(PointCloud2, '/wamv/sensors/lidars/lidar_wamv_sensor/points', self.lidar_callback, 10)
 
+        # --- PUBLISHERS ---
         self.pub_left = self.create_publisher(Float64, '/wamv/thrusters/left/thrust', 10)
         self.pub_right = self.create_publisher(Float64, '/wamv/thrusters/right/thrust', 10)
 
-        self.create_timer(0.05, self.control_loop) # 20Hz Control Loop
-        self.get_logger().info("ATLANTIS CONTROLLER: Online (Dynamic PID Enabled)")
+        # --- TIMER ---
+        self.create_timer(0.05, self.control_loop)
+        
+        self.get_logger().info("Atlantis Controller Waiting for Path...")
 
-    def parameter_callback(self, params):
-        for param in params:
-            if param.name == 'kp':
-                self.kp = param.value
-                self.get_logger().info(f"Tuned KP to: {self.kp}")
-            elif param.name == 'base_speed':
-                self.base_speed = param.value
-                self.get_logger().info(f"Speed set to: {self.base_speed}")
-        return SetParametersResult(successful=True)
-
-    def target_callback(self, msg):
-        self.target = (msg.x, msg.y, msg.z)
+    def path_callback(self, msg):
+        """Receive path from Planner"""
+        # If we already have a path and are driving, we might want to check if it changed
+        # For now, let's say if we get a new path, we restart following it
+        new_waypoints = []
+        for pose in msg.poses:
+            new_waypoints.append((pose.pose.position.x, pose.pose.position.y))
+            
+        if new_waypoints != self.waypoints:
+            self.waypoints = new_waypoints
+            self.current_wp_index = 0
+            self.get_logger().info(f"Received new plan with {len(self.waypoints)} waypoints")
+            if self.start_gps is not None:
+                self.state = "DRIVING"
 
     def gps_callback(self, msg):
         self.current_gps = (msg.latitude, msg.longitude)
-        if not self.start_gps: self.start_gps = self.current_gps
+        
+        if self.start_gps is None:
+            self.start_gps = (msg.latitude, msg.longitude)
+            self.get_logger().info(f"Home Position Set: {self.start_gps}")
+            if len(self.waypoints) > 0:
+                self.state = "DRIVING"
 
     def imu_callback(self, msg):
+        # (Keep your existing quaternion to yaw conversion)
         q = msg.orientation
         siny_cosp = 2 * (q.w * q.z + q.x * q.y)
         cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
         self.current_yaw = math.atan2(siny_cosp, cosy_cosp)
 
+    def lidar_callback(self, msg):
+        # (Keep your existing point cloud processing logic here)
+        pass 
+
     def latlon_to_meters(self, lat, lon):
-        if not self.start_gps: return 0,0
+        # (Keep your existing conversion)
         R = 6371000.0
-        dx = (math.radians(lon - self.start_gps[1]) * R * math.cos(math.radians(self.start_gps[0])))
-        dy = (math.radians(lat - self.start_gps[0]) * R)
-        return dx, dy
+        d_lat = math.radians(lat - self.start_gps[0])
+        d_lon = math.radians(lon - self.start_gps[1])
+        lat0 = math.radians(self.start_gps[0])
+        x = d_lat * R
+        y = d_lon * R * math.cos(lat0)
+        return y, x # East, North
 
     def control_loop(self):
-        if not self.target or not self.current_gps: return
-
-        tx, ty, mode = self.target
-        
-        # STOP
-        if mode == 0.0:
-            self.send_thrust(0.0, 0.0)
+        if self.state != "DRIVING" or self.current_gps is None or not self.waypoints:
             return
 
-        # REVERSE
-        if mode == -1.0:
-            self.send_thrust(-800.0, -800.0)
-            return
-
-        # DRIVE (PID)
+        # 1. Get Position
         curr_x, curr_y = self.latlon_to_meters(self.current_gps[0], self.current_gps[1])
-
-        dx = tx - curr_x
-        dy = ty - curr_y
-        desired_yaw = math.atan2(dy, dx)
         
-        error = desired_yaw - self.current_yaw
-        while error > math.pi: error -= 2*math.pi
-        while error < -math.pi: error += 2*math.pi
+        # 2. Check Waypoint Reached
+        target_x, target_y = self.waypoints[self.current_wp_index]
+        dx = target_x - curr_x
+        dy = target_y - curr_y
+        dist = math.hypot(dx, dy)
+        
+        if dist < self.waypoint_tolerance:
+            self.current_wp_index += 1
+            if self.current_wp_index >= len(self.waypoints):
+                self.state = "FINISHED"
+                self.stop_boat()
+                self.get_logger().info("Mission Finished")
+                return
+            else:
+                self.get_logger().info(f"Waypoint {self.current_wp_index} Reached")
+                # Update target
+                target_x, target_y = self.waypoints[self.current_wp_index]
+                dx = target_x - curr_x
+                dy = target_y - curr_y
 
-        # Uses the DYNAMIC 'self.kp' I have no idea if this one works good or no I didn't test it yet 
-        turn_effort = error * self.kp
-        turn_effort = max(-800.0, min(800.0, turn_effort))
+        # 3. Calculate Heading & PID (Keep your exact PID logic here)
+        target_angle = math.atan2(dy, dx)
+        angle_error = target_angle - self.current_yaw
+        
+        # Normalize angle
+        while angle_error > math.pi: angle_error -= 2.0 * math.pi
+        while angle_error < -math.pi: angle_error += 2.0 * math.pi
+        
+        # Simple PID (re-add your KD/KI)
+        turn_power = self.kp * angle_error
+        turn_power = max(-800.0, min(800.0, turn_power))
+        
+        speed = self.base_speed
+        
+        # Send Thrust
+        self.pub_left.publish(Float64(data=speed - turn_power))
+        self.pub_right.publish(Float64(data=speed + turn_power))
 
-        left = self.base_speed - turn_effort
-        right = self.base_speed + turn_effort
-
-        left = max(-1000.0, min(1000.0, left))
-        right = max(-1000.0, min(1000.0, right))
-
-        self.send_thrust(left, right)
-
-    def send_thrust(self, l, r):
-        self.pub_left.publish(Float64(data=float(l)))
-        self.pub_right.publish(Float64(data=float(r)))
+    def stop_boat(self):
+        self.pub_left.publish(Float64(data=0.0))
+        self.pub_right.publish(Float64(data=0.0))
 
 def main(args=None):
     rclpy.init(args=args)
     node = AtlantisController()
     rclpy.spin(node)
+    node.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':
