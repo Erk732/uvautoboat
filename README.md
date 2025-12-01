@@ -335,7 +335,7 @@ ros2 run plan apollo11
 
 ---
 
-### Option B: atalntis_planner (3D LIDAR + SASS)
+### Option B: atlantis_planner (3D LIDAR + SASS)
 
 Full-featured implementation with Smart Anti-Stuck System and web dashboard support.
 
@@ -350,6 +350,8 @@ ros2 run plan atlantis_planner
 Press ENTER to generate and publish path...
 ```
 after press enter this output will follow:
+---
+**Terminal Output :**
 [INFO] [1764598786.432758347] [atlantis_planner]: Generated Path with X waypoints
 [INFO] [1764598786.433813041] [atlantis_planner]: Path generated! Controller will start driving.
 
