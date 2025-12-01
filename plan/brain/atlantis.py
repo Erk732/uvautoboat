@@ -229,7 +229,7 @@ class Atlantis(Node):
         self.analyze_scan_sectors_3d(points)
 
     def analyze_scan_sectors_3d(self, points):
-        """Divide 3D point cloud into sectors (Vostok Logic)"""
+        """Divide 3D point cloud into sectors and analyze clearance"""
         front_points = []
         left_points = []
         right_points = []
@@ -237,7 +237,7 @@ class Atlantis(Node):
         for x, y, z, dist in points:
             angle = math.atan2(y, x) 
             
-            # Vostok Sectors:
+            # Sectors:
             if -math.pi/4 < angle < math.pi/4:  # Front ±45°
                 front_points.append(dist)
             elif math.pi/4 <= angle <= 3*math.pi/4:  # Left
@@ -379,13 +379,13 @@ class Atlantis(Node):
         else:
             self.reverse_start_time = None
 
-        # --- OBSTACLE AVOIDANCE STEERING (VOSTOK LOGIC) ---
+        # --- OBSTACLE AVOIDANCE STEERING ( NEW LOGIC) ---
         if self.obstacle_detected:
             if not self.avoidance_mode:
                 self.integral_error = 0.0 # Reset PID
             self.avoidance_mode = True
 
-            # Use Vostok Sector Logic (Left vs Right clearance)
+            # Use Sector Logic (Left vs Right clearance)
             if self.left_clear > self.right_clear:
                 # Turn Left
                 target_angle = self.current_yaw + math.pi / 2
