@@ -4,6 +4,7 @@ from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 from std_msgs.msg import Empty
 import math
+import threading
 
 class AtlantisPlanner(Node):
     def __init__(self):
@@ -30,9 +31,18 @@ class AtlantisPlanner(Node):
 
         # State
         self.path_msg = Path()
-        self.generate_lawnmower_path()
+        self.ready_to_plan = False  # Wait for user input
         
-        self.get_logger().info("Atlantis Planner Started")
+        self.get_logger().info("Atlantis Planner Started - Press ENTER to generate path")
+        
+        # Start thread waiting for user input
+        threading.Thread(target=self.wait_for_start, daemon=True).start()
+
+    def wait_for_start(self):
+        input("Press ENTER to generate and publish path...") # could be change to any other input method
+        self.ready_to_plan = True
+        self.generate_lawnmower_path()
+        self.get_logger().info("Path generated! Controller will start driving.")
 
     def parameter_callback(self, params):
         for param in params:
@@ -42,11 +52,13 @@ class AtlantisPlanner(Node):
                 # but good for safety if cached)
         
         # Regenerate path immediately on parameter change
-        self.generate_lawnmower_path()
+        if self.ready_to_plan:
+            self.generate_lawnmower_path()
         return rclpy.rcl_interfaces.msg.SetParametersResult(successful=True)
 
     def replan_callback(self, msg):
-        self.generate_lawnmower_path()
+        if self.ready_to_plan:
+            self.generate_lawnmower_path()
 
     def generate_lawnmower_path(self):
         scan_length = self.get_parameter('scan_length').value
@@ -100,6 +112,8 @@ class AtlantisPlanner(Node):
         self.publish_path()
 
     def publish_path(self):
+        if not self.ready_to_plan:
+            return
         self.path_msg.header.stamp = self.get_clock().now().to_msg()
         self.path_pub.publish(self.path_msg)
 
