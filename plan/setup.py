@@ -36,6 +36,7 @@ setup(
             'sputnik_planner = brain.sputnik_planner:main',
             # new code for advanced testing unfortunately still has the control and the planning parts together! 
             'atlantis = brain.atlantis:main',
+            'atlantis_planner = brain.atlantis_planner:main',
         ],
     },
 )
