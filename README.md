@@ -354,9 +354,11 @@ after press enter this terminal output will follow:
 ---
 
 **Terminal Output :**
+
+```text
 [INFO] [1764598786.432758347] [atlantis_planner]: Generated Path with X waypoints
 [INFO] [1764598786.433813041] [atlantis_planner]: Path generated! Controller will start driving.
-
+```
 
 ---
 
@@ -1689,8 +1691,8 @@ Open an issue on [GitHub](https://github.com/Erk732/uvautoboat/issues) with:
 - **Open Source Robotics Foundation**: VRX simulation environment
 - **IMT Nord Europe**: Academic support and guidance
 - **Development Teams**:
-  - Apollo11 — Planning Team
-  - Vostok1 — Control Team
+  - Planning Team atlantis_planner
+  - Control Team atlantis_controller
 
 ---
 
