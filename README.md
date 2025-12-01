@@ -207,10 +207,10 @@ Rotation angles measured in **radians**:
 
 ### 🔧 Technical Highlights
 
-- **Dual Implementations**: Apollo11 (modular) and Vostok1 (integrated) approaches
+- **Dual Implementations**: Apollo11 (modular) and atlantis (integrated) approaches
 - **3D Point Cloud Processing**: Height-filtered obstacle detection
 - **PID Control**: Configurable heading controller with tunable gains
-- **Bilingual Interface**: Russian/English terminal output and dashboard
+- **Bilingual Interface**: English terminal output and dashboard
 - **VRX Compatible**: Full integration with Virtual RobotX simulation
 
 ---
@@ -350,8 +350,6 @@ ros2 run plan atlantis_planner
 Press ENTER to generate and publish path...
 ```
 after press enter this terminal output will follow:
-
----
 
 **Terminal Output :**
 
