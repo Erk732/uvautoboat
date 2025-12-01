@@ -825,6 +825,46 @@ h2 {
     background: #5a6fd6;
 }
 
+/* Waypoint tooltip styling */
+.waypoint-tooltip-container {
+    background: white;
+    border: none;
+    border-radius: 6px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    padding: 0;
+    font-family: inherit;
+}
+
+.waypoint-tooltip-container .leaflet-tooltip-content {
+    margin: 0;
+}
+
+.waypoint-tooltip {
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.4;
+    min-width: 160px;
+}
+
+.waypoint-tooltip strong {
+    font-size: 13px;
+    color: #333;
+}
+
+.waypoint-tooltip .wp-status {
+    font-weight: 600;
+    font-size: 11px;
+}
+
+.waypoint-tooltip hr {
+    border: none;
+    border-top: 1px solid #eee;
+}
+
+.waypoint-tooltip b {
+    color: #666;
+}
+
 /* Responsive - Normal Mode */
 @media (max-width: 1200px) {
     .map-panel, .logs-panel, .config-panel, .terminal-panel {
@@ -1373,6 +1413,28 @@ body.bureau-mode .follow-boat-btn.active {
     box-shadow: 0 0 15px rgba(74, 232, 140, 0.5);
 }
 
+body.bureau-mode .waypoint-tooltip-container {
+    background: rgba(10, 20, 30, 0.95);
+    border: 1px solid rgba(74, 232, 140, 0.4);
+    box-shadow: 0 0 15px rgba(74, 232, 140, 0.3);
+}
+
+body.bureau-mode .waypoint-tooltip {
+    color: #4AE88C;
+}
+
+body.bureau-mode .waypoint-tooltip strong {
+    color: #4AE88C;
+}
+
+body.bureau-mode .waypoint-tooltip b {
+    color: rgba(74, 232, 140, 0.7);
+}
+
+body.bureau-mode .waypoint-tooltip hr {
+    border-color: rgba(74, 232, 140, 0.3);
+}
+
 /* Scrollbars - Bureau Mode */
 body.bureau-mode .logs-container::-webkit-scrollbar-track,
 body.bureau-mode .terminal-container::-webkit-scrollbar-track {
@@ -1809,6 +1871,29 @@ body.terminal-mode .follow-boat-btn.active {
     color: #33CCFF;
     border-color: #33CCFF;
     box-shadow: 0 0 15px rgba(51, 204, 255, 0.5);
+}
+
+body.terminal-mode .waypoint-tooltip-container {
+    background: rgba(0, 0, 0, 0.95);
+    border: 1px solid rgba(51, 204, 255, 0.4);
+    box-shadow: 0 0 15px rgba(51, 204, 255, 0.3);
+    font-family: 'Courier New', monospace;
+}
+
+body.terminal-mode .waypoint-tooltip {
+    color: #33CCFF;
+}
+
+body.terminal-mode .waypoint-tooltip strong {
+    color: #33CCFF;
+}
+
+body.terminal-mode .waypoint-tooltip b {
+    color: rgba(51, 204, 255, 0.7);
+}
+
+body.terminal-mode .waypoint-tooltip hr {
+    border-color: rgba(51, 204, 255, 0.3);
 }
 
 /* Scrollbars - Terminal Mode */

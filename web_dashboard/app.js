@@ -1072,7 +1072,7 @@ function displayWaypointsOnMap(waypoints, fitToWaypoints = false) {
     // Convert local coordinates to GPS
     const waypointLatLngs = waypoints.map((wp, idx) => {
         const latLng = localToGPS(wp.x, wp.y, startLat, startLon);
-        return { lat: latLng[0], lon: latLng[1], idx: idx };
+        return { lat: latLng[0], lon: latLng[1], x: wp.x, y: wp.y, idx: idx };
     });
     
     // Create waypoint markers
@@ -1081,7 +1081,8 @@ function displayWaypointsOnMap(waypoints, fitToWaypoints = false) {
         const isPassed = idx < missionState.currentWaypoint;
         
         const markerColor = isPassed ? 'green' : (isCurrentTarget ? 'orange' : 'blue');
-        const markerSize = isCurrentTarget ? 12 : 8;
+        const markerSize = isCurrentTarget ? 14 : 10;
+        const statusText = isPassed ? '✓ Passed' : (isCurrentTarget ? '→ Current Target' : 'Pending');
         
         const icon = L.divIcon({
             className: 'waypoint-marker',
@@ -1092,13 +1093,31 @@ function displayWaypointsOnMap(waypoints, fitToWaypoints = false) {
                 border-radius: 50%;
                 border: 2px solid white;
                 box-shadow: 0 0 4px rgba(0,0,0,0.5);
+                cursor: pointer;
             "></div>`,
             iconSize: [markerSize, markerSize],
             iconAnchor: [markerSize/2, markerSize/2]
         });
         
+        // Detailed tooltip content
+        const tooltipContent = `
+            <div class="waypoint-tooltip">
+                <strong>Waypoint ${idx + 1}/${waypoints.length}</strong><br>
+                <span class="wp-status" style="color: ${markerColor}">${statusText}</span>
+                <hr style="margin: 4px 0; border-color: #ddd;">
+                <b>Local:</b> (${wp.x.toFixed(1)}, ${wp.y.toFixed(1)}) m<br>
+                <b>GPS:</b> ${wp.lat.toFixed(6)}°, ${wp.lon.toFixed(6)}°
+            </div>
+        `;
+        
         const marker = L.marker([wp.lat, wp.lon], { icon: icon })
-            .bindPopup(`Waypoint ${idx + 1}`)
+            .bindTooltip(tooltipContent, {
+                permanent: false,
+                direction: 'top',
+                offset: [0, -10],
+                className: 'waypoint-tooltip-container',
+                sticky: true  // Keeps tooltip visible while hovering
+            })
             .addTo(map);
         
         waypointMarkers.push(marker);
