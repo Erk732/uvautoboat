@@ -79,7 +79,11 @@ class Vostok1(Node):
 
         self.waypoints = []
         self.current_wp_index = 0
-        self.state = "INIT"  # INIT -> DRIVING -> FINISHED
+        # Mission states: IDLE (waiting), WAYPOINTS_PREVIEW (waypoints defined, waiting for confirmation),
+        #                 RUNNING (mission active), PAUSED (mission paused), FINISHED (completed)
+        self.state = "IDLE"
+        self.mission_armed = False  # User must arm/start the mission
+        self.joystick_override = False  # Joystick control active
 
         # Obstacle avoidance state
         self.obstacle_detected = False
@@ -145,7 +149,7 @@ class Vostok1(Node):
         self.pub_obstacle_status = self.create_publisher(String, '/vostok1/obstacle_status', 10)
         self.pub_anti_stuck = self.create_publisher(String, '/vostok1/anti_stuck_status', 10)
         
-        # Waypoint publisher for RViz visualization
+        # Waypoint publisher for RViz visualization and web dashboard
         self.pub_waypoints = self.create_publisher(String, '/vostok1/waypoints', 10)
         
         # Parameter configuration publisher (for web dashboard)
@@ -156,6 +160,14 @@ class Vostok1(Node):
             String,
             '/vostok1/set_config',
             self.config_callback,
+            10
+        )
+        
+        # Mission command subscriber (start/stop/pause/joystick)
+        self.create_subscription(
+            String,
+            '/vostok1/mission_command',
+            self.mission_command_callback,
             10
         )
         
@@ -186,20 +198,20 @@ class Vostok1(Node):
         self.get_logger().info(f"ПИД: Kp={self.kp}, Ki={self.ki}, Kd={self.kd}")
         self.get_logger().info(f"Обнаружение препятствий: Безопасно={self.min_safe_distance}m, Критично={self.critical_distance}m")
         self.get_logger().info(f"Анти-застревание: timeout={self.stuck_timeout}s, threshold={self.stuck_threshold}m")
-        self.get_logger().info("Ожидание сигнала GPS...")
+        self.get_logger().info("Ожидание сигнала GPS и команды пользователя...")
+        self.get_logger().info("Waiting for GPS and user command...")
         self.get_logger().info("=" * 60)
 
     def gps_callback(self, msg):
         self.current_gps = (msg.latitude, msg.longitude)
 
-        # First GPS fix - initialize mission
+        # First GPS fix - set start position but don't start mission
         if self.start_gps is None:
             self.start_gps = (msg.latitude, msg.longitude)
             self.start_time = self.get_clock().now()
-            self.get_logger().info(f"Базовая точка: {self.start_gps[0]:.6f}, {self.start_gps[1]:.6f}")
-            self.generate_lawnmower_path()
-            self.state = "DRIVING"
-            self.get_logger().info("МИССИЯ НАЧАТА! (Mission Started!)")
+            self.get_logger().info(f"📍 Базовая точка | Base point: {self.start_gps[0]:.6f}, {self.start_gps[1]:.6f}")
+            self.get_logger().info("GPS готов | GPS ready - awaiting waypoint configuration")
+            self.get_logger().info("Use web dashboard to configure and start mission")
             self.get_logger().info("=" * 60)
 
     def imu_callback(self, msg):
@@ -407,7 +419,12 @@ class Vostok1(Node):
             'waypoint_tolerance': self.waypoint_tolerance,
             'total_waypoints': len(self.waypoints),
             'current_waypoint': self.current_wp_index,
-            'state': self.state
+            'state': self.state,
+            'mission_armed': self.mission_armed,
+            'joystick_override': self.joystick_override,
+            'gps_ready': self.start_gps is not None,
+            'start_lat': self.start_gps[0] if self.start_gps else None,
+            'start_lon': self.start_gps[1] if self.start_gps else None
         }
         msg = String()
         msg.data = json.dumps(config)
@@ -467,11 +484,12 @@ class Vostok1(Node):
                 self.min_safe_distance = float(config['min_safe_distance'])
                 self.get_logger().info(f"  Безопасная дистанция | Safe Distance: {self.min_safe_distance}m")
             
-            # Handle mission restart
+            # Handle mission restart (legacy support)
             if 'restart_mission' in config and config['restart_mission']:
                 self.get_logger().info("ПЕРЕЗАПУСК МИССИИ | MISSION RESTART")
                 self.current_wp_index = 0
-                self.state = "DRIVING"
+                self.state = "RUNNING"
+                self.mission_armed = True
                 self.integral_error = 0.0
                 self.previous_error = 0.0
                 regenerate_path = True
@@ -479,6 +497,7 @@ class Vostok1(Node):
             # Regenerate waypoints if path parameters changed
             if regenerate_path and self.start_gps is not None:
                 self.generate_lawnmower_path()
+                self.state = "WAYPOINTS_PREVIEW"  # Show preview after regenerating
                 self.get_logger().info(f"Маршрут перестроен | Path regenerated: {len(self.waypoints)} waypoints")
             
             self.get_logger().info("=" * 50)
@@ -515,8 +534,106 @@ class Vostok1(Node):
                 
         return SetParametersResult(successful=True)
 
+    def mission_command_callback(self, msg):
+        """Handle mission commands from web dashboard"""
+        try:
+            cmd = json.loads(msg.data)
+            command = cmd.get('command', '')
+            
+            self.get_logger().info("=" * 50)
+            self.get_logger().info(f"КОМАНДА МИССИИ | MISSION COMMAND: {command}")
+            
+            if command == 'generate_waypoints':
+                # Generate/regenerate waypoints for preview
+                if self.start_gps is not None:
+                    self.generate_lawnmower_path()
+                    self.state = "WAYPOINTS_PREVIEW"
+                    self.mission_armed = False
+                    self.get_logger().info(f"Waypoints generated: {len(self.waypoints)} points")
+                    self.get_logger().info("Состояние: ПРЕДПРОСМОТР | State: WAYPOINTS_PREVIEW")
+                else:
+                    self.get_logger().warn("GPS not available - cannot generate waypoints")
+                    
+            elif command == 'confirm_waypoints':
+                # User confirmed waypoints, ready to start
+                if self.waypoints:
+                    self.state = "READY"
+                    self.get_logger().info("Waypoints ПОДТВЕРЖДЕНЫ | CONFIRMED - Ready to start")
+                else:
+                    self.get_logger().warn("No waypoints to confirm")
+                    
+            elif command == 'cancel_waypoints':
+                # Cancel waypoints, go back to idle
+                self.waypoints = []
+                self.current_wp_index = 0
+                self.state = "IDLE"
+                self.mission_armed = False
+                self.get_logger().info("Waypoints ОТМЕНЕНЫ | CANCELLED")
+                
+            elif command == 'start_mission':
+                # Start the mission (user gives permission)
+                if self.waypoints and self.state in ["READY", "PAUSED", "WAYPOINTS_PREVIEW"]:
+                    self.state = "RUNNING"
+                    self.mission_armed = True
+                    self.joystick_override = False
+                    self.integral_error = 0.0
+                    self.previous_error = 0.0
+                    self.get_logger().info("🚀 МИССИЯ ЗАПУЩЕНА | MISSION STARTED!")
+                else:
+                    self.get_logger().warn(f"Cannot start - state={self.state}, waypoints={len(self.waypoints)}")
+                    
+            elif command == 'stop_mission':
+                # Emergency stop - stop motors and pause
+                self.state = "PAUSED"
+                self.mission_armed = False
+                self.stop_thrusters()
+                self.get_logger().info("🛑 МИССИЯ ОСТАНОВЛЕНА | MISSION STOPPED!")
+                
+            elif command == 'resume_mission':
+                # Resume paused mission
+                if self.state == "PAUSED" and self.waypoints:
+                    self.state = "RUNNING"
+                    self.mission_armed = True
+                    self.get_logger().info("▶️ МИССИЯ ВОЗОБНОВЛЕНА | MISSION RESUMED!")
+                    
+            elif command == 'joystick_enable':
+                # Enable joystick override mode
+                self.joystick_override = True
+                self.mission_armed = False
+                self.state = "JOYSTICK"
+                self.stop_thrusters()
+                self.get_logger().info("🎮 ДЖОЙСТИК АКТИВЕН | JOYSTICK MODE ENABLED")
+                self.get_logger().info("Run: ros2 launch vrx_gz usv_joy_teleop.launch.py")
+                
+            elif command == 'joystick_disable':
+                # Disable joystick, return to previous state
+                self.joystick_override = False
+                if self.waypoints:
+                    self.state = "PAUSED"
+                else:
+                    self.state = "IDLE"
+                self.get_logger().info("🎮 ДЖОЙСТИК ОТКЛЮЧЕН | JOYSTICK MODE DISABLED")
+                
+            self.get_logger().info("=" * 50)
+            
+        except json.JSONDecodeError as e:
+            self.get_logger().error(f"Mission command parse error: {e}")
+        except Exception as e:
+            self.get_logger().error(f"Mission command error: {e}")
+    
+    def stop_thrusters(self):
+        """Emergency stop - set both thrusters to zero"""
+        self.pub_left.publish(Float64(data=0.0))
+        self.pub_right.publish(Float64(data=0.0))
+
     def control_loop(self):
-        if self.state != "DRIVING" or self.current_gps is None:
+        # Don't run control if not in RUNNING state or joystick override
+        if self.state != "RUNNING" or self.joystick_override:
+            if self.state == "PAUSED":
+                self.stop_thrusters()  # Keep thrusters off when paused
+            return
+            
+        if self.current_gps is None:
             return
 
         # Get current position in meters
@@ -1194,13 +1311,17 @@ class Vostok1(Node):
         
         # Mission status with bilingual state messages
         state_translations = {
-            "STUCK_ESCAPING": "ЗАСТРЯЛ - МАНЕВР ОСВОБОЖДЕНИЯ | STUCK - ESCAPING", # We can remove the russian easter egg? 
-            "OBSTACLE_AVOIDING": "ПРЕПЯТСТВИЕ - ОБХОД | OBSTACLE - AVOIDING", # We can remove the russian easter egg? 
-            "MISSION_COMPLETE": "МИССИЯ ЗАВЕРШЕНА | MISSION COMPLETE", # We can remove the russian easter egg? 
-            "MOVING_TO_WAYPOINT": "ДВИЖЕНИЕ К ТОЧКЕ | MOVING TO WAYPOINT", # We can remove the russian easter egg? 
-            "FINISHED": "ЗАВЕРШЕНО | FINISHED", # We can remove the russian easter egg? 
-            "DRIVING": "ДВИЖЕНИЕ | DRIVING", # We can remove the russian easter egg? 
-            "INIT": "ИНИЦИАЛИЗАЦИЯ | INITIALIZING" # We can remove the russian easter egg?  
+            "STUCK_ESCAPING": "ЗАСТРЯЛ - МАНЕВР ОСВОБОЖДЕНИЯ | STUCK - ESCAPING",
+            "OBSTACLE_AVOIDING": "ПРЕПЯТСТВИЕ - ОБХОД | OBSTACLE - AVOIDING",
+            "MISSION_COMPLETE": "МИССИЯ ЗАВЕРШЕНА | MISSION COMPLETE",
+            "MOVING_TO_WAYPOINT": "ДВИЖЕНИЕ К ТОЧКЕ | MOVING TO WAYPOINT",
+            "FINISHED": "ЗАВЕРШЕНО | FINISHED",
+            "RUNNING": "ДВИЖЕНИЕ | RUNNING",
+            "IDLE": "ОЖИДАНИЕ | IDLE",
+            "WAYPOINTS_PREVIEW": "ПРЕДПРОСМОТР | WAYPOINTS PREVIEW",
+            "READY": "ГОТОВ К ЗАПУСКУ | READY",
+            "PAUSED": "ПАУЗА | PAUSED",
+            "JOYSTICK": "ДЖОЙСТИК | JOYSTICK CONTROL"
         }
         
         if self.escape_mode:
@@ -1209,7 +1330,7 @@ class Vostok1(Node):
             state_key = "OBSTACLE_AVOIDING"
         elif self.state == "FINISHED":
             state_key = "MISSION_COMPLETE"
-        elif self.state == "DRIVING":
+        elif self.state == "RUNNING":
             state_key = "MOVING_TO_WAYPOINT"
         else:
             state_key = self.state

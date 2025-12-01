@@ -167,6 +167,278 @@ h2 {
     grid-column: span 2;
 }
 
+/* ========== MISSION CONTROL PANEL ========== */
+.mission-control-panel {
+    grid-column: span 2;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: white;
+}
+
+.mission-control-panel h2 {
+    color: #4ecca3;
+    border-bottom: 2px solid #4ecca3;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.mission-status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.mission-state-indicator, .gps-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mission-badge {
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 14px;
+    text-transform: uppercase;
+}
+
+.mission-badge.idle { background: #6c757d; color: white; }
+.mission-badge.waypoints_preview { background: #17a2b8; color: white; }
+.mission-badge.ready { background: #28a745; color: white; }
+.mission-badge.running { background: #ffc107; color: black; animation: pulse 1s infinite; }
+.mission-badge.paused { background: #fd7e14; color: white; }
+.mission-badge.joystick { background: #e83e8c; color: white; }
+.mission-badge.finished { background: #6f42c1; color: white; }
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.gps-badge {
+    padding: 6px 12px;
+    border-radius: 15px;
+    font-size: 12px;
+}
+
+.gps-badge.ready { background: #28a745; color: white; }
+.gps-badge.not-ready { background: #dc3545; color: white; animation: blink 1s infinite; }
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.mission-step {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-left: 4px solid #4ecca3;
+}
+
+.mission-step h3 {
+    color: #4ecca3;
+    font-size: 14px;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+}
+
+.waypoint-config-inline {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+}
+
+.config-item-inline {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.config-item-inline label {
+    font-size: 11px;
+    color: #aaa;
+}
+
+.config-item-inline input {
+    width: 100px;
+    padding: 8px;
+    border: 1px solid #444;
+    border-radius: 5px;
+    background: #2a2a4a;
+    color: white;
+    font-size: 14px;
+}
+
+.config-item-inline input:focus {
+    outline: none;
+    border-color: #4ecca3;
+}
+
+.waypoint-preview-info {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #aaa;
+}
+
+.mission-buttons-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.mission-btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+}
+
+.mission-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.mission-btn.generate {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+}
+
+.mission-btn.generate:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.mission-btn.confirm {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+}
+
+.mission-btn.cancel {
+    background: linear-gradient(135deg, #dc3545, #e83e8c);
+    color: white;
+}
+
+.mission-btn.start {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+    font-size: 16px;
+    padding: 15px 30px;
+}
+
+.mission-btn.start:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(40, 167, 69, 0.5);
+}
+
+.mission-btn.stop {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+    color: white;
+    font-size: 16px;
+    padding: 15px 30px;
+}
+
+.mission-btn.stop:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(220, 53, 69, 0.5);
+}
+
+.mission-btn.resume {
+    background: linear-gradient(135deg, #17a2b8, #138496);
+    color: white;
+}
+
+.mission-btn.joystick {
+    background: linear-gradient(135deg, #e83e8c, #d63384);
+    color: white;
+}
+
+.mission-btn.joystick-off {
+    background: linear-gradient(135deg, #6c757d, #495057);
+    color: white;
+}
+
+.joystick-section {
+    border-left-color: #e83e8c;
+}
+
+.joystick-info {
+    font-size: 12px;
+    color: #aaa;
+    margin-bottom: 10px;
+}
+
+.joystick-hint {
+    font-style: italic;
+    color: #888;
+}
+
+.joystick-status {
+    margin-top: 15px;
+    padding: 10px;
+    background: rgba(232, 62, 140, 0.2);
+    border: 1px solid #e83e8c;
+    border-radius: 8px;
+}
+
+.joystick-status.hidden {
+    display: none;
+}
+
+.joystick-active {
+    color: #e83e8c;
+    font-weight: bold;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.joystick-cmd {
+    font-family: monospace;
+    font-size: 11px;
+    color: #aaa;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 5px 10px;
+    border-radius: 4px;
+    display: block;
+}
+
+/* Map Legend */
+.map-legend {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    font-size: 12px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.legend-color.boat { background: #ff6b6b; }
+.legend-color.waypoint { background: #3388ff; }
+.legend-color.current-wp { background: #ffa500; }
+.legend-color.path { background: #3388ff; }
+.legend-color.trajectory { background: #667eea; }
+
 .config-panel {
     grid-column: span 2;
 }
@@ -520,6 +792,37 @@ h2 {
 .boat-marker {
     font-size: 24px;
     text-align: center;
+}
+
+/* Follow boat toggle button */
+.follow-boat-control {
+    margin-top: 10px;
+}
+
+.follow-boat-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 34px !important;
+    height: 34px !important;
+    font-size: 18px;
+    background: white;
+    color: #333;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.follow-boat-btn:hover {
+    background: #f0f0f0;
+}
+
+.follow-boat-btn.active {
+    background: #667eea;
+    color: white;
+}
+
+.follow-boat-btn.active:hover {
+    background: #5a6fd6;
 }
 
 /* Responsive - Normal Mode */
@@ -1052,6 +1355,24 @@ body.bureau-mode .boat-marker {
     filter: drop-shadow(0 0 6px rgba(58, 145, 168, 0.9));
 }
 
+body.bureau-mode .follow-boat-btn {
+    background: rgba(10, 20, 30, 0.9);
+    color: #4AE88C;
+    border: 1px solid rgba(74, 232, 140, 0.4);
+}
+
+body.bureau-mode .follow-boat-btn:hover {
+    background: rgba(20, 40, 60, 0.9);
+    box-shadow: 0 0 10px rgba(74, 232, 140, 0.3);
+}
+
+body.bureau-mode .follow-boat-btn.active {
+    background: rgba(74, 232, 140, 0.3);
+    color: #4AE88C;
+    border-color: #4AE88C;
+    box-shadow: 0 0 15px rgba(74, 232, 140, 0.5);
+}
+
 /* Scrollbars - Bureau Mode */
 body.bureau-mode .logs-container::-webkit-scrollbar-track,
 body.bureau-mode .terminal-container::-webkit-scrollbar-track {
@@ -1469,6 +1790,25 @@ body.terminal-mode .auto-scroll-label input[type="checkbox"] {
 
 body.terminal-mode .boat-marker {
     filter: drop-shadow(0 0 8px var(--terminal-glow));
+}
+
+body.terminal-mode .follow-boat-btn {
+    background: rgba(0, 0, 0, 0.9);
+    color: #33CCFF;
+    border: 1px solid rgba(51, 204, 255, 0.4);
+    font-family: 'Courier New', monospace;
+}
+
+body.terminal-mode .follow-boat-btn:hover {
+    background: rgba(51, 204, 255, 0.1);
+    box-shadow: 0 0 10px rgba(51, 204, 255, 0.3);
+}
+
+body.terminal-mode .follow-boat-btn.active {
+    background: rgba(51, 204, 255, 0.2);
+    color: #33CCFF;
+    border-color: #33CCFF;
+    box-shadow: 0 0 15px rgba(51, 204, 255, 0.5);
 }
 
 /* Scrollbars - Terminal Mode */

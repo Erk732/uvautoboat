@@ -8,20 +8,37 @@ let boatMarker;
 let trajectoryLine;
 let trajectoryPoints = [];
 let waypointMarkers = [];
+let waypointPath = null;  // Line connecting waypoints
+let currentWaypointMarker = null;  // Highlight current target
 
 // Configuration publisher
 let configPublisher = null;
+let missionCommandPublisher = null;  // NEW: Mission command publisher
+
+// Mission state
+let missionState = {
+    state: 'IDLE',
+    gpsReady: false,
+    waypointsGenerated: false,
+    missionArmed: false,
+    joystickOverride: false,
+    waypoints: [],
+    currentWaypoint: 0,
+    totalWaypoints: 0,
+    startLat: null,
+    startLon: null
+};
 
 // Data storage
 let currentState = {
     gps: { lat: 0, lon: 0, local_x: 0, local_y: 0 },
     obstacles: { min: Infinity, front: true, left: true, right: true },
     thrusters: { left: 0, right: 0 },
-    mission: { state: 'INIT', waypoint: 0, distance: 0 },
+    mission: { state: 'IDLE', waypoint: 0, distance: 0 },
     config: {
-        scan_length: 15.0,
-        scan_width: 30.0,
-        lanes: 10,
+        scan_length: 150.0,
+        scan_width: 50.0,
+        lanes: 8,
         kp: 400.0,
         ki: 20.0,
         kd: 100.0,
@@ -52,6 +69,7 @@ window.addEventListener('load', () => {
     connectToROS();
     initStyleToggle();
     initConfigPanel();
+    initMissionControl();  // NEW: Mission control buttons
     initTerminal();
     addLog('Dashboard initialized', 'info');
 });
@@ -91,6 +109,25 @@ function initStyleToggle() {
 }
 
 
+// Map follow mode
+let mapFollowBoat = false;  // Default: don't auto-follow
+
+// Update follow button visual state
+function updateFollowButtonState() {
+    const btn = document.getElementById('follow-boat-toggle');
+    if (btn) {
+        if (mapFollowBoat) {
+            btn.innerHTML = '🔒';
+            btn.classList.add('active');
+            btn.title = 'Following Boat (Click to unlock) | Слежение за судном (Нажмите для отключения)';
+        } else {
+            btn.innerHTML = '🎯';
+            btn.classList.remove('active');
+            btn.title = 'Click to follow boat | Нажмите для слежения';
+        }
+    }
+}
+
 // Initialize Leaflet map
 function initMap() {
     // Initialize map at Sydney Regatta Centre approximate location
@@ -110,6 +147,34 @@ function initMap() {
     
     boatMarker = L.marker([-33.8361, 151.0697], { icon: boatIcon }).addTo(map);
     trajectoryLine = L.polyline([], { color: '#667eea', weight: 3 }).addTo(map);
+    
+    // Add follow boat toggle button
+    const FollowBoatControl = L.Control.extend({
+        options: { position: 'topright' },
+        onAdd: function(map) {
+            const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control follow-boat-control');
+            const button = L.DomUtil.create('a', 'follow-boat-btn', container);
+            button.href = '#';
+            button.title = 'Follow Boat | Следить за судном';
+            button.innerHTML = '🎯';
+            button.id = 'follow-boat-toggle';
+            
+            L.DomEvent.on(button, 'click', function(e) {
+                L.DomEvent.preventDefault(e);
+                L.DomEvent.stopPropagation(e);
+                mapFollowBoat = !mapFollowBoat;
+                updateFollowButtonState();
+                if (mapFollowBoat && currentState.gps.lat !== 0) {
+                    map.panTo([currentState.gps.lat, currentState.gps.lon]);
+                }
+            });
+            
+            return container;
+        }
+    });
+    
+    map.addControl(new FollowBoatControl());
+    updateFollowButtonState();
     
     addLog('Map initialized', 'info');
 }
@@ -332,6 +397,33 @@ function subscribeToTopics() {
         updateConfigFromROS(data);
     });
     
+    // Subscribe to waypoints for map preview
+    const waypointsTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/vostok1/waypoints',
+        messageType: 'std_msgs/String'
+    });
+    
+    waypointsTopic.subscribe((message) => {
+        const data = JSON.parse(message.data);
+        if (data.waypoints && data.waypoints.length > 0) {
+            // Check if waypoints actually changed
+            const newWpString = JSON.stringify(data.waypoints);
+            const oldWpString = JSON.stringify(missionState.waypoints);
+            const waypointsChanged = newWpString !== oldWpString;
+            
+            missionState.waypoints = data.waypoints;
+            displayWaypointsOnMap(data.waypoints, waypointsChanged);
+        }
+    });
+    
+    // Create mission command publisher
+    missionCommandPublisher = new ROSLIB.Topic({
+        ros: ros,
+        name: '/vostok1/mission_command',
+        messageType: 'std_msgs/String'
+    });
+    
     // Subscribe to ROS logs (rosout)
     const rosoutTopic = new ROSLIB.Topic({
         ros: ros,
@@ -374,11 +466,13 @@ function updateGPS(message) {
     }
     trajectoryLine.setLatLngs(trajectoryPoints);
     
-    // Center map on boat (only if far from current view)
-    const center = map.getCenter();
-    const distance = map.distance(center, latLng);
-    if (distance > 100) { // More than 100m from center
-        map.panTo(latLng);
+    // Center map on boat only if follow mode is enabled
+    if (mapFollowBoat) {
+        const center = map.getCenter();
+        const distance = map.distance(center, latLng);
+        if (distance > 50) { // More than 50m from center
+            map.panTo(latLng);
+        }
     }
 }
 
@@ -572,19 +666,9 @@ setInterval(() => {
 function initConfigPanel() {
     console.log('Initializing config panel...');
     
-    // Apply all config button
+    // Apply all config button (now applies PID/Speed only)
     document.getElementById('btn-apply-config').addEventListener('click', () => {
-        sendConfig(false, false);
-    });
-    
-    // Apply PID only button
-    document.getElementById('btn-apply-pid').addEventListener('click', () => {
-        sendConfig(true, false);
-    });
-    
-    // Restart mission button
-    document.getElementById('btn-restart-mission').addEventListener('click', () => {
-        sendConfig(false, true);
+        sendConfig(true, false);  // PID only
     });
     
     console.log('Config panel initialized');
@@ -607,12 +691,29 @@ function updateConfigFromROS(data) {
         'cfg-safe-dist': data.min_safe_distance
     };
     
+    // Also update mission control inputs
+    const wpInputs = {
+        'wp-lanes': data.lanes,
+        'wp-length': data.scan_length,
+        'wp-width': data.scan_width
+    };
+    
     for (const [id, value] of Object.entries(inputs)) {
         const el = document.getElementById(id);
         if (el && document.activeElement !== el && value !== undefined) {
             el.value = value;
         }
     }
+    
+    for (const [id, value] of Object.entries(wpInputs)) {
+        const el = document.getElementById(id);
+        if (el && document.activeElement !== el && value !== undefined) {
+            el.value = value;
+        }
+    }
+    
+    // Update mission control UI
+    updateMissionControlUI(data);
 }
 
 // Send configuration to Vostok1
@@ -728,4 +829,322 @@ function initTerminal() {
             terminal.innerHTML = '<div class="terminal-line system">[SYSTEM] Терминал очищен | Terminal cleared</div>';
         });
     }
+}
+
+// ========== MISSION CONTROL FUNCTIONS ==========
+
+// Initialize mission control panel
+function initMissionControl() {
+    console.log('Initializing mission control...');
+    
+    // Step 1: Generate Waypoints
+    document.getElementById('btn-generate-waypoints').addEventListener('click', () => {
+        generateWaypoints();
+    });
+    
+    // Step 2: Confirm/Cancel Waypoints
+    document.getElementById('btn-confirm-waypoints').addEventListener('click', () => {
+        sendMissionCommand('confirm_waypoints');
+    });
+    
+    document.getElementById('btn-cancel-waypoints').addEventListener('click', () => {
+        sendMissionCommand('cancel_waypoints');
+        clearWaypointPreview();
+    });
+    
+    // Step 3: Start/Stop/Resume Mission
+    document.getElementById('btn-start-mission').addEventListener('click', () => {
+        sendMissionCommand('start_mission');
+    });
+    
+    document.getElementById('btn-stop-mission').addEventListener('click', () => {
+        sendMissionCommand('stop_mission');
+    });
+    
+    document.getElementById('btn-resume-mission').addEventListener('click', () => {
+        sendMissionCommand('resume_mission');
+    });
+    
+    // Joystick Override
+    document.getElementById('btn-joystick-enable').addEventListener('click', () => {
+        sendMissionCommand('joystick_enable');
+    });
+    
+    document.getElementById('btn-joystick-disable').addEventListener('click', () => {
+        sendMissionCommand('joystick_disable');
+    });
+    
+    console.log('Mission control initialized');
+}
+
+// Generate waypoints and update config
+function generateWaypoints() {
+    if (!connected || !configPublisher) {
+        addLog('Not connected to ROS', 'error');
+        return;
+    }
+    
+    // Get waypoint parameters from mission control inputs
+    const lanes = parseInt(document.getElementById('wp-lanes').value);
+    const length = parseFloat(document.getElementById('wp-length').value);
+    const width = parseFloat(document.getElementById('wp-width').value);
+    
+    // Update hidden config fields for compatibility
+    document.getElementById('cfg-lanes').value = lanes;
+    document.getElementById('cfg-scan-length').value = length;
+    document.getElementById('cfg-scan-width').value = width;
+    
+    // Send config update first
+    const config = {
+        lanes: lanes,
+        scan_length: length,
+        scan_width: width
+    };
+    
+    const configMsg = new ROSLIB.Message({
+        data: JSON.stringify(config)
+    });
+    configPublisher.publish(configMsg);
+    
+    // Then send generate command
+    sendMissionCommand('generate_waypoints');
+    
+    // Calculate and display preview info
+    const totalWaypoints = lanes * 2 - 1;
+    const estimatedDistance = length * lanes + width * (lanes - 1);
+    document.getElementById('waypoint-count').textContent = `Waypoints: ~${totalWaypoints}`;
+    document.getElementById('estimated-distance').textContent = `Расстояние | Distance: ~${estimatedDistance}m`;
+    
+    addLog(`Generating ${totalWaypoints} waypoints: ${length}m × ${lanes} lanes`, 'info');
+}
+
+// Send mission command to Vostok1
+function sendMissionCommand(command) {
+    if (!connected) {
+        addLog('Not connected to ROS', 'error');
+        return;
+    }
+    
+    // Create publisher if not exists
+    if (!missionCommandPublisher) {
+        missionCommandPublisher = new ROSLIB.Topic({
+            ros: ros,
+            name: '/vostok1/mission_command',
+            messageType: 'std_msgs/String'
+        });
+    }
+    
+    const msg = new ROSLIB.Message({
+        data: JSON.stringify({ command: command })
+    });
+    
+    missionCommandPublisher.publish(msg);
+    addLog(`Mission command: ${command}`, 'info');
+    console.log('Mission command sent:', command);
+}
+
+// Update mission control UI based on state
+function updateMissionControlUI(state) {
+    missionState.state = state.state || 'IDLE';
+    missionState.gpsReady = state.gps_ready || false;
+    missionState.missionArmed = state.mission_armed || false;
+    missionState.joystickOverride = state.joystick_override || false;
+    missionState.totalWaypoints = state.total_waypoints || 0;
+    missionState.currentWaypoint = state.current_waypoint || 0;
+    missionState.startLat = state.start_lat;
+    missionState.startLon = state.start_lon;
+    
+    // Update GPS indicator
+    const gpsBadge = document.getElementById('gps-ready-badge');
+    if (gpsBadge) {
+        if (missionState.gpsReady) {
+            gpsBadge.textContent = '📡 GPS: Готов | Ready';
+            gpsBadge.className = 'gps-badge ready';
+        } else {
+            gpsBadge.textContent = '📡 GPS: Ожидание... | Waiting...';
+            gpsBadge.className = 'gps-badge not-ready';
+        }
+    }
+    
+    // Update state badge
+    const stateBadge = document.getElementById('mission-state-badge');
+    if (stateBadge) {
+        const stateLabels = {
+            'IDLE': 'ОЖИДАНИЕ | IDLE',
+            'WAYPOINTS_PREVIEW': '👁️ ПРЕДПРОСМОТР | PREVIEW',
+            'READY': '✅ ГОТОВ | READY',
+            'RUNNING': '🚀 ВЫПОЛНЯЕТСЯ | RUNNING',
+            'PAUSED': '⏸️ ПАУЗА | PAUSED',
+            'JOYSTICK': '🎮 ДЖОЙСТИК | JOYSTICK',
+            'FINISHED': '🏁 ЗАВЕРШЕНО | FINISHED'
+        };
+        stateBadge.textContent = stateLabels[missionState.state] || missionState.state;
+        stateBadge.className = `mission-badge ${missionState.state.toLowerCase()}`;
+    }
+    
+    // Update button states based on mission state
+    const btnGenerate = document.getElementById('btn-generate-waypoints');
+    const btnConfirm = document.getElementById('btn-confirm-waypoints');
+    const btnCancel = document.getElementById('btn-cancel-waypoints');
+    const btnStart = document.getElementById('btn-start-mission');
+    const btnStop = document.getElementById('btn-stop-mission');
+    const btnResume = document.getElementById('btn-resume-mission');
+    const btnJoyEnable = document.getElementById('btn-joystick-enable');
+    const btnJoyDisable = document.getElementById('btn-joystick-disable');
+    
+    // Reset all buttons
+    [btnGenerate, btnConfirm, btnCancel, btnStart, btnStop, btnResume, btnJoyEnable, btnJoyDisable].forEach(btn => {
+        if (btn) btn.disabled = true;
+    });
+    
+    // Enable buttons based on state
+    switch (missionState.state) {
+        case 'IDLE':
+            if (missionState.gpsReady) {
+                btnGenerate.disabled = false;
+            }
+            btnJoyEnable.disabled = false;
+            break;
+            
+        case 'WAYPOINTS_PREVIEW':
+            btnGenerate.disabled = false;
+            btnConfirm.disabled = false;
+            btnCancel.disabled = false;
+            btnJoyEnable.disabled = false;
+            break;
+            
+        case 'READY':
+            btnStart.disabled = false;
+            btnCancel.disabled = false;
+            btnJoyEnable.disabled = false;
+            break;
+            
+        case 'RUNNING':
+            btnStop.disabled = false;
+            break;
+            
+        case 'PAUSED':
+            btnResume.disabled = false;
+            btnStart.disabled = false;
+            btnCancel.disabled = false;
+            btnJoyEnable.disabled = false;
+            break;
+            
+        case 'JOYSTICK':
+            btnJoyDisable.disabled = false;
+            break;
+            
+        case 'FINISHED':
+            btnGenerate.disabled = false;
+            btnJoyEnable.disabled = false;
+            break;
+    }
+    
+    // Update joystick status display
+    const joystickStatus = document.getElementById('joystick-status');
+    if (joystickStatus) {
+        if (missionState.joystickOverride) {
+            joystickStatus.classList.remove('hidden');
+        } else {
+            joystickStatus.classList.add('hidden');
+        }
+    }
+    
+    // Update waypoint count display
+    if (missionState.totalWaypoints > 0) {
+        document.getElementById('waypoint-count').textContent = 
+            `Waypoints: ${missionState.currentWaypoint}/${missionState.totalWaypoints}`;
+    }
+}
+
+// Display waypoints on map
+// fitToWaypoints: only zoom to fit when waypoints change, not on every update
+function displayWaypointsOnMap(waypoints, fitToWaypoints = false) {
+    // Clear existing waypoint markers
+    clearWaypointPreview();
+    
+    if (!waypoints || waypoints.length === 0) return;
+    if (!missionState.startLat || !missionState.startLon) return;
+    
+    const startLat = missionState.startLat;
+    const startLon = missionState.startLon;
+    
+    // Convert local coordinates to GPS
+    const waypointLatLngs = waypoints.map((wp, idx) => {
+        const latLng = localToGPS(wp.x, wp.y, startLat, startLon);
+        return { lat: latLng[0], lon: latLng[1], idx: idx };
+    });
+    
+    // Create waypoint markers
+    waypointLatLngs.forEach((wp, idx) => {
+        const isCurrentTarget = idx === missionState.currentWaypoint;
+        const isPassed = idx < missionState.currentWaypoint;
+        
+        const markerColor = isPassed ? 'green' : (isCurrentTarget ? 'orange' : 'blue');
+        const markerSize = isCurrentTarget ? 12 : 8;
+        
+        const icon = L.divIcon({
+            className: 'waypoint-marker',
+            html: `<div style="
+                background-color: ${markerColor};
+                width: ${markerSize}px;
+                height: ${markerSize}px;
+                border-radius: 50%;
+                border: 2px solid white;
+                box-shadow: 0 0 4px rgba(0,0,0,0.5);
+            "></div>`,
+            iconSize: [markerSize, markerSize],
+            iconAnchor: [markerSize/2, markerSize/2]
+        });
+        
+        const marker = L.marker([wp.lat, wp.lon], { icon: icon })
+            .bindPopup(`Waypoint ${idx + 1}`)
+            .addTo(map);
+        
+        waypointMarkers.push(marker);
+    });
+    
+    // Draw path line connecting waypoints
+    const pathCoords = waypointLatLngs.map(wp => [wp.lat, wp.lon]);
+    waypointPath = L.polyline(pathCoords, {
+        color: '#3388ff',
+        weight: 2,
+        opacity: 0.7,
+        dashArray: '5, 10'
+    }).addTo(map);
+    
+    // Fit map to show all waypoints (only when waypoints change, not on every update)
+    if (fitToWaypoints && pathCoords.length > 0) {
+        const bounds = L.latLngBounds(pathCoords);
+        bounds.extend([startLat, startLon]);  // Include boat position
+        map.fitBounds(bounds, { padding: [50, 50] });
+    }
+    
+    addLog(`Displayed ${waypoints.length} waypoints on map`, 'info');
+}
+
+// Clear waypoint preview from map
+function clearWaypointPreview() {
+    waypointMarkers.forEach(marker => map.removeLayer(marker));
+    waypointMarkers = [];
+    
+    if (waypointPath) {
+        map.removeLayer(waypointPath);
+        waypointPath = null;
+    }
+}
+
+// Convert local ENU coordinates to GPS
+function localToGPS(x, y, refLat, refLon) {
+    const R = 6371000.0;  // Earth radius in meters
+    const refLatRad = refLat * Math.PI / 180;
+    
+    // x = East, y = North
+    const dLat = y / R;
+    const dLon = x / (R * Math.cos(refLatRad));
+    
+    const lat = refLat + dLat * 180 / Math.PI;
+    const lon = refLon + dLon * 180 / Math.PI;
+    
+    return [lat, lon];
 }

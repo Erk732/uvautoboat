@@ -34,6 +34,8 @@ setup(
             'buran_controller = control.buran_controller:main',
             #NEW CODE FOR SEPERATED CONTROL AND PLANNING
             'atlantis_controller = control.atlantis_controller:main',
+            # Keyboard teleop for manual control
+            'keyboard_teleop = control.keyboard_teleop:main',
         ],
     },
 )
