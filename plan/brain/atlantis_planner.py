@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
+# PLEASE READ COMMENTS
 # atlanis_planner.py for only planning with dynamic reconfigure feature
+# WE CAN USE ANY NODE WE CAN THIS IS ONLY A PSEUDO CODE FOR THE NEW PLANNER WITH DYNAMIC PARAMETERS
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult # FOR DYNAMIC PARAMETERS
@@ -27,7 +29,7 @@ class AtlantisPlanner(Node):
         self.scan_width = self.get_parameter('scan_width').value
         self.lanes = self.get_parameter('lanes').value
 
-        # --- 3. ENABLE DYNAMIC UPDATES (The Missing Link) ---
+        # --- 3. ENABLE DYNAMIC UPDATES --- # I am not sure did I do it right or no? 
         self.add_on_set_parameters_callback(self.parameter_callback)
 
         # --- STATE ---
@@ -42,7 +44,7 @@ class AtlantisPlanner(Node):
         self.is_stuck = False
         self.obstacle_mode = False
         
-        # --- PUBS/SUBS ---
+        # --- PUBLISHERS/SUBSCRIBERS ---
         self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, 10)
         self.create_subscription(PointCloud2, '/wamv/sensors/lidars/lidar_wamv_sensor/points', self.lidar_callback, 10)
 
