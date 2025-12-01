@@ -1473,6 +1473,15 @@ ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messag
 cd ~/seal_ws/src/uvautoboat/web_dashboard && python3 -m http.server 8000
 ```
 
+```bash
+# Teleport boat to starting position (reset without restarting simulation)
+gz service -s /world/sydney_regatta/set_pose \
+  --reqtype gz.msgs.Pose \
+  --reptype gz.msgs.Boolean \
+  --timeout 1000 \
+  --req 'name: "wamv", position: {x: 0, y: 0, z: 0.5}, orientation: {x: 0, y: 0, z: 0, w: 1}'
+```
+
 ### 🐛 Debugging
 
 ```bash
@@ -1544,6 +1553,15 @@ rqt_image_view
 # Parameter Reconfigure - tune parameters live
 rqt_reconfigure
 ```
+
+> 💡 **Better Plotting UI:** For advanced real-time plotting, install PlotJuggler:
+>
+> ```bash
+> sudo apt install ros-jazzy-plotjuggler-ros
+> ros2 run plotjuggler plotjuggler
+> ```
+>
+> Then: **Streaming → ROS2 Topic Subscriber → Start → Select topics → Drag to plot**
 
 ### 💾 Git Quick Commands
 
