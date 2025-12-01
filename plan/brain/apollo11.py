@@ -62,7 +62,7 @@ class Apollo11(Node):
         
         if self.start_gps is None:
             self.start_gps = (msg.latitude, msg.longitude)
-            self.get_logger().info(f"Launch Pad Established: {self.start_gps}")
+            self.get_logger().info(f"Launch Position has been established: {self.start_gps}")
             self.generate_mission_waypoints()
             self.state = "DRIVING"
             
@@ -131,7 +131,7 @@ class Apollo11(Node):
             last_x, last_y = self.last_check_pos
             dist_moved = math.hypot(curr_x - last_x, curr_y - last_y)
             if dist_moved < self.min_move_dist:
-                self.get_logger().warn(f"WAMV IS STUCK! Moved only {dist_moved:.2f}m in 5s.")
+                self.get_logger().warn(f"WAMV IS STUCK! Moved only {dist_moved:.2f}m in 5s.") # maybe we could make the 5s prin prompt into paramater?
                 self.get_logger().warn("Initiating Recovery Maneuver...")
                 self.state = "REVERSING"
                 self.recovery_start_time = time.time()
@@ -163,9 +163,9 @@ class Apollo11(Node):
         # --- Obstacle Avoidance --- CHANGE IT
         if self.state == "AVOIDING":
             turn_power = 600.0
-            if self.obstacle_state == 1:   # more space on left → turn left
+            if self.obstacle_state == 1:   # more space on left then turn left
                 self.send_thrust(-turn_power, turn_power)
-            elif self.obstacle_state == -1:  # more space on right → turn right
+            elif self.obstacle_state == -1:  # more space on right then turn right
                 self.send_thrust(turn_power, -turn_power)
             else:
                 self.send_thrust(0.0, 0.0)

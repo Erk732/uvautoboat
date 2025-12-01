@@ -1085,7 +1085,7 @@ class Vostok1(Node):
         
         direction = "LEFT" if self.left_clear > self.right_clear else "RIGHT"
         self.get_logger().warn(
-            f"ОБХОДНОЙ МАРШРУТ! Inserting detour waypoint {direction} at ({detour_x:.1f}, {detour_y:.1f})"
+            f"ОБХОДНОЙ МАРШРУТ! Inserting detour waypoint {direction} at ({detour_x:.1f}, {detour_y:.1f})" # We can remove the russian easter egg? 
         )
     
     def record_escape_result(self, success):
@@ -1169,13 +1169,13 @@ class Vostok1(Node):
         
         # Mission status with bilingual state messages
         state_translations = {
-            "STUCK_ESCAPING": "ЗАСТРЯЛ - МАНЕВР ОСВОБОЖДЕНИЯ | STUCK - ESCAPING",
-            "OBSTACLE_AVOIDING": "ПРЕПЯТСТВИЕ - ОБХОД | OBSTACLE - AVOIDING",
-            "MISSION_COMPLETE": "МИССИЯ ЗАВЕРШЕНА | MISSION COMPLETE",
-            "MOVING_TO_WAYPOINT": "ДВИЖЕНИЕ К ТОЧКЕ | MOVING TO WAYPOINT",
-            "FINISHED": "ЗАВЕРШЕНО | FINISHED",
-            "DRIVING": "ДВИЖЕНИЕ | DRIVING",
-            "INIT": "ИНИЦИАЛИЗАЦИЯ | INITIALIZING"
+            "STUCK_ESCAPING": "ЗАСТРЯЛ - МАНЕВР ОСВОБОЖДЕНИЯ | STUCK - ESCAPING", # We can remove the russian easter egg? 
+            "OBSTACLE_AVOIDING": "ПРЕПЯТСТВИЕ - ОБХОД | OBSTACLE - AVOIDING", # We can remove the russian easter egg? 
+            "MISSION_COMPLETE": "МИССИЯ ЗАВЕРШЕНА | MISSION COMPLETE", # We can remove the russian easter egg? 
+            "MOVING_TO_WAYPOINT": "ДВИЖЕНИЕ К ТОЧКЕ | MOVING TO WAYPOINT", # We can remove the russian easter egg? 
+            "FINISHED": "ЗАВЕРШЕНО | FINISHED", # We can remove the russian easter egg? 
+            "DRIVING": "ДВИЖЕНИЕ | DRIVING", # We can remove the russian easter egg? 
+            "INIT": "ИНИЦИАЛИЗАЦИЯ | INITIALIZING" # We can remove the russian easter egg?  
         }
         
         if self.escape_mode:
@@ -1206,9 +1206,9 @@ class Vostok1(Node):
         obstacle_detected = self.min_obstacle_distance < self.min_safe_distance
         
         if obstacle_detected:
-            status_text = f"🚨 ПРЕПЯТСТВИЕ {round(self.min_obstacle_distance, 1)}m | OBSTACLE DETECTED"
+            status_text = f"🚨 ПРЕПЯТСТВИЕ {round(self.min_obstacle_distance, 1)}m | OBSTACLE DETECTED" # We can remove the russian easter egg? 
         else:
-            status_text = "✅ ПУТЬ СВОБОДЕН | PATH CLEAR"
+            status_text = "✅ ПУТЬ СВОБОДЕН | PATH CLEAR" # We can remove the russian easter egg? 
         
         obstacle_data = {
             "status": status_text,
@@ -1232,7 +1232,7 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("МИССИЯ ПРЕРВАНА ОПЕРАТОРОМ | Mission aborted by user")
+        node.get_logger().info("МИССИЯ ПРЕРВАНА ОПЕРАТОРОМ | Mission aborted by user") # We can remove the russian easter egg? 
     finally:
         node.stop_boat()
         node.destroy_node()
