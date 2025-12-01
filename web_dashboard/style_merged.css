@@ -401,14 +401,57 @@ h2 {
     margin-bottom: 5px;
 }
 
-.joystick-cmd {
-    font-family: monospace;
+/* Joystick Instructions Box */
+.joystick-instructions {
+    margin-top: 12px;
+    padding: 12px;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+    border: 1px solid rgba(102, 126, 234, 0.4);
+    border-radius: 8px;
+}
+
+.joystick-instructions.hidden {
+    display: none;
+}
+
+.instructions-title {
+    font-weight: bold;
+    color: #667eea;
+    margin-bottom: 10px;
+}
+
+.joystick-instructions code {
+    display: block;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    color: #4CAF50;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 8px 0;
+    border-left: 3px solid #4CAF50;
+    user-select: all;
+    cursor: text;
+}
+
+.instructions-note {
+    text-align: center;
+    color: #888;
+    font-size: 11px;
+    margin: 5px 0;
+}
+
+.instructions-hint {
     font-size: 11px;
     color: #aaa;
-    background: rgba(0, 0, 0, 0.3);
-    padding: 5px 10px;
-    border-radius: 4px;
-    display: block;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.joystick-instructions p {
+    margin: 5px 0;
+    font-size: 12px;
 }
 
 /* Map Legend */
@@ -863,6 +906,18 @@ h2 {
 
 .waypoint-tooltip b {
     color: #666;
+}
+
+/* Dirty input indicator - shows user has modified value */
+.input-dirty {
+    border-color: #f0ad4e !important;
+    box-shadow: 0 0 3px rgba(240, 173, 78, 0.5);
+    background-color: rgba(240, 173, 78, 0.1);
+}
+
+.input-dirty:focus {
+    border-color: #ec971f !important;
+    box-shadow: 0 0 5px rgba(236, 151, 31, 0.5);
 }
 
 /* Responsive - Normal Mode */
@@ -1452,6 +1507,12 @@ body.bureau-mode .terminal-container::-webkit-scrollbar-thumb:hover {
     background: var(--bureau-teal);
 }
 
+body.bureau-mode .input-dirty {
+    border-color: #E7C660 !important;
+    box-shadow: 0 0 8px rgba(231, 198, 96, 0.4);
+    background-color: rgba(231, 198, 96, 0.1);
+}
+
 
 /* ============================================================ */
 /* ========== TERMINAL MODE (CRT Green Phosphor) ============== */
@@ -1894,6 +1955,12 @@ body.terminal-mode .waypoint-tooltip b {
 
 body.terminal-mode .waypoint-tooltip hr {
     border-color: rgba(51, 204, 255, 0.3);
+}
+
+body.terminal-mode .input-dirty {
+    border-color: #FFCC00 !important;
+    box-shadow: 0 0 8px rgba(255, 204, 0, 0.4);
+    background-color: rgba(255, 204, 0, 0.1);
 }
 
 /* Scrollbars - Terminal Mode */

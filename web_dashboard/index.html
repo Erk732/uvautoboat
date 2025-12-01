@@ -231,8 +231,8 @@
                 <div class="mission-step joystick-section">
                     <h3>🎮 Ручное Управление | Manual Override</h3>
                     <div class="joystick-info">
-                        <span>Переключает управление на джойстик</span><br>
-                        <span class="joystick-hint">Switches control to joystick/teleop</span>
+                        <span>Отключает автономное управление для ручного контроля</span><br>
+                        <span class="joystick-hint">Disables autonomous control for manual driving</span>
                     </div>
                     <div class="mission-buttons-row">
                         <button id="btn-joystick-enable" class="mission-btn joystick">
@@ -244,6 +244,16 @@
                     </div>
                     <div id="joystick-status" class="joystick-status hidden">
                         <span class="joystick-active">🎮 OVERRIDE ACTIVE - Autonomous control disabled</span>
+                    </div>
+                    <div id="joystick-instructions" class="joystick-instructions hidden">
+                        <div class="instructions-title">📋 Инструкция | Instructions:</div>
+                        <div class="instructions-content">
+                            <p><strong>В новом терминале запустите | Run in a new terminal:</strong></p>
+                            <code>ros2 run control keyboard_teleop</code>
+                            <p class="instructions-note">или | or</p>
+                            <code>ros2 launch vrx_gz usv_joy_teleop.py</code>
+                            <p class="instructions-hint">⌨️ WASD/Arrows = движение | movement, Space = стоп | stop</p>
+                        </div>
                     </div>
                 </div>
             </div>

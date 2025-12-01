@@ -15,6 +15,9 @@ let currentWaypointMarker = null;  // Highlight current target
 let configPublisher = null;
 let missionCommandPublisher = null;  // NEW: Mission command publisher
 
+// Track which config inputs have been modified by user (prevents ROS from overwriting)
+let dirtyInputs = new Set();
+
 // Mission state
 let missionState = {
     state: 'IDLE',
@@ -666,19 +669,54 @@ setInterval(() => {
 function initConfigPanel() {
     console.log('Initializing config panel...');
     
+    // All config input IDs
+    const allConfigInputs = [
+        'cfg-lanes', 'cfg-scan-length', 'cfg-scan-width',
+        'cfg-kp', 'cfg-ki', 'cfg-kd',
+        'cfg-base-speed', 'cfg-max-speed', 'cfg-safe-dist',
+        'wp-lanes', 'wp-length', 'wp-width'
+    ];
+    
+    // Mark input as dirty when user types
+    allConfigInputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', () => {
+                dirtyInputs.add(id);
+                el.classList.add('input-dirty');
+            });
+            // Also mark dirty on focus (user intends to edit)
+            el.addEventListener('focus', () => {
+                dirtyInputs.add(id);
+                el.classList.add('input-dirty');
+            });
+        }
+    });
+    
     // Apply all config button (now applies PID/Speed only)
     document.getElementById('btn-apply-config').addEventListener('click', () => {
         sendConfig(true, false);  // PID only
+        // Clear dirty state for applied inputs
+        clearDirtyInputs(['cfg-kp', 'cfg-ki', 'cfg-kd', 'cfg-base-speed', 'cfg-max-speed', 'cfg-safe-dist']);
     });
     
     console.log('Config panel initialized');
+}
+
+// Clear dirty state for specified inputs
+function clearDirtyInputs(inputIds) {
+    inputIds.forEach(id => {
+        dirtyInputs.delete(id);
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('input-dirty');
+    });
 }
 
 // Update config inputs from ROS
 function updateConfigFromROS(data) {
     currentState.config = { ...currentState.config, ...data };
     
-    // Only update inputs if they're not focused (user not typing)
+    // Only update inputs if they're not dirty (user hasn't modified them)
     const inputs = {
         'cfg-lanes': data.lanes,
         'cfg-scan-length': data.scan_length,
@@ -700,14 +738,16 @@ function updateConfigFromROS(data) {
     
     for (const [id, value] of Object.entries(inputs)) {
         const el = document.getElementById(id);
-        if (el && document.activeElement !== el && value !== undefined) {
+        // Don't update if input is dirty (user modified) or focused
+        if (el && !dirtyInputs.has(id) && document.activeElement !== el && value !== undefined) {
             el.value = value;
         }
     }
     
     for (const [id, value] of Object.entries(wpInputs)) {
         const el = document.getElementById(id);
-        if (el && document.activeElement !== el && value !== undefined) {
+        // Don't update if input is dirty (user modified) or focused
+        if (el && !dirtyInputs.has(id) && document.activeElement !== el && value !== undefined) {
             el.value = value;
         }
     }
@@ -894,6 +934,9 @@ function generateWaypoints() {
     document.getElementById('cfg-scan-length').value = length;
     document.getElementById('cfg-scan-width').value = width;
     
+    // Clear dirty state for waypoint inputs since we're applying them
+    clearDirtyInputs(['wp-lanes', 'wp-length', 'wp-width', 'cfg-lanes', 'cfg-scan-length', 'cfg-scan-width']);
+    
     // Send config update first
     const config = {
         lanes: lanes,
@@ -1040,13 +1083,16 @@ function updateMissionControlUI(state) {
             break;
     }
     
-    // Update joystick status display
+    // Update joystick status and instructions display
     const joystickStatus = document.getElementById('joystick-status');
+    const joystickInstructions = document.getElementById('joystick-instructions');
     if (joystickStatus) {
         if (missionState.joystickOverride) {
             joystickStatus.classList.remove('hidden');
+            if (joystickInstructions) joystickInstructions.classList.remove('hidden');
         } else {
             joystickStatus.classList.add('hidden');
+            if (joystickInstructions) joystickInstructions.classList.add('hidden');
         }
     }
     
