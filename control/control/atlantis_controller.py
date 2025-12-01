@@ -98,6 +98,31 @@ class AtlantisController(Node):
 
     def lidar_callback(self, msg):
         # (Keep your existing point cloud processing logic here)
+        """Process 3D LIDAR point cloud for obstacle detection"""
+        # [Insert your original parsing logic here to get points]
+        # For brevity, let's assume you parse 'points' like in the original file
+        
+        # --- SIMPLIFIED PARSING FOR CONTEXT ---
+        # (You should copy the full parsing block from your original atlantis.py)
+        # ... parsing code ...
+        
+        # Determine clearances
+        # (Copy the sector analysis from original code)
+        self.analyze_scan_sectors_3d(points) 
+        
+        # Placeholder for the result of your original analysis:
+        self.min_obstacle_distance = ... 
+        self.left_clear = ...
+        self.right_clear = ...
+        
+        # Obstacle State Logic
+        if self.obstacle_detected:
+            # Hysteresis exit
+            exit_threshold = self.get_parameter('min_safe_distance').value + 2.0
+            self.obstacle_detected = self.min_obstacle_distance < exit_threshold
+        else:
+            # Entry
+            self.obstacle_detected = self.min_obstacle_distance < self.get_parameter('min_safe_distance').value
         pass 
 
     def latlon_to_meters(self, lat, lon):
@@ -113,7 +138,28 @@ class AtlantisController(Node):
     def control_loop(self):
         if self.state != "DRIVING" or self.current_gps is None or not self.waypoints:
             return
+        # --- OBSTACLE AVOIDANCE OVERRIDE ---
+        if self.min_obstacle_distance < self.get_parameter('critical_distance').value:
+            # CRITICAL STOP/REVERSE
+            self.get_logger().warn("CRITICAL OBSTACLE! Reversing...")
+            self.pub_left.publish(Float64(data=-500.0))
+            self.pub_right.publish(Float64(data=-500.0))
+            return # Skip PID
 
+        if self.obstacle_detected:
+            # Override target angle for avoidance
+            if self.left_clear > self.right_clear:
+                # Turn Left
+                target_angle = self.current_yaw + 1.57 # 90 degrees
+            else:
+                # Turn Right
+                target_angle = self.current_yaw - 1.57
+                
+            # Log it
+            self.get_logger().info(f"Avoiding Obstacle! Dist: {self.min_obstacle_distance:.1f}")
+        else:
+            # NORMAL NAVIGATION
+            target_angle = math.atan2(dy, dx)
         # 1. Get Position
         curr_x, curr_y = self.latlon_to_meters(self.current_gps[0], self.current_gps[1])
         
