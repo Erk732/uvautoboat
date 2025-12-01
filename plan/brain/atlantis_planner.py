@@ -22,7 +22,7 @@ class AtlantisPlanner(Node):
         # --- 1. DECLARE PARAMETERS ---
         self.declare_parameter('scan_length', 40.0)
         self.declare_parameter('scan_width', 20.0)
-        self.declare_parameter('lanes', 6)
+        self.declare_parameter('lanes', 6) # WHEN THESE PARAMETERS CHANGED BY USER PLEASE ALWAYS MIND THAT TO CHANGE PLANNER SIDE ALSO
         
         self.scan_length = self.get_parameter('scan_length').value
         self.scan_width = self.get_parameter('scan_width').value
