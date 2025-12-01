@@ -32,6 +32,8 @@ setup(
             'path_follower = control.path_follower:main',
             # Modular controller (TNO style name)
             'buran_controller = control.buran_controller:main',
+            #NEW CODE FOR SEPERATED CONTROL AND PLANNING
+            'atlantis_controller = control.atlantis_controller:main',
         ],
     },
 )
