@@ -18,9 +18,9 @@ class Atlantis(Node):
         super().__init__('atlantis_node')
 
         # --- CONFIGURATION PARAMETERS --- configure as much as you want 
-        self.declare_parameter('scan_length', 50.0) # 2nd test was 50.0 3RD test was 40.0 4th test was 50.0
-        self.declare_parameter('scan_width', 10.0)  #2 nd test was 10.0  3rd test was 5.0 4th test was 10.0
-        self.declare_parameter('lanes', 16) # 2nd test was 8 3rd test was 12 4th test was 16
+        self.declare_parameter('scan_length', 150.0) # 2nd test was 50.0 3RD test was 40.0 4th test was 50.0
+        self.declare_parameter('scan_width', 50.0)  #2 nd test was 10.0  3rd test was 5.0 4th test was 10.0
+        self.declare_parameter('lanes', 8) # 2nd test was 8 3rd test was 12 4th test was 16
         self.declare_parameter('base_speed', 500.0)
         self.declare_parameter('max_speed', 800.0)
         self.declare_parameter('waypoint_tolerance', 3.0)
@@ -31,7 +31,7 @@ class Atlantis(Node):
         self.declare_parameter('kd', 100.0)
 
         # Obstacle avoidance parameters
-        self.declare_parameter('min_safe_distance', 15.0)# minimum distance to consider obstacle
+        self.declare_parameter('min_safe_distance', 15.0) 
         self.declare_parameter('critical_distance', 5.0)
         self.declare_parameter('obstacle_slow_factor', 0.3)
         self.declare_parameter('hysteresis_distance', 2.0)  
