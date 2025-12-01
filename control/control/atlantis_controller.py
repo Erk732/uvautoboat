@@ -137,7 +137,7 @@ class AtlantisController(Node):
                 dx = target_x - curr_x
                 dy = target_y - curr_y
 
-        # 3. Calculate Heading & PID (Keep your exact PID logic here)
+        # 3. Calculate Heading & PID 
         dt = 0.05  # matches your timer period
         target_angle = math.atan2(dy, dx)
         angle_error = target_angle - self.current_yaw
@@ -146,7 +146,7 @@ class AtlantisController(Node):
         while angle_error > math.pi: angle_error -= 2.0 * math.pi
         while angle_error < -math.pi: angle_error += 2.0 * math.pi
         
-        # Full PID (KP/KD/KI)
+        # Full PID (KP/KI/KD)
         self.integral_error += angle_error * dt
         # Anti-windup: clamp integral term
         self.integral_error = max(-100.0, min(100.0, self.integral_error))
