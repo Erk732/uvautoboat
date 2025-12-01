@@ -303,7 +303,7 @@ This section covers how to run the autonomous navigation systems. Choose based o
 Before running any navigation system, start the Gazebo simulation:
 
 ```bash
-ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+ros2 launch vrx_gz competition.launch.py world:=sydney_regatta # You can use other worlds like "gymkhana_task" or "follow_path_task" just swap the "sydney_regatta" with whichever you want
 ```
 
 > **⚠️ Important**: Wait for Gazebo to fully load (you should see the WAM-V boat floating in the water) before running any navigation node. The boat needs GPS and sensor data to start navigating.
