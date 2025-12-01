@@ -148,6 +148,10 @@ class AtlantisController(Node):
         # Simple PID (re-add your KD/KI)
         turn_power = self.kp * angle_error
         turn_power = max(-800.0, min(800.0, turn_power))
+        self.integral_error += angle_error * dt
+        derivative_error = (angle_error - self.previous_error) / dt
+        turn_power = self.kp * angle_error + self.ki * self.integral_error + self.kd * derivative_error
+        self.previous_error = angle_error
         
         speed = self.base_speed
         
