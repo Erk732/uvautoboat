@@ -11,7 +11,7 @@ A real-time web-based monitoring dashboard for the Vostok1 autonomous boat syste
 - **SASS v2.0 Anti-Stuck Status** with visual escalation indicators
 - **System logs** with color-coded severity levels
 - **Dual-mode support**: Works with both integrated Vostok1 and modular navigation
-- **Style toggle**: Switch between Bureau (TNO) and Terminal modes
+- **3 Style modes**: Normal (modern), Bureau (TNO Soviet), Terminal (CRT retro)
 - **Configuration panel**: Adjust mission parameters in real-time
 - **Responsive design** works on desktop and mobile devices
 
@@ -273,10 +273,19 @@ setInterval(() => {
 ## Files
 
 - `index.html` - Main dashboard structure
-- `style.css` - Dashboard styling and layout (Bureau/TNO mode)
-- `style_tno.css` - Terminal mode styling (Soviet retro aesthetic)
+- `style_merged.css` - Unified stylesheet with 3 style modes
 - `app.js` - ROS connection and data handling logic
 - `Readme_webdashboard.md` - This file
+
+### Style Modes
+
+The dashboard supports 3 visual styles (click the toggle button to cycle):
+
+| Mode | Description |
+|------|-------------|
+| **Normal** | Clean purple gradient, modern look |
+| **Bureau** | TNO Soviet industrial aesthetic with CRT effects |
+| **Terminal** | Green phosphor CRT retro computer style |
 
 ## Future Enhancements
 

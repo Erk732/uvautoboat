@@ -31,8 +31,19 @@ let currentState = {
     }
 };
 
-// Style mode state
-let isTerminalMode = false;
+// Style mode state: 'normal', 'bureau', 'terminal'
+let currentStyleMode = 'normal';
+const styleModes = ['normal', 'bureau', 'terminal'];
+const styleModeLabels = {
+    'normal': 'БЮРО | BUREAU MODE',
+    'bureau': 'ТЕРМИНАЛ | TERMINAL MODE', 
+    'terminal': 'ОБЫЧНЫЙ | NORMAL MODE'
+};
+const styleModeLogMessages = {
+    'normal': 'Переключено на обычный режим | Switched to normal mode',
+    'bureau': 'Переключено на режим бюро | Switched to bureau mode',
+    'terminal': 'Переключено на режим терминала | Switched to terminal mode'
+};
 
 // Initialize everything when page loads
 window.addEventListener('load', () => {
@@ -45,7 +56,7 @@ window.addEventListener('load', () => {
     addLog('Dashboard initialized', 'info');
 });
 
-// Initialize style toggle button
+// Initialize style toggle button - cycles through 3 modes
 function initStyleToggle() {
     const toggleBtn = document.getElementById('style-toggle');
     const toggleText = document.getElementById('toggle-text');
@@ -53,22 +64,30 @@ function initStyleToggle() {
     const container = document.querySelector('.container');
     
     toggleBtn.addEventListener('click', () => {
-        isTerminalMode = !isTerminalMode;
+        // Remove current style class
+        body.classList.remove('bureau-mode', 'terminal-mode');
+        container.classList.remove('bureau-mode', 'terminal-mode');
         
-        if (isTerminalMode) {
-            body.classList.add('terminal-mode');
-            container.classList.add('terminal-mode');
-            toggleText.textContent = 'БЮРО | BUREAU MODE';
-            addLog('Переключено на режим терминала | Switched to terminal mode', 'info');
-        } else {
-            body.classList.remove('terminal-mode');
-            container.classList.remove('terminal-mode');
-            toggleText.textContent = 'ТЕРМИНАЛ | TERMINAL MODE';
-            addLog('Переключено на режим бюро | Switched to bureau mode', 'info');
+        // Cycle to next style
+        const currentIndex = styleModes.indexOf(currentStyleMode);
+        const nextIndex = (currentIndex + 1) % styleModes.length;
+        currentStyleMode = styleModes[nextIndex];
+        
+        // Apply new style class (normal has no class)
+        if (currentStyleMode !== 'normal') {
+            body.classList.add(`${currentStyleMode}-mode`);
+            container.classList.add(`${currentStyleMode}-mode`);
         }
+        
+        // Update button text to show NEXT mode
+        toggleText.textContent = styleModeLabels[currentStyleMode];
+        
+        // Log the change
+        addLog(styleModeLogMessages[currentStyleMode], 'info');
+        console.log(`Style changed to: ${currentStyleMode}`);
     });
     
-    console.log('Style toggle initialized');
+    console.log('Style toggle initialized (3-mode cycle: Normal → Bureau → Terminal)');
 }
 
 
