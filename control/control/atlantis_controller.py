@@ -138,21 +138,21 @@ class AtlantisController(Node):
                 dy = target_y - curr_y
 
         # 3. Calculate Heading & PID (Keep your exact PID logic here)
+        dt = 0.05  # matches your timer period
         target_angle = math.atan2(dy, dx)
         angle_error = target_angle - self.current_yaw
-        
+
         # Normalize angle
         while angle_error > math.pi: angle_error -= 2.0 * math.pi
         while angle_error < -math.pi: angle_error += 2.0 * math.pi
         
-        # Simple PID (re-add your KD/KI)
-        turn_power = self.kp * angle_error
-        turn_power = max(-800.0, min(800.0, turn_power))
+        # Full PID (KP/KD/KI)
         self.integral_error += angle_error * dt
         derivative_error = (angle_error - self.previous_error) / dt
         turn_power = self.kp * angle_error + self.ki * self.integral_error + self.kd * derivative_error
         self.previous_error = angle_error
-        
+        # Clamp the output
+        turn_power = max(-800.0, min(800.0, turn_power))
         speed = self.base_speed
         
         # Send Thrust
