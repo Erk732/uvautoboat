@@ -349,7 +349,8 @@ ros2 run plan atlantis_planner
 [INFO] [1764598711.682310894] [atlantis_planner]: Atlantis Planner Started - Press ENTER to generate path
 Press ENTER to generate and publish path...
 ```
-after press enter this terminal output will follow:
+
+After pressing enter, this terminal output will follow:
 
 **Terminal Output :**
 
