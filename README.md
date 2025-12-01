@@ -44,8 +44,8 @@ AutoBoat is an autonomous navigation system designed for maritime surface vehicl
 
 | Phase | Description | Status |
 |:------|:------------|:------:|
-| Phase 1 | Architecture & MVP | ✅ Complete |
-| Phase 2 | Autonomous Navigation | ✅ Complete |
+| Phase 1 | Architecture & MVP | ✅ Completed |
+| Phase 2 | Autonomous Navigation | ✅ Completed |
 | Phase 3 | Coverage & Search | ⏸️ Planned |
 | Phase 4 | Integration & Testing | 🔄 60% |
 
@@ -139,7 +139,7 @@ ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
 source ~/seal_ws/install/setup.bash  # Required in each new terminal
 # Choose one:
 ros2 run plan apollo11    # Option A: 2D LIDAR approach
-ros2 run plan vostok1     # Option B: 3D LIDAR approach
+ros2 run plan atlantis_planner     # Option B: 3D LIDAR approach
 ```
 
 ### Expected Output
@@ -335,23 +335,24 @@ ros2 run plan apollo11
 
 ---
 
-### Option B: Vostok1 (3D LIDAR + SASS)
+### Option B: atalntis_planner (3D LIDAR + SASS)
 
 Full-featured implementation with Smart Anti-Stuck System and web dashboard support.
 
 ```bash
-ros2 run plan vostok1
+ros2 run plan atlantis_planner
 ```
 
-**Terminal Output (Bilingual):**
+**Terminal Output :**
 
 ```text
-[INFO] ПРОЕКТ-17 (Proekt-17) - Автономная Навигация
-[INFO] Vostok 1 - Autonomous Navigation System
-[INFO] + Smart Anti-Stuck System (SASS) v2.0
-[INFO] МИССИЯ НАЧАТА! (Mission Started!)
-[INFO] ТМ 1/19 | Поз: (5.2, 3.1) | Цель: (15.0, 0.0) | Дист: 10.2m | СВОБОДНО | CLEAR
+[INFO] [1764598711.682310894] [atlantis_planner]: Atlantis Planner Started - Press ENTER to generate path
+Press ENTER to generate and publish path...
 ```
+after press enter this output will follow:
+[INFO] [1764598786.432758347] [atlantis_planner]: Generated Path with X waypoints
+[INFO] [1764598786.433813041] [atlantis_planner]: Path generated! Controller will start driving.
+
 
 ---
 
