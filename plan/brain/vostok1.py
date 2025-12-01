@@ -554,7 +554,7 @@ class Vostok1(Node):
                 # Fall through to normal avoidance
             else:
                 # Reverse harder in critical zone
-                self.send_thrust(-800.0, -800.0)
+                self.send_thrust(-800.0, -800.0) # change the reverse thrust?
                 self.avoidance_mode = True
                 return
         else:
