@@ -19,21 +19,21 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='user',
-    maintainer_email='user@todo.todo',
-    description='VRX Navigation Logic',
-    license='TODO',
+    maintainer='bot',
+    maintainer_email='cayhanerk@gmail.com',
+    description='Planning and perception package for VRX autonomous navigation.',
+    license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'simple_perception = brain.simple_perception:main',
-            'astar_planner = brain.astar_planner:main',
             'mission_trigger = brain.mission_trigger:main',
-            'avoidingobs_ts_planner = brain.avoidingobs_ts_planner:main',
             'tf_broadcaster = brain.tf_broadcaster:main',
             'apollo11 = brain.apollo11:main',
-            'lawn_mower = brain.lawn_mower:main',
             'vostok1 = brain.vostok1:main',
+            # Modular nodes (TNO style names)
+            'oko_perception = brain.oko_perception:main',
+            'sputnik_planner = brain.sputnik_planner:main',
         ],
     },
 )

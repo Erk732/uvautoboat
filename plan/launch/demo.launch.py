@@ -20,12 +20,13 @@ def generate_launch_description():
         ),
 
         # 2. Planner Node (Brain)
-        Node(
-            package=pkg_name,
-            executable='astar_planner',
-            name='planner_node',
-            output='screen'
-        ),
+        # NOTE: astar_planner was removed - use sputnik_planner or apollo11/vostok1 instead
+        # Node(
+        #     package=pkg_name,
+        #     executable='astar_planner',
+        #     name='planner_node',
+        #     output='screen'
+        # ),
 
         # 3. Mission Trigger (The Auto-Start) <--- THIS IS NEW
         Node(

@@ -10,12 +10,15 @@ setup(
         ('share/ament_index/resource_index/packages',
          ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/launch', ['launch/simple_controller.launch.py']),
+        ('share/' + package_name + '/launch', [
+            'launch/simple_controller.launch.py',
+            'launch/path_follower.launch.py',
+        ]),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='ghostzero',
-    maintainer_email='yinpuchen0@gamil.com',
+    maintainer_email='yinpuchen0@gmail.com',
     description='Control package for VRX WAM-V thruster-based path following.',
     license='Apache-2.0',
     extras_require={
@@ -27,6 +30,8 @@ setup(
         'console_scripts': [
             'simple_controller = control.simple_controller:main',
             'path_follower = control.path_follower:main',
+            # Modular controller (TNO style name)
+            'buran_controller = control.buran_controller:main',
         ],
     },
 )

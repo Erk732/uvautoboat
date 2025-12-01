@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vostok1 Dashboard</title>
+    <!-- Switch between styles: style.css (original) or style_tno.css (TNO theme) -->
+    <link rel="stylesheet" href="style_tno.css?v=7">
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <img src="Longtermism.png" alt="Socialist Longtermism" class="ideology-icon">
+                <h1>ПРОЕКТ-17 | Vostok1 Autonomous Navigation System</h1>
+            </div>
+            <div class="header-right">
+                <button id="style-toggle" class="style-toggle-btn">
+                    <span id="toggle-text">ТЕРМИНАЛ | TERMINAL MODE</span>
+                </button>
+                <div id="connection-status" class="status disconnected">Отключено | Disconnected</div>
+            </div>
+        </header>
+
+        <div class="dashboard">
+            <!-- Status Panel -->
+            <div class="panel">
+                <h2>Статус Миссии | Mission Status</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="label">State:</span>
+                        <span id="state" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Waypoint:</span>
+                        <span id="waypoint" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Distance:</span>
+                        <span id="distance" class="value">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GPS Panel -->
+            <div class="panel">
+                <h2>GPS Позиция | GPS Position</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="label">Latitude:</span>
+                        <span id="latitude" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Longitude:</span>
+                        <span id="longitude" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Local X:</span>
+                        <span id="local-x" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Local Y:</span>
+                        <span id="local-y" class="value">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Obstacle Detection Panel -->
+            <div class="panel">
+                <h2>Обнаружение Препятствий | Obstacle Detection</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="label">Minimum Distance:</span>
+                        <span id="min-obstacle" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Front Clear:</span>
+                        <span id="front-clear" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Left Clear:</span>
+                        <span id="left-clear" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Right Clear:</span>
+                        <span id="right-clear" class="value">-</span>
+                    </div>
+                    <div class="info-item full-width">
+                        <span class="label">Obstacle Status:</span>
+                        <span id="obstacle-status" class="value badge">Clear</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Thruster Control Panel -->
+            <div class="panel">
+                <h2>Двигатели | Thruster Output</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="label">Left Thrust:</span>
+                        <span id="left-thrust" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Right Thrust:</span>
+                        <span id="right-thrust" class="value">-</span>
+                    </div>
+                </div>
+                <div class="thrust-bars">
+                    <div class="thrust-bar-container">
+                        <label>Left</label>
+                        <div class="thrust-bar">
+                            <div id="left-thrust-bar" class="thrust-fill"></div>
+                        </div>
+                    </div>
+                    <div class="thrust-bar-container">
+                        <label>Right</label>
+                        <div class="thrust-bar">
+                            <div id="right-thrust-bar" class="thrust-fill"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Smart Anti-Stuck System (SASS) Panel -->
+            <div class="panel sass-panel">
+                <h2>🛡️ Анти-Застревание | Smart Anti-Stuck (SASS)</h2>
+                <div class="info-grid">
+                    <div class="info-item full-width">
+                        <span class="label">Статус | Status:</span>
+                        <span id="stuck-status" class="value badge clear">Норма | Normal</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Фаза | Phase:</span>
+                        <span id="escape-phase" class="value">ОЖИДАНИЕ | IDLE</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Направление | Direction:</span>
+                        <span id="best-direction" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">No-Go Зоны | Zones:</span>
+                        <span id="no-go-zones" class="value">0 зон | zones</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Дрейф | Drift:</span>
+                        <span id="drift-vector" class="value">Минимально | Minimal</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">История | History:</span>
+                        <span id="escape-history" class="value">0 записей | records</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Зонд | Probe:</span>
+                        <span id="probe-results" class="value">L:- R:-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration Panel -->
+            <div class="panel config-panel">
+                <h2>Конфигурация | Configuration</h2>
+                <div class="config-grid">
+                    <div class="config-section">
+                        <h3>Маршрут | Path</h3>
+                        <div class="config-item">
+                            <label for="cfg-lanes">Полосы | Lanes:</label>
+                            <input type="number" id="cfg-lanes" min="1" max="50" value="10">
+                        </div>
+                        <div class="config-item">
+                            <label for="cfg-scan-length">Длина | Length (m):</label>
+                            <input type="number" id="cfg-scan-length" min="5" max="200" step="5" value="15">
+                        </div>
+                        <div class="config-item">
+                            <label for="cfg-scan-width">Ширина | Width (m):</label>
+                            <input type="number" id="cfg-scan-width" min="5" max="100" step="5" value="30">
+                        </div>
+                    </div>
+                    <div class="config-section">
+                        <h3>ПИД | PID Control</h3>
+                        <div class="config-item">
+                            <label for="cfg-kp">Kp (Proportional):</label>
+                            <input type="number" id="cfg-kp" min="0" max="2000" step="50" value="400">
+                        </div>
+                        <div class="config-item">
+                            <label for="cfg-ki">Ki (Integral):</label>
+                            <input type="number" id="cfg-ki" min="0" max="200" step="5" value="20">
+                        </div>
+                        <div class="config-item">
+                            <label for="cfg-kd">Kd (Derivative):</label>
+                            <input type="number" id="cfg-kd" min="0" max="500" step="10" value="100">
+                        </div>
+                    </div>
+                    <div class="config-section">
+                        <h3>Скорость | Speed</h3>
+                        <div class="config-item">
+                            <label for="cfg-base-speed">Базовая | Base:</label>
+                            <input type="number" id="cfg-base-speed" min="100" max="1000" step="50" value="500">
+                        </div>
+                        <div class="config-item">
+                            <label for="cfg-max-speed">Макс | Max:</label>
+                            <input type="number" id="cfg-max-speed" min="100" max="1000" step="50" value="800">
+                        </div>
+                        <div class="config-item">
+                            <label for="cfg-safe-dist">Безоп. дист. | Safe (m):</label>
+                            <input type="number" id="cfg-safe-dist" min="5" max="50" step="1" value="15">
+                        </div>
+                    </div>
+                </div>
+                <div class="config-buttons">
+                    <button id="btn-apply-config" class="config-btn apply">
+                        Применить | Apply
+                    </button>
+                    <button id="btn-apply-pid" class="config-btn pid">
+                        Только ПИД | PID Only
+                    </button>
+                    <button id="btn-restart-mission" class="config-btn restart">
+                        Перезапуск | Restart Mission
+                    </button>
+                </div>
+            </div>
+
+            <!-- Map Panel -->
+            <div class="panel map-panel">
+                <h2>Траектория Судна | Boat Trajectory</h2>
+                <div id="map"></div>
+            </div>
+
+            <!-- Raw Terminal Output Panel -->
+            <div class="panel terminal-panel">
+                <h2>Терминал Vostok1 | Terminal Output</h2>
+                <div class="terminal-header">
+                    <span class="terminal-title">vostok1_node@ros2</span>
+                    <div class="terminal-controls">
+                        <button id="btn-clear-terminal" class="terminal-btn">Очистить | Clear</button>
+                        <label class="auto-scroll-label">
+                            <input type="checkbox" id="auto-scroll" checked>
+                            Auto-scroll
+                        </label>
+                    </div>
+                </div>
+                <div id="terminal-output" class="terminal-container">
+                    <div class="terminal-line system">[SYSTEM] Ожидание подключения к Vostok1... | Waiting for Vostok1 connection...</div>
+                </div>
+            </div>
+
+            <!-- Logs Panel -->
+            <div class="panel logs-panel">
+                <h2>Системные Логи | System Logs</h2>
+                <div id="logs" class="logs-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=2"></script>
+</body>
+</html>

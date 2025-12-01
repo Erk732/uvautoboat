@@ -34,3 +34,8 @@ test_results/
 
 .DS_Store
 Thumbs.db
+
+--- Generated TF Graphs ---
+
+frames_*.gv
+frames_*.pdf

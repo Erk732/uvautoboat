@@ -1,238 +1,55 @@
-# AutoBoat (uvautoboat)
+# AutoBoat
 
-[![ROS 2 Version](https://img.shields.io/badge/ROS_2-Jazzy-blue)](https://docs.ros.org/en/jazzy/)
-[![Gazebo Version](https://img.shields.io/badge/Gazebo-Harmonic-orange)](https://gazebosim.org/)
-![ROS 2 CI](https://github.com/osrf/vrx/workflows/ROS%202%20CI/badge.svg)
+[![ROS 2](https://img.shields.io/badge/ROS_2-Jazzy-blue)](https://docs.ros.org/en/jazzy/)
+[![Gazebo](https://img.shields.io/badge/Gazebo-Harmonic-orange)](https://gazebosim.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+![Status](https://img.shields.io/badge/Status-Active-green)
 
-> An autonomous navigation system for unmanned surface vehicles (USVs) developed for the Virtual RobotX (VRX) competition.
-
-## Table of Contents
-
-- [Abstract](#abstract)
-- [Quick Start](#quick-start)
-- [Features](#features)
-- [Background Concepts for New Users](#background-concepts-for-new-users)
-- [System Architecture](#system-architecture)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Simulation Environment](#simulation-environment)
-- [Package Documentation](#package-documentation)
-- [Testing](#testing)
-- [Troubleshooting](#troubleshooting)
-- [Development](#development)
-- [References](#references)
+> **Autonomous Navigation System for Unmanned Surface Vehicles (USVs)**  
+> Developed for the Virtual RobotX (VRX) Competition
 
 ---
 
-## Abstract
+## 📋 Table of Contents
 
-AutoBoat is an autonomous navigation system for unmanned surface vehicles (USVs) developed for the Virtual RobotX (VRX) competition. The system integrates advanced path planning, real-time obstacle avoidance, and precise trajectory tracking algorithms optimized for the WAM-V maritime platform. Built on ROS 2 Jazzy and Gazebo Harmonic, the framework provides a robust foundation for autonomous maritime navigation in simulated environments.
-
----
-
-## Quick Start
-
-**Prerequisites**: ROS 2 Jazzy, Gazebo Harmonic, and VRX installed ([Installation Guide](#installation))
-
-```bash
-# Terminal 1 - Launch simulation
-ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
-
-# Terminal 2 - Start TF broadcaster (CRITICAL)
-ros2 run plan tf_broadcaster --ros-args -p use_sim_time:=true
-
-# Terminal 3 - Start planner
-ros2 run plan astar_planner --ros-args -p use_sim_time:=true
-
-# Terminal 4 - Start controller
-ros2 run control path_follower --ros-args -p use_sim_time:=true
-
-# Terminal 5 - Send navigation goal
-ros2 topic pub --once /planning/goal geometry_msgs/msg/PoseStamped \
-"{header: {frame_id: 'world'}, pose: {position: {x: 50.0, y: 50.0, z: 0.0}}}"
-```
-
-**Expected Result**: The WAM-V boat autonomously navigates to the goal position (50, 50).
-
-For detailed testing instructions, see [Integration Testing](#integration-testing).
-
----
-
-## Features
-
-### Core Capabilities
-
-✅ **Autonomous Navigation** - Fully operational point-to-point navigation system tested on ROS 2 Jazzy + Gazebo Harmonic
-
-✅ **A* Path Planning** - Grid-based optimal path planning with configurable environment size (300m to 2000m)
-
-✅ **Obstacle Avoidance** - Static obstacle detection and dynamic replanning capabilities
-
-✅ **Differential Thrust Control** - Precise trajectory tracking using independent left/right thruster control
-
-✅ **Transform Management** - Comprehensive TF system for coordinate frame handling
-
-### Technical Highlights
-
-- **Modular Architecture**: Separation of perception, planning, and control subsystems
-- **Grid-Based Planning**: Configurable resolution and environment size for different scenarios
-- **VRX Integration**: Full compatibility with Virtual RobotX simulation environment
-- **Simulation Time Support**: Proper synchronization with Gazebo physics simulation
-- **Extensible Framework**: Easy integration of additional planning algorithms and controllers
-
-### Current Status
-
-- ✅ **Phase 1**: Architecture & MVP - **100% Complete**
-- ✅ **Phase 2**: Obstacle Avoidance (A*) - **100% Complete**
-- ⏸️ **Phase 3**: Coverage & Search - Not Started
-- 🔄 **Phase 4**: Integration & Testing - **60% Complete**
-
-See [Board.md](Board.md) for detailed project status and milestones.
+1. [Overview](#overview)
+2. [Installation](#installation)
+3. [Quick Start](#quick-start)
+4. [Coordinate System](#coordinate-system)
+5. [Features](#features)
+6. [System Architecture](#system-architecture)
+7. [Usage Guide](#usage-guide)
+8. [Smart Anti-Stuck System (SASS)](#smart-anti-stuck-system-sass)
+9. [Technical Documentation](#technical-documentation)
+10. [Testing](#testing)
+11. [Troubleshooting](#troubleshooting)
+12. [Command Cheatsheet](#command-cheatsheet)
+13. [Contributing](#contributing)
+14. [References](#references)
+15. [Acknowledgments](#acknowledgments)
+16. [License](#license)
 
 ---
 
 ## Overview
 
-AutoBoat implements a hierarchical autonomous navigation framework designed for maritime surface vehicles operating in complex environments. The system combines perception, planning, and control subsystems to enable intelligent waypoint navigation while dynamically responding to environmental constraints. By processing sensor data streams and mission objectives in real-time, the architecture generates collision-free trajectories that account for static obstacles, operational boundaries, and vehicle dynamics, ensuring safe and efficient autonomous operation.
+AutoBoat is an autonomous navigation system designed for maritime surface vehicles competing in the Virtual RobotX (VRX) competition. Built on **ROS 2 Jazzy** and **Gazebo Harmonic**, the system provides:
 
-## Background Concepts for New Users
+- Real-time GPS-based waypoint navigation
+- LIDAR-based obstacle detection and avoidance
+- Differential thrust control for precise maneuvering
+- Two distinct autonomous implementations for different use cases
 
-If you're new to ROS 2 or autonomous navigation, here are some key concepts that will help you understand this system:
+### Project Status
 
-### What is ROS 2?
+| Phase | Description | Status |
+|:------|:------------|:------:|
+| Phase 1 | Architecture & MVP | ✅ Complete |
+| Phase 2 | Autonomous Navigation | ✅ Complete |
+| Phase 3 | Coverage & Search | ⏸️ Planned |
+| Phase 4 | Integration & Testing | 🔄 60% |
 
-**ROS 2 (Robot Operating System 2)** is a framework for building robot software. Think of it as a communication system that allows different parts of a robot (sensors, planning algorithms, controllers) to talk to each other.
-
-**Key ROS 2 Concepts:**
-
-- **Node**: An independent program that performs a specific task (e.g., path planning, motor control)
-- **Topic**: A named channel where nodes send and receive messages (like `/wamv/pose` for boat position)
-- **Message**: Data structure sent over topics (e.g., position coordinates, sensor readings)
-- **Package**: A collection of related nodes and code organized together
-
-**Example**: In this system, the `astar_planner` node publishes path messages to the `/planning/path` topic, and the `path_follower` node subscribes to that topic to receive the path.
-
-### What are Coordinate Frames (TF)?
-
-**Coordinate frames** define where things are in 3D space. Different parts of the robot have their own reference frames.
-
-**In this system:**
-
-- `world` or `map`: The global reference frame (like GPS coordinates)
-- `wamv/base_link`: The boat's center point
-- `wamv/imu_wamv_link`: Where the IMU sensor is located
-
-**Why it matters**: To plan a path, the system needs to know where the boat is relative to the world. The TF (Transform) system automatically converts between these different frames.
-
-### What is use_sim_time?
-
-When running in simulation (Gazebo), time moves differently than real-world time. The simulation can be paused, slowed down, or sped up.
-
-**The `use_sim_time` parameter** tells ROS 2 nodes to use simulation time instead of your computer's clock. This keeps everything synchronized.
-
-**Always use** `--ros-args -p use_sim_time:=true` when running nodes alongside Gazebo simulation.
-
-### What is Gazebo?
-
-**Gazebo** is a 3D physics simulator that creates realistic virtual environments for testing robots. It simulates:
-
-- Physics (gravity, buoyancy, collisions)
-- Sensors (cameras, GPS, IMU)
-- Actuators (thrusters, motors)
-
-**Why simulate?** Testing on real boats is expensive and dangerous. Gazebo lets you test your algorithms safely before deploying to hardware.
-
-### How Does Path Planning Work?
-
-Path planning is like using Google Maps for your robot:
-
-1. **Input**: Current position + Goal position
-2. **Process**: Algorithm finds obstacle-free path
-3. **Output**: Series of waypoints to follow
-
-**A* Algorithm** (used in this system):
-
-- Searches through a grid of possible positions
-- Finds the shortest path while avoiding obstacles
-- Uses a "heuristic" (educated guess) to search efficiently
-
-### How Does the Control System Work?
-
-The control system is like a driver following GPS directions:
-
-1. **Input**: Desired path from planner
-2. **Process**: Calculate steering and throttle commands
-3. **Output**: Thruster commands (left/right thrust)
-
-**Differential Thrust Control**:
-
-- Two independent thrusters (left and right)
-- To go straight: Both thrusters equal power
-- To turn left: Right thruster more power than left
-- To turn right: Left thruster more power than right
-
-### Topic Communication Example
-
-```text
-┌─────────────┐         /planning/goal        ┌──────────────┐
-│    User     │ ──────────────────────────────│ astar_planner│
-└─────────────┘                               └──────────────┘
-                                                       │
-                                                       │ /planning/path
-                                                       ↓
-                                                ┌──────────────┐
-                                                │path_follower │
-                                                └──────────────┘
-                                                       │
-                                          ┌────────────┴──────────────┐
-                                          ↓                           ↓
-                                /wamv/thrusters/left    /wamv/thrusters/right
-                                          ↓                           ↓
-                                    ┌─────────────────────────────────┐
-                                    │   WAM-V Boat (Gazebo)           │
-                                    └─────────────────────────────────┘
-```
-
-This visualization shows how messages flow from goal input to boat movement.
-
----
-
-## System Architecture
-
-The navigation system follows a hierarchical architecture with three primary layers:
-
-- **Mission Layer**: High-level task coordination and goal specification
-- **Planning Layer**: Path generation and obstacle avoidance (`plan` package)
-- **Control Layer**: Trajectory tracking and thruster control (`control` package)
-
-The planning module serves as the bridge between mission objectives and vehicle control, transforming high-level goals into executable trajectories.
-
-### ROS 2 Communication Interfaces
-
-#### Planning Topics
-
-| Topic Name | Message Type | Direction | Description |
-| :--- | :--- | :--- | :--- |
-| `/planning/goal` | `geometry_msgs/PoseStamped` | Input | Target destination in `world` frame |
-| `/planning/path` | `nav_msgs/Path` | Output | Computed collision-free trajectory |
-| `/perception/obstacles` | `geometry_msgs/PoseArray` | Input | Detected obstacle positions |
-
-#### Control Topics
-
-| Topic Name | Message Type | Direction | Description |
-| :--- | :--- | :--- | :--- |
-| `/planning/path` | `nav_msgs/Path` | Input | Trajectory waypoints from planner |
-| `/wamv/thrusters/left/thrust` | `std_msgs/Float64` | Output | Left thruster command (-1000 to 1000 N) |
-| `/wamv/thrusters/right/thrust` | `std_msgs/Float64` | Output | Right thruster command (-1000 to 1000 N) |
-
-#### Transform Frames
-
-| Frame ID | Parent Frame | Description |
-| :--- | :--- | :--- |
-| `world` | - | Global reference frame (root) |
-| `wamv/wamv/base_link` | `world` | Boat center point |
-| `wamv/wamv/imu_wamv_link` | `wamv/wamv/base_link` | IMU sensor location |
+See [Board.md](Board.md) for detailed milestones and progress tracking.
 
 ---
 
@@ -240,758 +57,1630 @@ The planning module serves as the bridge between mission objectives and vehicle 
 
 ### System Requirements
 
-- **Operating System**: Ubuntu 24.04 LTS
-- **Python**: Version 3.10 or higher
-- **Memory**: Minimum 8GB RAM (16GB or 32GB recommended)
-- **Storage**: At least 40GB available disk space
+| Component | Minimum | Recommended |
+|:----------|:--------|:------------|
+| OS | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS |
+| RAM | 8 GB | 16 GB |
+| Storage | 40 GB | 60 GB |
+| Python | 3.10+ | 3.12 |
 
 ### Prerequisites
 
-⚠️ **Important**: This package has been tested with ROS 2 Jazzy and Gazebo Harmonic. Using different versions may result in compatibility issues or unexpected behavior.
+- Ubuntu 24.04 LTS
+- ROS 2 Jazzy ([Installation Guide](https://docs.ros.org/en/jazzy/Installation.html))
+- Gazebo Harmonic ([Installation Guide](https://gazebosim.org/docs/harmonic/install_ubuntu/))
+- VRX Simulation ([GitHub](https://github.com/osrf/vrx))
 
-**Required Software:**
+### Step-by-Step Installation
 
-- [ROS 2 Jazzy Jalisco](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html) - Robot Operating System 2
-- [Gazebo Harmonic](https://gazebosim.org/docs/harmonic/install_ubuntu/) - Physics-based simulation environment
-- [VRX Simulation](https://github.com/osrf/vrx) - Virtual RobotX competition environment
-- Python 3.10+ with pip
-
-**Python Dependencies:**
-
-The following Python packages are automatically installed during the build process:
-
-- `numpy` - Numerical computing
-- `matplotlib` - Visualization (optional)
-- Other dependencies specified in package configurations
-
-### Installation Instructions
-
-⚠️ **Note**: Please follow these instructions carefully. Skipping steps may result in build failures or runtime errors.
-
-1. **Create and initialize workspace**
-
-   Create a ROS 2 workspace and clone this repository into the `src` directory:
+1. **Create Workspace**
 
    ```bash
    mkdir -p ~/seal_ws/src
    cd ~/seal_ws/src
-   git clone https://github.com/Erk732/uvautoboat.git
    ```
 
-2. **Clone VRX dependencies**
-
-   The VRX simulation environment is required for testing:
+2. **Clone Repositories**
 
    ```bash
-   cd ~/seal_ws/src
+   git clone https://github.com/Erk732/uvautoboat.git
    git clone https://github.com/osrf/vrx.git
    ```
 
-3. **Source ROS 2 environment**
-
-   Source the ROS 2 installation (default location: `/opt/ros/jazzy/setup.bash`):
-
-   ```bash
-   source /opt/ros/jazzy/setup.bash
-   ```
-
-4. **Build the workspace**
-
-   Navigate to the workspace root and build all packages:
+3. **Install Dependencies**
 
    ```bash
    cd ~/seal_ws
+   source /opt/ros/jazzy/setup.bash
+   rosdep install --from-paths src --ignore-src -r -y
+   ```
+
+4. **Build Workspace**
+
+   ```bash
    colcon build --merge-install
    ```
 
-   For parallel builds (faster compilation):
-
-   ```bash
-   colcon build --merge-install --parallel-workers 4
-   ```
-
-5. **Source the workspace**
-
-   After successful build, source the workspace overlay:
+5. **Source Environment**
 
    ```bash
    source ~/seal_ws/install/setup.bash
    ```
 
-   **Tip**: Add this line to your `~/.bashrc` for automatic sourcing:
+   **Optional (Recommended)**: Add to `~/.bashrc` so you don't need to source in every new terminal:
 
    ```bash
    echo "source ~/seal_ws/install/setup.bash" >> ~/.bashrc
    ```
 
-## Usage
+   To verify or edit your bashrc:
 
-### Launch Demo (Alternative Method)
+   ```bash
+   gedit ~/.bashrc
+   ```
 
-Launch the complete navigation system using the provided demo launch file:
+   > **Note**: If you've added the source command to `~/.bashrc`, new terminals will automatically have the workspace sourced. No need to run `source` manually each time.
 
-```bash
-# Terminal 1 - Launch VRX simulation
-ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+---
 
-# Terminal 2 - Launch navigation demo
-ros2 launch plan demo.launch.py
-```
+## Quick Start
 
-**Note**: For step-by-step component launch, see the [Quick Start](#quick-start) section above.
+After installation, launch in 2 steps (each step in a **separate terminal window**):
 
-### Running Individual Components
-
-⚠️ **Important**: When running nodes with Gazebo simulation, you must use the `use_sim_time` parameter to synchronize with simulation time.
-
-**Planning Nodes:**
-
-***A star path planner with obstacle avoidance***
-
-```bash
-ros2 run plan astar_planner --ros-args -p use_sim_time:=true
-```
-
-***Time-stamped dynamic obstacle avoidance***
-
-```bash
-ros2 run plan avoidingobs_ts_planner --ros-args -p use_sim_time:=true
-```
-
-***Perception and obstacle detection***
-
-```bash
-ros2 run plan simple_perception --ros-args -p use_sim_time:=true
-```
-
-***Mission coordination***
-
-```bash
-ros2 run plan mission_trigger
-```
-
-**Control Nodes:**
-
-***Simple thruster controller***
-
-```bash
-ros2 run control simple_controller --ros-args -p use_sim_time:=true
-```
-
-***Path following controller***
-
-```bash
-ros2 run control path_follower --ros-args -p use_sim_time:=true
-```
-
-## Simulation Environment
-
-### Default Environment
-
-The system is designed to operate in the standard VRX Sydney Regatta environment:
+**Terminal 1** — Start Simulation:
 
 ```bash
 ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
 ```
 
-### Legacy Test Environment (Deprecated)
+**Terminal 2** — Run Autonomous Navigation:
 
-⚠️ **Deprecation Notice**: The custom test environment is maintained for backward compatibility but is no longer actively developed. Users are advised to utilize the default Sydney Regatta environment for current development and testing.
-
-The `test_environment` directory contains legacy simulation worlds and custom models:
-
-**Custom Worlds:**
-
-- `sydney_regatta_custom.sdf` - Modified environment with additional obstacles and test scenarios
-
-**Custom Models:**
-
-- `cardboardbox/` - Simple obstacle model for collision avoidance testing
-
-**Legacy Environment Launch** (Optional):
-
-1. Configure Gazebo resource path:
-
-   ```bash
-   export GZ_SIM_RESOURCE_PATH=$HOME/seal_ws/src/uvautoboat/test_environment:$GZ_SIM_RESOURCE_PATH
-   ```
-
-2. Launch custom environment:
-
-   ```bash
-   source ~/seal_ws/install/setup.bash
-   ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_custom
-   ```
-
-### Customizing the Simulation World
-
-⚠️ **Important Note**: The VRX repository (`~/seal_ws/src/vrx`) is itself a Git repository. If you modify VRX world files (e.g., `sydney_regatta.sdf`) or other VRX content and don't want to accidentally push changes to the upstream VRX repository, consider these options:
-
-- **Option 1**: Create custom world files in your own package (e.g., `test_environment/`) and reference them instead
-- **Option 2**: Add modified files to `.git/info/exclude` in the VRX directory to ignore them locally without affecting `.gitignore`
-- **Option 3**: Use `git update-index --assume-unchanged <file>` to tell Git to ignore changes to specific files
-- **Best Practice**: Keep VRX unmodified and create custom worlds in your own workspace directories
-
-#### Adding Models from Gazebo Fuel
-
-To add additional obstacles or objects to your simulation environment, you can download models from the Gazebo Fuel model repository, which is the recommended source.
-
-**Model Repositories:**
-
-- **General Models**: [Gazebo Fuel Collections](https://app.gazebosim.org/OpenRobotics/fuel/collections)
-- **VRX-Specific Models**: [VRX Model Collection](https://app.gazebosim.org/OpenRobotics/fuel/collections/VRX)
-
-**Steps to Add Models to Your World:**
-
-1. **Browse and select a model** from Gazebo Fuel (e.g., `cardboard_box`, `construction_barrel`, etc.)
-
-2. **Download the model** (optional - Gazebo can auto-download):
-
-   Models are automatically downloaded when referenced in your SDF file, or you can manually download them to your local model path.
-
-3. **Add the model to your world file**:
-
-   Open your world SDF file (e.g., `sydney_regatta.sdf` or create a custom one) and add the model using the `<include>` tag:
-
-   ```xml
-   <world name="sydney_regatta">
-     <!-- Existing world content -->
-     
-     <!-- Add your custom model -->
-     <include>
-       <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/cardboard_box</uri>
-       <name>obstacle_box_1</name>
-       <pose>10 5 0 0 0 0</pose>  <!-- x y z roll pitch yaw -->
-     </include>
-     
-     <!-- Add multiple instances with different names and positions -->
-     <include>
-       <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/cardboard_box</uri>
-       <name>obstacle_box_2</name>
-       <pose>15 -3 0 0 0 1.57</pose>
-     </include>
-   </world>
-   ```
-
-4. **Launch with your customized world**:
-
-   ```bash
-   ros2 launch vrx_gz competition.launch.py world:=your_custom_world
-   ```
-
-**Common Useful Models:**
-
-- `cardboard_box` - Simple box obstacle
-- `construction_barrel` - Traffic barrel
-- `jersey_barrier` - Concrete barrier
-- `brick_wall` - Wall obstacle
-- `wooden_peg` - Small marker
-
-**Note**: The `<pose>` tag specifies the model's position (x, y, z) and orientation (roll, pitch, yaw) in meters and radians respectively.
-
-![3D Cartesian Coordinate System](images/3d_coordinate_system.jpg)
-*Figure: 3D Cartesian coordinate system showing x, y, z axes. Image: [Primalshell](https://commons.wikimedia.org/wiki/File:3D_Cartesian_Coodinate_Handedness.jpg), [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)*
-
-- **Position** (x, y, z): Coordinates in 3D space measured in **meters**
-  - `x`: Forward/backward (正向/反向)
-  - `y`: Left/right (左/右)
-  - `z`: Up/down (上/下)
-- **Orientation** (roll, pitch, yaw): Rotation angles measured in **radians**
-  - `roll`: Rotation around x-axis (绕x轴旋转)
-  - `pitch`: Rotation around y-axis (绕y轴旋转)
-  - `yaw`: Rotation around z-axis (绕z轴旋转)
-  - **Common usage**: `0 0 0` for default upright orientation (no rotation)
-  - **Example**: `0 0 1.57` rotates 90° (π/2 radians) around z-axis
-
-**Note**: The `<pose>` tag specifies the model's position in (x, y, z) and orientation (roll, pitch, yaw)，in meters and radians respectively.
-
-- **Position** (x, y, z): Coordinates in 3D space in **m**.
-  - `x`: Used for going forward (all engines ahead) or backward (all engines sternway)
-  - `y`: Left hand turning or righr hand turning
-  - `z`: Up or down
-- **Orientation** (roll, pitch, yaw): Rotation angle in **rad**.
-  - `roll`: Rotation around the x-axis (roll to port side or starboard side)
-  - `pitch`: Rotation around the y-axis（pitch up or pitch down）
-  - `yaw`: Rotation around the z-axis（yaw to port direction or starboard direction ）
-  - **Common Values**: `0 0 0` These values are default upright orinetation of the boat
-  - **For better understanding**: `0 0 1.57` values will show a 90° (π/2 in radians) rotation around z-axis(a simple yaw)
+```bash
+source ~/seal_ws/install/setup.bash  # Required in each new terminal
+# Choose one:
+ros2 run plan apollo11    # Option A: 2D LIDAR approach
+ros2 run plan vostok1     # Option B: 3D LIDAR approach
+```
 
 ### Expected Output
 
-After launching the simulation environment, you should observe the following:
+After launching the simulation, you should see the Sydney Regatta environment with the WAM-V boat:
 
 [![VRX Simulation Environment](images/sydney_regatta_gzsim.png)](https://vimeo.com/851696025 "Gazebo Virtual RobotX v. 2.3 - Click to Watch!")
+*Figure: Sydney Regatta simulation environment in Gazebo. Click to watch video demo. Source: [VRX Project](https://github.com/osrf/vrx/wiki/running_vrx_tutorial)*
 
-*Figure: Sydney Regatta simulation environment in Gazebo. Source: [VRX Project](https://github.com/osrf/vrx/wiki/running_vrx_tutorial)*
-
----
-
-## Package Documentation
-
-### Plan Package
-
-The `plan` package implements the planning and perception subsystems for autonomous navigation. This package provides multiple planning algorithms and supporting utilities for environment representation and obstacle detection.
-
-#### Planning Nodes
-
-**1. A* Planner** (`astar_planner`)
-
-Implements the A* search algorithm for optimal path planning with obstacle avoidance. Uses grid-based environmental representation with configurable resolution and inflation radius.
-
-**Algorithm Overview:**
-
-A* (A-star) is an informed search algorithm that finds the shortest path between two points while avoiding obstacles. It combines two key metrics:
-
-- **g(n)**: Actual cost from start to current node
-- **h(n)**: Estimated cost (heuristic) from current node to goal
-- **f(n) = g(n) + h(n)**: Total estimated cost through current node
-
-The algorithm maintains a priority queue of nodes to explore, always expanding the node with the lowest f(n) value. This ensures both optimality (finding the shortest path) and efficiency (exploring fewer nodes than uninformed search methods like Dijkstra's algorithm).
-
-**Further Reading:** [A* Search Algorithm - Wikipedia](https://en.wikipedia.org/wiki/A*_search_algorithm)
-
-**Key Features:**
-
-- Guaranteed to find the optimal path if one exists
-- Grid-based discretization of the environment
-- Obstacle inflation for safety margins
-- Euclidean distance heuristic for maritime navigation
-
-**Run:**
-
-```bash
-ros2 run plan astar_planner --ros-args -p use_sim_time:=true
-```
-
-**2. Time-Stamped Obstacle Avoidance Planner** (`avoidingobs_ts_planner`)
-
-Enhanced planning algorithm incorporating temporal information for dynamic obstacle prediction and avoidance.
-
-**Run:**
-
-```bash
-ros2 run plan avoidingobs_ts_planner --ros-args -p use_sim_time:=true
-```
-
-**3. Perception Module** (`simple_perception`)
-
-Processes sensor data streams to construct environmental representations, including obstacle detection and classification.
-
-**Run:**
-
-```bash
-ros2 run plan simple_perception
-```
-
-**4. Mission Coordinator** (`mission_trigger`)
-
-High-level mission management node responsible for goal specification and planning behavior coordination.
-
-**Run:**
-
-```bash
-ros2 run plan mission_trigger
-```
-
-**5. Transform Broadcaster** (`tf_broadcaster`)
-
-Manages coordinate frame transformations required for navigation stack operation.
-
-**Run:**
-
-```bash
-ros2 run plan tf_broadcaster
-```
-
-### Launch Files
-
-**Demo Launch:**
-
-```bash
-ros2 launch plan demo.launch.py
-```
-
-### Plan Package Modules
-
-- `astar_planner.py` - A* path planning implementation
-- `avoidingOBS_planner.py` - Obstacle avoidance planner
-- `avoidingobs_ts_planner.py` - Time-stamped obstacle avoidance
-- `grid_map.py` - Grid-based environment representation
-- `simple_perception.py` - Obstacle detection and processing
-- `mission_trigger.py` - Mission coordination
-- `tf_broadcaster.py` - Transform broadcasting
-- `FREE.py` - Free space utilities
-- `OUT.py` - Out-of-bounds detection
+The WAM-V boat will autonomously navigate through predefined waypoints while avoiding obstacles.
 
 ---
 
-### Control Package
+## Coordinate System
 
-The `control` package implements trajectory tracking and low-level thruster control for the WAM-V platform.
+Understanding the coordinate system is essential for working with VRX simulation.
 
-#### Control Nodes
+![3D Cartesian Coordinate System](images/3d_coordinate_system.jpg)
+*Figure: 3D Cartesian coordinate system. Image: [Primalshell](https://commons.wikimedia.org/wiki/File:3D_Cartesian_Coodinate_Handedness.jpg), [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)*
 
-**1. Simple Controller** (`simple_controller`)
+### Position (x, y, z)
 
-Baseline controller implementation for thruster command testing and validation.
+Coordinates in 3D space measured in **meters**:
 
-**Run:**
+| Axis | Direction | Maritime Term |
+|:-----|:----------|:--------------|
+| **X** | Forward / Backward | Ahead / Astern |
+| **Y** | Left / Right | Port / Starboard |
+| **Z** | Up / Down | Above / Below waterline |
 
-```bash
-ros2 run control simple_controller --ros-args -p use_sim_time:=true
-```
+### Orientation (Roll, Pitch, Yaw)
 
-**Launch file:**
+Rotation angles measured in **radians**:
 
-```bash
-ros2 launch control simple_controller.launch.py
-```
+| Rotation | Axis | Description | Maritime Term |
+|:---------|:-----|:------------|:--------------|
+| **Roll** | X-axis | Side-to-side tilt | Heel to port/starboard |
+| **Pitch** | Y-axis | Front-to-back tilt | Bow up / Bow down |
+| **Yaw** | Z-axis | Horizontal rotation | Turn to port/starboard |
 
-**2. Path Following Controller** (`path_follower`)
+**Common Values:**
 
-Advanced trajectory tracking controller implementing waypoint following with feedback control for precise path execution.
+| Pose | Roll | Pitch | Yaw | Result |
+|:-----|:----:|:-----:|:---:|:-------|
+| Default | 0 | 0 | 0 | Upright, facing +X |
+| 90° right turn | 0 | 0 | -1.57 | Facing +Y |
+| 90° left turn | 0 | 0 | 1.57 | Facing -Y |
+| 180° turn | 0 | 0 | 3.14 | Facing -X |
 
-**Current Implementation:**
-
-⚠️ **Note**: The current path follower uses a simplified control strategy rather than full PID control. The controller employs direct y-axis adjustment for heading correction, setting the y-axis value in the final goal command sent to the boat. This approach provides basic trajectory tracking functionality while more advanced PID-based control methods are under development.
-
-**Run:**
-
-```bash
-ros2 run control path_follower --ros-args -p use_sim_time:=true
-```
-
-### Control Interfaces
-
-| Topic Name | Message Type | I/O | Description |
-| :--- | :--- | :--- | :--- |
-| `/planning/path` | `nav_msgs/Path` | Sub | Trajectory waypoints from planner. |
-| `/wamv/pose` | `geometry_msgs/PoseStamped` | Sub | Current boat state. |
-| `/wamv/thrusters/left/thrust` | `std_msgs/Float64` | Pub | Left thruster command. |
-| `/wamv/thrusters/right/thrust` | `std_msgs/Float64` | Pub | Right thruster command. |
+**Note**: π/2 radians = 90°, π radians = 180°
 
 ---
 
-## Troubleshooting
+## Features
 
-### Common Issues and Solutions
+### ✅ Core Capabilities
 
-#### Issue: Boat Not Moving in Simulation
+| Feature | Description |
+|:--------|:------------|
+| **Autonomous Navigation** | GPS-based waypoint following with lawnmower pattern |
+| **Obstacle Avoidance** | Real-time LIDAR-based detection and reactive maneuvering |
+| **Differential Thrust** | Independent left/right thruster control for precise steering |
+| **Stuck Detection** | Automatic recovery when boat becomes trapped |
+| **Web Dashboard** | Real-time monitoring interface (Vostok1 integrated & modular) |
 
-**Symptoms**: Nodes are running but the WAM-V boat remains stationary.
+### 🔧 Technical Highlights
 
-**Solutions**:
+- **Dual Implementations**: Apollo11 (modular) and Vostok1 (integrated) approaches
+- **3D Point Cloud Processing**: Height-filtered obstacle detection
+- **PID Control**: Configurable heading controller with tunable gains
+- **Bilingual Interface**: Russian/English terminal output and dashboard
+- **VRX Compatible**: Full integration with Virtual RobotX simulation
 
-1. **Verify `use_sim_time` parameter**:
-   - Ensure all nodes are launched with `--ros-args -p use_sim_time:=true`
-   - This synchronizes node time with Gazebo simulation time
+---
 
-2. **Check topic connections**:
+## System Architecture
 
-   ```bash
-   # Verify thrust commands are being published
-   ros2 topic echo /wamv/thrusters/left/thrust
-   ros2 topic echo /wamv/thrusters/right/thrust
+### Implementation Comparison
 
-   # Check if path is being generated
-   ros2 topic echo /planning/path
+AutoBoat provides three autonomous navigation systems:
 
-   # Verify pose data is available
-   ros2 topic echo /wamv/pose
-   ```
+| Aspect | Apollo11 | Vostok1 | Modular (TNO) |
+|:-------|:---------|:--------|:--------------|
+| **Approach** | Modular subsystems | Integrated autonomy | Distributed nodes |
+| **LIDAR** | 2D LaserScan | 3D PointCloud2 | 3D PointCloud2 |
+| **Detection** | Horizontal plane | Full 3D volume | Full 3D volume |
+| **Control** | Direct thrust | PID-based heading | PID (configurable) |
+| **Monitoring** | Terminal only | Terminal + Web | Terminal (bilingual) |
+| **PID Tuning** | N/A | Parameters | Launch arguments |
+| **Best For** | Simple environments | Dynamic obstacles | Custom tuning |
 
-3. **Verify TF transforms**:
+### Data Flow
 
-   ```bash
-   # Check if required transforms are available
-   ros2 run tf2_ros tf2_echo map wamv/base_link
-   ```
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                    SENSORS (Gazebo)                         │
+├─────────────────┬─────────────────┬─────────────────────────┤
+│   GPS           │      IMU        │        LIDAR            │
+│ (NavSatFix)     │    (Imu)        │  (LaserScan/PointCloud) │
+└────────┬────────┴────────┬────────┴────────────┬────────────┘
+         │                 │                     │
+         └─────────────────┼─────────────────────┘
+                           ▼
+              ┌────────────────────────┐
+              │   Apollo11 / Vostok1   │
+              │   ──────────────────   │
+              │   • Position tracking  │
+              │   • Heading control    │
+              │   • Obstacle avoidance │
+              │   • Waypoint planning  │
+              └───────────┬────────────┘
+                          │
+            ┌─────────────┴─────────────┐
+            ▼                           ▼
+    Left Thruster              Right Thruster
+    (-1000 to +1000)           (-1000 to +1000)
+```
 
-4. **Check node status**:
+### ROS 2 Topics
 
-   ```bash
-   # List active nodes
-   ros2 node list
+#### Sensor Inputs
 
-   # Check specific node info
-   ros2 node info /astar_planner_node
-   ros2 node info /thruster_path_follower
-   ```
+| Topic | Type | Description |
+|:------|:-----|:------------|
+| `/wamv/sensors/gps/gps/fix` | `NavSatFix` | GPS coordinates (lat, lon, alt) |
+| `/wamv/sensors/imu/imu/data` | `Imu` | Orientation quaternion |
+| `/wamv/sensors/lidars/.../scan` | `LaserScan` | 2D LIDAR (Apollo11) |
+| `/wamv/sensors/lidars/.../points` | `PointCloud2` | 3D LIDAR (Vostok1) |
 
-#### Issue: A* Planner Not Publishing Path
+#### Control Outputs
 
-**Symptoms**: No path messages on `/planning/path` topic after sending a goal.
+| Topic | Type | Description |
+|:------|:-----|:------------|
+| `/wamv/thrusters/left/thrust` | `Float64` | Left thruster command |
+| `/wamv/thrusters/right/thrust` | `Float64` | Right thruster command |
 
-**Solutions**:
+#### Vostok1 Dashboard Topics
 
-1. **Verify goal message**:
+| Topic | Type | Description |
+|:------|:-----|:------------|
+| `/vostok1/mission_status` | `String` | Mission state (JSON) |
+| `/vostok1/obstacle_status` | `String` | Obstacle data (JSON) |
+| `/vostok1/config` | `String` | Current configuration (JSON, 1Hz) |
+| `/vostok1/set_config` | `String` | Configuration updates from web |
+| `/rosout` | `rcl_interfaces/Log` | ROS logs for terminal panel |
 
-   ```bash
-   # Ensure goal is in correct frame
-   ros2 topic pub --once /planning/goal geometry_msgs/msg/PoseStamped \
-   "{header: {frame_id: 'map'}, pose: {position: {x: -520.0, y: 190.0, z: 0.0}}}"
-   ```
+---
 
-2. **Check planner logs**:
-   - Look for warnings like "Start or Goal outside Grid Map!"
-   - Verify TF is available: "Waiting for TF..."
+## Usage Guide
 
-3. **Verify grid map configuration**:
-   - Default grid: 300m × 300m
-   - Ensure goal coordinates are within grid bounds
+This section covers how to run the autonomous navigation systems. Choose based on your needs:
 
-#### Issue: Build Failures
+| System | Best For | Complexity | Features |
+|:-------|:---------|:-----------|:---------|
+| **Apollo11** | Simple testing | Low | 2D LIDAR, basic stuck recovery |
+| **Vostok1** | Production use | Medium | 3D LIDAR, SASS, web dashboard |
+| **Modular** | Custom tuning | High | Distributed nodes, full config |
 
-**Symptoms**: `colcon build` fails with errors.
+### Before Running
 
-**Solutions**:
+Before running any navigation system, start the Gazebo simulation:
 
-1. **Missing dependencies**:
+```bash
+ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+```
 
-   ```bash
-   # Install ROS 2 dependencies
-   cd ~/seal_ws
-   rosdep install --from-paths src --ignore-src -r -y
-   ```
+> **⚠️ Important**: Wait for Gazebo to fully load (you should see the WAM-V boat floating in the water) before running any navigation node. The boat needs GPS and sensor data to start navigating.
+>
+> **💡 Tip**: Each new terminal requires sourcing the workspace. See [Build & Environment](#-build--environment) in Command Cheatsheet for auto-sourcing setup via `~/.bashrc`.
+>
+> ```bash
+> source ~/seal_ws/install/setup.bash
+> ```
 
-2. **Clean build**:
+---
 
-   ```bash
-   # Remove build artifacts and rebuild
-   rm -rf build install log
-   colcon build --merge-install
-   ```
+### Option A: Apollo11 (2D LIDAR)
 
-3. **Python import errors**:
-   - Ensure `grid_map.py` exists in `plan/brain/` directory
-   - Verify relative imports use correct syntax
+Simple, lightweight implementation for basic testing.
 
-#### Issue: Simulation Crashes or Freezes
+```bash
+ros2 run plan apollo11
+```
 
-**Symptoms**: Gazebo becomes unresponsive or crashes.
+**Terminal Output:**
 
-**Solutions**:
+```text
+[INFO] Apollo 11 - Autonomous Navigation System
+[INFO] Waiting for GPS signal...
+[INFO] Mission Started!
+[INFO] WP 1/19 | Pos: (5.2, 3.1) | Target: (15.0, 0.0) | Dist: 10.2m
+```
 
-1. **Check system resources**:
-   - Verify sufficient RAM (minimum 8GB, recommended 16GB)
-   - Monitor CPU usage
+---
 
-2. **Reduce graphics quality**:
-   - Lower rendering settings in Gazebo
-   - Disable shadows and reflections
+### Option B: Vostok1 (3D LIDAR + SASS)
 
-3. **Use headless mode** (for testing without GUI):
+Full-featured implementation with Smart Anti-Stuck System and web dashboard support.
 
-   ```bash
-   ros2 launch vrx_gz competition.launch.py world:=sydney_regatta headless:=true
-   ```
+```bash
+ros2 run plan vostok1
+```
 
-### Getting Help
+**Terminal Output (Bilingual):**
 
-If you encounter issues not covered here:
+```text
+[INFO] ПРОЕКТ-17 (Proekt-17) - Автономная Навигация
+[INFO] Vostok 1 - Autonomous Navigation System
+[INFO] + Smart Anti-Stuck System (SASS) v2.0
+[INFO] МИССИЯ НАЧАТА! (Mission Started!)
+[INFO] ТМ 1/19 | Поз: (5.2, 3.1) | Цель: (15.0, 0.0) | Дист: 10.2m | СВОБОДНО | CLEAR
+```
 
-1. **Check logs**: Review terminal output for error messages and warnings
-2. **Verify configuration**: Ensure all parameters match the documentation
-3. **Consult VRX documentation**: [VRX Wiki](https://github.com/osrf/vrx/wiki)
-4. **Report issues**: Open an issue on the [GitHub repository](https://github.com/Erk732/uvautoboat/issues)
+---
+
+### Option C: Modular Navigation (Vostok1 Edition)
+
+For advanced users who need configurable PID control and modular architecture:
+
+```bash
+ros2 launch plan vostok1_modular_navigation.launch.py
+```
+
+**With Custom PID Gains:**
+
+```bash
+ros2 launch plan vostok1_modular_navigation.launch.py kp:=500.0 ki:=30.0 kd:=150.0
+```
+
+**Available Launch Parameters:**
+
+| Parameter | Default | Description |
+|:----------|:--------|:------------|
+| `kp` | 400.0 | PID Proportional gain |
+| `ki` | 20.0 | PID Integral gain |
+| `kd` | 100.0 | PID Derivative gain |
+| `base_speed` | 500.0 | Base thrust speed |
+| `max_speed` | 800.0 | Maximum thrust limit |
+| `min_safe_distance` | 15.0 | Obstacle safe distance (m) |
+| `scan_length` | 15.0 | Lawnmower lane length (m) |
+| `scan_width` | 30.0 | Lawnmower lane width (m) |
+| `lanes` | 10 | Number of scan lanes |
+
+**Modular Nodes (TNO/Post-Soviet Names):**
+
+| Node | Name | Function |
+|:-----|:-----|:---------|
+| **ОКО** (Oko) | `oko_perception` | 3D LIDAR obstacle detection |
+| **СПУТНИК** (Sputnik) | `sputnik_planner` | GPS waypoint planning |
+| **БУРАН** (Buran) | `buran_controller` | PID heading control |
+
+**Terminal Output:**
+
+```text
+[INFO] ОКО (OKO) - Система Обнаружения Препятствий
+[INFO] СПУТНИК (SPUTNIK) - Система Планирования Маршрута
+[INFO] БУРАН (BURAN) - Система Управления Движением
+[INFO] ТМ 1/19 | Поз: (5.2, 3.1) | Цель: (15.0, 0.0) | Дист: 10.2m | Курс: 45°
+[INFO] ✅ СВОБОДНО | CLEAR (F:50.0 L:50.0 R:50.0)
+```
+
+### Web Dashboard
+
+The web dashboard provides real-time monitoring and control of the autonomous navigation system. It supports **both integrated and modular** navigation versions.
+
+> 📖 **Full Documentation:** See [web_dashboard/Readme_webdashboard.md](web_dashboard/Readme_webdashboard.md) for detailed setup, customization, and troubleshooting.
+
+| Topic Namespace | Source | Features |
+|:----------------|:-------|:---------|
+| `/vostok1/*` | Integrated Vostok1 | Full mission status, SASS, config |
+| `/planning/*`, `/control/*`, `/perception/*` | Modular Navigation | Mission status, SASS, obstacles |
+
+#### Requirements
+
+Install rosbridge (once per machine):
+
+```bash
+sudo apt install ros-jazzy-rosbridge-suite
+```
+
+#### Quick Start - Integrated Vostok1 (4 Terminals)
+
+> **Note**: Open 4 separate terminal windows. Each terminal runs one command continuously. Make sure to run `source ~/seal_ws/install/setup.bash` in each terminal first.
+
+| Terminal | Command | Purpose |
+|:---------|:--------|:--------|
+| **T1** | `ros2 launch vrx_gz competition.launch.py world:=sydney_regatta` | Gazebo simulation |
+| **T2** | `ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0` | WebSocket bridge |
+| **T3** | `ros2 run plan vostok1` | Vostok1 navigation |
+| **T4** | `cd ~/seal_ws/src/uvautoboat/web_dashboard && python3 -m http.server 8000` | Web server |
+
+Then open: <http://localhost:8000>
+
+#### Quick Start - Modular Navigation (4 Terminals)
+
+| Terminal | Command | Purpose |
+|:---------|:--------|:--------|
+| **T1** | `ros2 launch vrx_gz competition.launch.py world:=sydney_regatta` | Gazebo simulation |
+| **T2** | `ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0` | WebSocket bridge |
+| **T3** | `ros2 launch plan vostok1_modular_navigation.launch.py` | Modular navigation |
+| **T4** | `cd ~/seal_ws/src/uvautoboat/web_dashboard && python3 -m http.server 8000` | Web server |
+
+Then open: <http://localhost:8000>
+
+#### Dashboard Panels
+
+| Panel | Description |
+|:------|:------------|
+| **Connection Status** | WebSocket connection indicator |
+| **GPS Position** | Latitude, longitude, local coordinates |
+| **Mission Status** | State, waypoint progress, distance |
+| **Obstacle Detection** | Front/Left/Right clearance, status badge |
+| **Thruster Output** | Left/Right thrust with visual bars |
+| **🛡️ Anti-Stuck (SASS)** | Escape phase, no-go zones, drift, probe results |
+| **Trajectory Map** | Interactive Leaflet map with boat position |
+| **Configuration** | Path, PID, Speed parameter controls |
+| **Terminal Output** | Live ROS log feed |
+| **System Logs** | Dashboard event history |
+
+#### Smart Anti-Stuck Panel (SASS)
+
+The SASS panel displays real-time anti-stuck system status:
+
+| Field | Description |
+|:------|:------------|
+| **Статус \| Status** | Normal (green) or STUCK with attempt count (red) |
+| **Фаза \| Phase** | Current escape phase: PROBE → REVERSE → TURN → FORWARD → IDLE |
+| **Направление \| Direction** | Best escape direction (← LEFT / → RIGHT) |
+| **No-Go Зоны \| Zones** | Number of remembered stuck locations |
+| **Дрейф \| Drift** | Estimated drift magnitude and direction |
+| **История \| History** | Escape attempt records count |
+| **Зонд \| Probe** | Left/Right clearance from last probe scan |
+
+#### Visual Modes (TNO Aesthetic)
+
+The dashboard features authentic TNO (The New Order) Cold War aesthetic with two switchable modes:
+
+| Mode | Description | Color Palette |
+|:-----|:------------|:--------------|
+| **Bureau Mode** | TNO propaganda poster style | Soviet red accents, muted blue-gray (#0D0F11) |
+| **Terminal Mode** | Cold War technocratic CRT | Bureau teal (#3A91A8), deep blue-gray background |
+
+Both modes include:
+
+- CRT scanline effects and screen flicker
+- Analog signal glitch animations
+- Soviet-style typography (Cyrillic headers)
+- Oppressive Cold War bureaucratic atmosphere
+
+#### Terminal Output Panel
+
+Real-time ROS log display showing navigation feedback:
+
+```text
+[VOSTOK1] ТМ 1/19 | Поз: (5.2, 3.1) | Цель: (15.0, 0.0) | Дист: 10.2m
+[VOSTOK1] ✅ СВОБОДНО | CLEAR (F:50.0 L:50.0 R:50.0)
+[VOSTOK1] 🚨 ЗАСТРЯЛ! | STUCK! Smart escape initiating (Attempt 1)
+[VOSTOK1] Phase 0: PROBING - L:25.0m R:18.0m → Best: LEFT
+[VOSTOK1] Phase 2: TURN LEFT (escalation: 1)
+[VOSTOK1] ✅ Escape successful! Resuming navigation
+```
+
+Features:
+
+- Auto-scroll with toggle checkbox
+- Clear button to reset output
+- Color-coded log levels (INFO/WARN/ERROR)
+- Filters for vostok1/buran/sputnik/oko nodes
+- SASS escape phase logging
+
+#### Live Parameter Configuration
+
+The web dashboard includes a configuration panel for real-time parameter tuning:
+
+| Section | Parameters | Description |
+|:--------|:-----------|:------------|
+| **Path** | Lanes, Length, Width | Lawnmower pattern configuration |
+| **PID** | Kp, Ki, Kd | Heading controller gains |
+| **Speed** | Base, Max, Safe Distance | Motion control parameters |
+
+**Configuration Buttons:**
+
+| Button | Action |
+|:-------|:-------|
+| **Apply** | Send all parameters, regenerate path |
+| **PID Only** | Update only PID gains (immediate effect) |
+| **Restart Mission** | Reset waypoint index and regenerate path |
+
+**Command Line Parameter Tuning:**
+
+```bash
+# Set parameters at launch
+ros2 run plan vostok1 --ros-args -p kp:=500.0 -p ki:=30.0 -p kd:=150.0
+```
+
+```bash
+# Set parameters at runtime
+ros2 param set /vostok1_node kp 500.0
+ros2 param set /vostok1_node ki 30.0
+ros2 param set /vostok1_node kd 150.0
+```
+
+```bash
+# List all parameters
+ros2 param list /vostok1_node
+```
+
+---
+
+## Smart Anti-Stuck System (SASS)
+
+The Vostok series (Vostok1 and Modular/Buran) implements an advanced **Smart Anti-Stuck System (SASS)** that enables intelligent recovery when the boat becomes trapped or immobilized.
+
+### Evolution of Anti-Stuck Strategies
+
+| Feature | Apollo11 (Basic) | Vostok1/Buran (SASS v2.0) |
+|:--------|:-----------------|:--------------------------|
+| **Detection** | Fixed 5s interval, 1m threshold | Configurable 3s interval, 0.5m threshold |
+| **Escape Duration** | Fixed 4s (reverse + turn) | Adaptive 10-20s based on situation |
+| **Turn Direction** | Fixed rotation | Multi-direction probe + LIDAR-guided |
+| **Memory** | None | No-go zones (remembers stuck locations) |
+| **Drift Compensation** | None | Real-time current/wind compensation |
+| **Learning** | None | Records successful escapes |
+| **Detour Waypoints** | None | Auto-inserts detour waypoints |
+| **Skip Logic** | After 3 attempts | After 4 attempts (more patient) |
+
+### SASS Features
+
+#### 1. Adaptive Escape Duration
+
+The escape duration adjusts based on the situation severity:
+
+```text
+Base Duration: 10s
++ 4s if obstacle < critical distance (5m)
++ 2s if obstacle < safe distance (15m)  
++ 2s per consecutive stuck attempt
+Maximum: 20s
+```
+
+#### 2. Multi-Direction Probe
+
+Before committing to an escape direction, SASS probes left, right, and backward:
+
+| Phase | Time | Action |
+|:------|:-----|:-------|
+| Probe Left | 0-0.6s | Turn left, record max clearance |
+| Probe Right | 0.6-1.2s | Turn right, record max clearance |
+| Assess | 1.2-2.0s | Compare results, select best direction |
+
+#### 3. No-Go Zone Memory
+
+SASS remembers where the boat got stuck and avoids those areas:
+
+- **Zone Radius**: 8m (configurable)
+- **Zone Expansion**: Grows if stuck nearby again
+- **Max Zones**: 20 (oldest removed to prevent memory issues)
+- **Forward Check**: Before moving forward, checks if heading leads to no-go zone
+
+#### 4. Drift/Current Compensation
+
+Estimates and compensates for environmental drift:
+
+```text
+1. Track position history (last 100 samples at 20Hz)
+2. Calculate drift vector using exponential moving average
+3. Apply thrust bias to counteract drift during escape
+```
+
+#### 5. Detour Waypoint Insertion
+
+On the 2nd consecutive stuck attempt, SASS inserts a detour waypoint:
+
+```text
+1. Calculate detour perpendicular to obstacle (12m offset)
+2. Verify detour doesn't lead to no-go zone
+3. Insert waypoint before current target
+4. Resume normal navigation through detour
+```
+
+#### 6. Simple Escape Learning
+
+SASS learns from successful escapes:
+
+- Records: direction, success/failure, obstacle distance
+- Stores last 50 escape attempts
+- Recent successes weighted 2x when choosing direction
+- Falls back to learned direction when probe results are ambiguous
+
+### SASS Escape Sequence
+
+| Phase | Duration | Action | Details |
+|:------|:---------|:-------|:--------|
+| **0: PROBE** | 0-2s | Multi-direction scan | L/R/Back clearance assessment |
+| **1: REVERSE** | 2s-~6s | Backward thrust | Adaptive power based on obstacle distance |
+| **2: TURN** | 6s-~10s | Rotate | Direction from probing, escalating power |
+| **3: FORWARD** | 10s-~12s | Forward test | With drift compensation, no-go zone check |
+
+### SASS Parameters (Configurable)
+
+| Parameter | Default | Description |
+|:----------|:--------|:------------|
+| `stuck_timeout` | 3.0s | Time window to detect stuck |
+| `stuck_threshold` | 0.5m | Minimum movement to not be stuck |
+| `no_go_zone_radius` | 8.0m | Radius of avoided zones |
+| `drift_compensation_gain` | 0.3 | Drift correction aggressiveness |
+| `detour_distance` | 12.0m | Distance for detour waypoints |
+
+### Web Dashboard SASS Panel
+
+The web dashboard displays real-time SASS status:
+
+| Field | Description |
+|:------|:------------|
+| **Status** | Normal / STUCK (with attempt count) |
+| **Phase** | Current escape phase (PROBE/REVERSE/TURN/FORWARD/IDLE) |
+| **Direction** | Best escape direction (LEFT/RIGHT) |
+| **No-Go Zones** | Number of remembered stuck locations |
+| **Drift** | Estimated drift magnitude and direction |
+| **History** | Number of recorded escape attempts |
+| **Probe** | Left/Right clearance from last probe |
+
+---
+
+## Technical Documentation
+
+### GPS Navigation
+
+The system uses GPS for absolute position tracking with local coordinate conversion using equirectangular projection:
+
+```text
+Local X = (latitude - start_lat) × Earth_radius
+Local Y = (longitude - start_lon) × Earth_radius × cos(start_lat)
+```
+
+**Key Concepts:**
+
+- First GPS fix becomes local origin (0, 0)
+- Waypoints defined in local meters from origin
+- Earth radius: 6,371,000 meters
+- See [Coordinate System](#coordinate-system) for axis orientation
+
+**GPS Message Structure** (`sensor_msgs/NavSatFix`):
+
+| Field | Type | Range | Description |
+|:------|:-----|:------|:------------|
+| latitude | float64 | -90° to +90° | Degrees north/south |
+| longitude | float64 | -180° to +180° | Degrees east/west |
+| altitude | float64 | meters | Height above sea level |
+
+### IMU (Inertial Measurement Unit)
+
+The IMU provides the boat's orientation (heading) using a combination of accelerometers and gyroscopes. The WAM-V's IMU publishes data to `/wamv/sensors/imu/imu/data`.
+
+**How the System Uses IMU:**
+
+1. **Heading Calculation**: Extracts yaw angle from quaternion orientation
+2. **Target Heading**: Calculates desired heading to next waypoint using `atan2(dy, dx)`
+3. **Heading Error**: Computes difference between current and target heading
+4. **PID Control**: Uses heading error to adjust differential thrust
+
+**Quaternion to Yaw Conversion:**
+
+```text
+siny_cosp = 2 × (w × z + x × y)
+cosy_cosp = 1 - 2 × (y² + z²)
+yaw = atan2(siny_cosp, cosy_cosp)
+```
+
+**IMU Message Structure** (`sensor_msgs/Imu`):
+
+| Field | Type | Description |
+|:------|:-----|:------------|
+| orientation | Quaternion | x, y, z, w components |
+| angular_velocity | Vector3 | Roll, pitch, yaw rates (rad/s) |
+| linear_acceleration | Vector3 | X, Y, Z acceleration (m/s²) |
+
+**Note**: The system primarily uses the `orientation` quaternion for heading control. Angular velocity and acceleration are available but not currently used.
+
+### 3D LIDAR Processing (Vostok1)
+
+**Point Cloud Filtering Pipeline:**
+
+1. **Height Filter**: Keep points between -0.2m and 3.0m
+   - Excludes water surface reflections
+   - Excludes sky and distant objects
+
+2. **Distance Filter**: Within configurable detection range (default: 50m)
+
+3. **Sector Analysis**:
+
+   | Sector | Angle Range | Purpose |
+   |:-------|:------------|:--------|
+   | Front | -45° to +45° | Forward obstacle detection |
+   | Left | +45° to +135° | Left-side clearance |
+   | Right | -135° to -45° | Right-side clearance |
+
+**Decision Logic:**
+
+```text
+IF min_front_distance < safety_threshold:
+    IF left_clearance > right_clearance:
+        Turn LEFT
+    ELSE:
+        Turn RIGHT
+```
+
+**Hysteresis**: Entry threshold differs from exit threshold to prevent detection flickering.
+
+### Differential Thrust Control
+
+The WAM-V uses two independent thrusters for differential steering:
+
+| Maneuver | Left Thruster | Right Thruster | Result |
+|:---------|:--------------|:---------------|:-------|
+| Forward | +500 | +500 | Straight ahead |
+| Reverse | -500 | -500 | Straight back |
+| Turn Left | +200 | +500 | Gradual left turn |
+| Turn Right | +500 | +200 | Gradual right turn |
+| Spin Left | -500 | +500 | Rotate in place |
+| Spin Right | +500 | -500 | Rotate in place |
+
+**Thrust Range**: -1000 to +1000 Newtons
+
+### PID Heading Control (Vostok1)
+
+Vostok1 uses a PID controller for smooth heading adjustments:
+
+```text
+error = target_heading - current_heading
+correction = Kp × error + Ki × ∫error + Kd × d(error)/dt
+```
+
+**Default Gains:**
+
+| Parameter | Value | Effect |
+|:----------|:------|:-------|
+| Kp | 800 | Proportional response |
+| Ki | 50 | Integral accumulation |
+| Kd | 100 | Derivative damping |
 
 ---
 
 ## Testing
 
-This section provides comprehensive testing procedures to validate the AutoBoat navigation system.
+### Quick Validation
 
-### Unit Testing
-
-The project includes unit tests for critical components:
+**Step 1** — Launch Simulation:
 
 ```bash
-# Run all tests
+ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+```
+
+**Step 2** — Run Navigation:
+
+```bash
+ros2 run plan vostok1
+```
+
+**Step 3** — Monitor Topics:
+
+```bash
+# Verify thruster commands
+ros2 topic echo /wamv/thrusters/left/thrust
+```
+
+```bash
+# Verify GPS data
+ros2 topic echo /wamv/sensors/gps/gps/fix
+```
+
+```bash
+# Verify LIDAR data
+ros2 topic echo /wamv/sensors/lidars/lidar_wamv_sensor/points --no-arr
+```
+
+### Expected Behavior
+
+| Stage | Expected Output |
+|:------|:----------------|
+| Startup | "МИССИЯ НАЧАТА! (Mission Started!)" |
+| Navigation | "ТМ X/19 \| Поз: (x, y) \| Цель: (tx, ty)" |
+| Obstacle | "🚨 ПРЕПЯТСТВИЕ! \| OBSTACLE DETECTED!" |
+| Clear | "✅ Путь свободен \| Path CLEAR" |
+| **Stuck Detected** | "🚨 ЗАСТРЯЛ! \| STUCK! Smart escape initiating" |
+| **Escape Phase** | "Phase 0: PROBING" → "Phase 1: REVERSE" → "Phase 2: TURN" → "Phase 3: FORWARD" |
+| **Escape Success** | "✅ Escape successful! Resuming navigation" |
+| Complete | "МИССИЯ ЗАВЕРШЕНА! (MISSION COMPLETE!)" |
+
+### Testing SASS (Anti-Stuck System)
+
+To test the Smart Anti-Stuck System:
+
+1. **Create obstacle scenario**: Place obstacles in Gazebo that trap the boat
+2. **Monitor stuck detection**: Watch for "ЗАСТРЯЛ!" messages
+3. **Observe escape phases**: Verify 4-phase escape sequence
+4. **Check no-go zones**: Boat should avoid returning to stuck locations
+
+```bash
+# Monitor anti-stuck status (Vostok1)
+ros2 topic echo /vostok1/anti_stuck_status
+```
+
+```bash
+# Monitor anti-stuck status (Modular/Buran)
+ros2 topic echo /control/anti_stuck_status
+```
+
+### Performance Benchmarks
+
+| Metric | Target | Achieved |
+|:-------|:-------|:---------|
+| Waypoint Accuracy | < 3m | ~2m |
+| Control Loop Rate | 20 Hz | 20 Hz |
+| Detection Range | 50m | 50m |
+| Collision Avoidance | 100% | 100% |
+
+### Unit Tests
+
+```bash
 cd ~/seal_ws
 colcon test --packages-select plan control
-
-# View test results
 colcon test-result --verbose
 ```
 
-### Integration Testing
+---
 
-Integration tests validate the complete navigation stack with all components working together.
+## Troubleshooting
 
-#### Test 1: Path Planning and Following ✅
+### Common Issues
 
-**Status**: Verified working on ROS 2 Jazzy + Gazebo Harmonic (27/11/2025)
+#### Boat Not Moving
 
-**Objective**: Validate end-to-end autonomous navigation from goal specification to boat movement.
+**Symptoms**: Gazebo running but boat stationary.
 
-**Prerequisites:**
+**Solutions**:
 
-- Ensure all packages are built: `cd ~/seal_ws && colcon build --merge-install`
-- Source the workspace: `source ~/seal_ws/install/setup.bash` (If already sourced in bashrc, skip this step)
-
-**Step-by-Step Testing:**
-
-1. **Terminal 1 - Launch VRX Simulation:**
+1. Check GPS signal:
 
    ```bash
-   ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+   ros2 topic echo /wamv/sensors/gps/gps/fix
    ```
 
-   Wait for Gazebo to fully load and the WAM-V boat to appear in the water.
-
-2. **Terminal 2 - Start TF Broadcaster (CRITICAL):**
+2. Check thruster commands:
 
    ```bash
-   ros2 run plan tf_broadcaster --ros-args -p use_sim_time:=true
+   ros2 topic echo /wamv/thrusters/left/thrust
    ```
 
-   This creates the `world` frame required for navigation. You should see:
-
-   ```text
-   [INFO] [tf_broadcaster]: TF Broadcaster: Creating world frame as root of TF tree
-   ```
-
-3. **Terminal 3 - Verify TF is Working:**
+3. Verify node is running:
 
    ```bash
-   ros2 run tf2_ros tf2_echo world wamv/wamv/base_link
+   ros2 node list | grep -E "apollo|vostok"
    ```
 
-   You should see transform data updating continuously. Press Ctrl+C after verification.
-
-4. **Terminal 4 - Start Astar Planner:**
+4. Check if waypoints are loaded:
 
    ```bash
-   ros2 run plan astar_planner --ros-args -p use_sim_time:=true
+   ros2 topic echo /vostok1/mission_status --once
    ```
 
-   You should see:
-
-   ```text
-   [INFO] [astar_planner_node]: A* Planner Ready. Waiting for TF...
-   ```
-
-5. **Terminal 5 - Start Path Follower:**
+5. Verify LIDAR is publishing (obstacle detection may be blocking):
 
    ```bash
-   ros2 run control path_follower --ros-args -p use_sim_time:=true
+   ros2 topic hz /wamv/sensors/lidars/lidar_wamv/points
    ```
 
-6. **Terminal 6 - Send Test Goal:**
+#### Boat Spinning in Circles
 
-   **Small goal (quick test):**
+**Symptoms**: Boat rotates continuously without making progress.
+
+**Solutions**:
+
+1. Check IMU orientation data:
 
    ```bash
-   ros2 topic pub --once /planning/goal geometry_msgs/msg/PoseStamped \
-   "{header: {frame_id: 'world'}, pose: {position: {x: 50.0, y: 50.0, z: 0.0}}}"
+   ros2 topic echo /wamv/sensors/imu/imu/data --field orientation
    ```
 
-   **Large goal (full Sydney Regatta world):**
+2. Verify heading calculation - yaw should be in radians:
 
    ```bash
-   ros2 topic pub --once /planning/goal geometry_msgs/msg/PoseStamped \
-   "{header: {frame_id: 'world'}, pose: {position: {x: -520.0, y: 190.0, z: 0.0}}}"
+   ros2 topic echo /wamv/sensors/imu/imu/data --field orientation.z
    ```
 
-**Expected Behavior:**
-
-- A* planner logs: `[INFO] Goal received: X, Y`
-- A* planner computes path within 1-2 seconds
-- Path published to `/planning/path` topic
-- Path follower begins tracking waypoints
-- Thrusters activate (check with `ros2 topic echo /wamv/thrusters/left/thrust`)
-- Boat moves smoothly toward goal in Gazebo
-- Boat stops within 2m of goal position
-
-**Valid Goal Coordinates:**
-
-- With default grid (1200m × 600m): X ∈ [-600, 600], Y ∈ [-300, 300]
-- With reduced grid (300m × 300m): X ∈ [-150, 150], Y ∈ [-150, 150]
-- Adjust grid size in `astar_planner.py` if needed
-
-**Troubleshooting:**
-
-- If "Start or Goal outside Grid Map!" appears, goal is outside grid bounds
-- If "Waiting for Boat Position (TF)..." persists, ensure tf_broadcaster is running
-- If boat doesn't move, check thrust commands: `ros2 topic echo /wamv/thrusters/left/thrust`
-
-#### Test 2: Obstacle Avoidance ⚠️
-
-**Status**: Legacy test - requires custom environment setup
-
-**Objective**: Validate dynamic obstacle detection and avoidance capabilities.
-
-**Steps:**
-
-1. **Configure environment**:
+3. Check for reversed thruster commands (left/right swapped):
 
    ```bash
-   export GZ_SIM_RESOURCE_PATH=$HOME/seal_ws/src/uvautoboat/test_environment:$GZ_SIM_RESOURCE_PATH
+   ros2 topic echo /wamv/thrusters/left/thrust &
+   ros2 topic echo /wamv/thrusters/right/thrust &
    ```
 
-2. **Launch custom world**:
+4. Reduce PID gains if oscillating:
 
    ```bash
-   gz sim ~/seal_ws/src/uvautoboat/test_environment/sydney_regatta_custom.sdf
+   ros2 param set /vostok1_node kp 0.3
+   ros2 param set /vostok1_node kd 0.05
    ```
 
-3. **Start obstacle avoidance planner**:
+#### Stuck Detection Not Working
+
+**Symptoms**: Boat gets stuck but doesn't trigger escape maneuver.
+
+**Solutions**:
+
+1. Check SASS status:
 
    ```bash
-   ros2 run plan avoidingobs_ts_planner --ros-args -p use_sim_time:=true
+   ros2 topic echo /vostok1/anti_stuck_status
+   # or for modular:
+   ros2 topic echo /control/anti_stuck_status
    ```
 
-**Expected Behavior**:
+2. Verify GPS is updating (stuck detection uses position delta):
 
-- Perception node detects cardboard box obstacles
-- Planner generates collision-free paths around obstacles
-- Boat adjusts trajectory dynamically to avoid collisions
-- Thrust commands modulate based on obstacle proximity
+   ```bash
+   ros2 topic hz /wamv/sensors/gps/gps/fix
+   ```
 
-### Performance Metrics
+3. Check stuck threshold parameters:
 
-Expected system performance benchmarks:
+   ```bash
+   ros2 param get /vostok1_node stuck_distance_threshold
+   ros2 param get /vostok1_node stuck_time_threshold
+   ```
 
-| Metric | Target | Description |
-|:-------|:-------|:------------|
-| Planning Time | < 2s | Time to compute initial path |
-| Control Loop Rate | 10 Hz | Path follower update frequency |
-| Position Error | < 2m | Distance to goal at completion |
-| Collision Avoidance | 100% | Success rate in test scenarios |
+4. Monitor position changes manually:
+
+   ```bash
+   watch -n 1 "ros2 topic echo /wamv/sensors/gps/gps/fix --once 2>/dev/null | grep -E 'latitude|longitude'"
+   ```
+
+#### Web Dashboard Not Connecting
+
+**Symptoms**: Dashboard shows "Disconnected" or no data updating.
+
+**Solutions**:
+
+1. Verify rosbridge is running:
+
+   ```bash
+   ros2 node list | grep rosbridge
+   ```
+
+2. Check rosbridge port (default 9090):
+
+   ```bash
+   ss -tlnp | grep 9090
+   ```
+
+3. Restart rosbridge:
+
+   ```bash
+   pkill -f rosbridge
+   ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
+   ```
+
+4. Clear browser cache (Ctrl+Shift+R) or use incognito mode
+
+5. Check browser console for WebSocket errors (F12 → Console)
+
+6. Verify correct URL in browser: `http://localhost:8000` (not https)
+
+7. Check firewall isn't blocking ports 8000 or 9090:
+
+   ```bash
+   sudo ufw status
+   ```
+
+#### LIDAR Not Detecting Obstacles
+
+**Symptoms**: Boat collides with obstacles despite LIDAR being active.
+
+**Solutions**:
+
+1. Verify LIDAR topic is publishing:
+
+   ```bash
+   ros2 topic hz /wamv/sensors/lidars/lidar_wamv/points
+   ```
+
+2. Check point cloud has data:
+
+   ```bash
+   ros2 topic echo /wamv/sensors/lidars/lidar_wamv/points --field height
+   ```
+
+3. Verify obstacle detection parameters:
+
+   ```bash
+   ros2 param get /vostok1_node obstacle_distance_threshold
+   ros2 param get /vostok1_node min_obstacle_height
+   ros2 param get /vostok1_node max_obstacle_height
+   ```
+
+4. Visualize in RViz2:
+
+   ```bash
+   ros2 run rviz2 rviz2 -d ~/seal_ws/src/uvautoboat/plan/rviz/default.rviz
+   ```
+
+5. Check TF transforms are valid:
+
+   ```bash
+   ros2 run tf2_tools view_frames
+   ```
+
+#### Build Failures
+
+**Solutions**:
+
+1. Install missing dependencies:
+
+   ```bash
+   rosdep install --from-paths src --ignore-src -r -y
+   ```
+
+2. Clean and rebuild:
+
+   ```bash
+   rm -rf build install log
+   colcon build --merge-install
+   ```
+
+3. Check Python package versions:
+
+   ```bash
+   pip list | grep -E "numpy|transforms3d|rclpy"
+   ```
+
+4. Source the workspace after building:
+
+   ```bash
+   source install/setup.bash
+   ```
+
+5. Check for conflicting installations:
+
+   ```bash
+   pip check
+   ```
+
+#### ROS 2 Nodes Not Found
+
+**Symptoms**: `ros2 run plan vostok1` fails with "Package not found".
+
+**Solutions**:
+
+1. Verify workspace is sourced:
+
+   ```bash
+   echo $AMENT_PREFIX_PATH | grep seal_ws
+   ```
+
+2. Re-source after every new terminal:
+
+   ```bash
+   source ~/seal_ws/install/setup.bash
+   ```
+
+3. Add to `.bashrc` for automatic sourcing:
+
+   ```bash
+   echo "source ~/seal_ws/install/setup.bash" >> ~/.bashrc
+   ```
+
+4. Verify package is installed:
+
+   ```bash
+   ros2 pkg list | grep -E "plan|control"
+   ```
+
+5. Check entry points in `setup.py`:
+
+   ```bash
+   cat ~/seal_ws/src/uvautoboat/plan/setup.py | grep console_scripts -A 10
+   ```
+
+#### Gazebo Crashes on Startup
+
+**Symptoms**: Gazebo window opens then immediately closes.
+
+**Solutions**:
+
+1. Check GPU drivers:
+
+   ```bash
+   nvidia-smi  # or glxinfo | grep "OpenGL"
+   ```
+
+2. Run with software rendering:
+
+   ```bash
+   export LIBGL_ALWAYS_SOFTWARE=1
+   ros2 launch vrx_gz competition.launch.py
+   ```
+
+3. Check available memory:
+
+   ```bash
+   free -h
+   ```
+
+4. Kill zombie processes:
+
+   ```bash
+   pkill -9 -f gazebo && pkill -9 -f gz && pkill -9 -f ruby
+   ```
+
+5. Clear Gazebo cache:
+
+   ```bash
+   rm -rf ~/.gz/fuel ~/.gazebo/models
+   ```
+
+6. Check for missing models (first run downloads them):
+
+   ```bash
+   gz fuel download -u https://fuel.gazebosim.org/1.0/OpenRobotics/models/sydney_regatta
+   ```
+
+#### Simulation Performance
+
+| Issue | Solution |
+|:------|:---------|
+| Low FPS | Reduce Gazebo graphics quality |
+| Crashes | Verify 8GB+ RAM available |
+| Lag | Use headless mode for testing |
+| GPU overheating | Limit FPS with `--render-engine-server-plugin` |
+| High CPU | Close unnecessary applications |
+
+**Headless Mode:**
+
+```bash
+ros2 launch vrx_gz competition.launch.py headless:=true
+```
+
+**Reduce Physics Rate (if lagging):**
+
+```bash
+# Lower real-time factor
+gz service -s /world/sydney_regatta/set_physics --reqtype gz.msgs.Physics --reptype gz.msgs.Boolean --req "real_time_factor: 0.5"
+```
+
+### Environment Issues
+
+#### VRX/Gazebo Not Installed
+
+**Solutions**:
+
+1. Follow VRX installation guide:
+
+   ```bash
+   # Add OSRF packages
+   sudo sh -c 'echo "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" > /etc/apt/sources.list.d/gazebo-stable.list'
+   wget https://packages.osrfoundation.org/gazebo.key -O - | sudo apt-key add -
+   sudo apt update
+   ```
+
+2. Install VRX packages:
+
+   ```bash
+   sudo apt install ros-jazzy-vrx-gz
+   ```
+
+3. Verify installation:
+
+   ```bash
+   ros2 pkg list | grep vrx
+   ```
+
+#### Python Import Errors
+
+**Symptoms**: `ModuleNotFoundError` when running nodes.
+
+**Solutions**:
+
+1. Install missing Python packages:
+
+   ```bash
+   pip install numpy transforms3d scipy
+   ```
+
+2. For ROS packages:
+
+   ```bash
+   sudo apt install ros-jazzy-tf-transformations python3-transforms3d
+   ```
+
+3. Check Python path:
+
+   ```bash
+   python3 -c "import sys; print('\n'.join(sys.path))"
+   ```
+
+### Debug Tips
+
+#### Enable Verbose Logging
+
+```bash
+# Set log level for specific node
+ros2 run plan vostok1 --ros-args --log-level debug
+
+# Or via environment variable
+export RCUTILS_LOGGING_MIN_SEVERITY=DEBUG
+ros2 run plan vostok1
+```
+
+#### Record a Bag for Analysis
+
+```bash
+# Record all relevant topics
+ros2 bag record /wamv/sensors/gps/gps/fix \
+                /wamv/sensors/imu/imu/data \
+                /wamv/sensors/lidars/lidar_wamv/points \
+                /wamv/thrusters/left/thrust \
+                /wamv/thrusters/right/thrust \
+                /vostok1/mission_status \
+                /vostok1/anti_stuck_status \
+                -o debug_session
+```
+
+#### Replay for Debugging
+
+```bash
+ros2 bag play debug_session --clock
+```
+
+#### Monitor System Resources
+
+```bash
+# Watch CPU/Memory usage
+htop
+
+# Monitor GPU (NVIDIA)
+watch -n 1 nvidia-smi
+
+# Check disk space
+df -h
+```
 
 ---
 
-## Development
+## Command Cheatsheet
 
-### Project Status
+### 🔴 Kill Processes
 
-For detailed development status, milestones, and task tracking, refer to [Board.md](Board.md).
+```bash
+# Kill all Gazebo processes completely
+pkill -9 -f gazebo && pkill -9 -f gz && pkill -9 -f ruby
+```
 
-### Contributing
+```bash
+# Kill specific ROS 2 nodes
+pkill -9 -f apollo11
+pkill -9 -f vostok1
+pkill -9 -f rosbridge
+```
 
-This project is developed as part of the ROS 2 Autonomous Systems course at IMT Nord Europe. Contributions are welcome from the community.
+```bash
+# Kill rosbridge and verify port 9090 is released
+pkill -9 -f rosbridge && sleep 1 && ss -tlnp | grep 9090
+# (no output = port is free)
+```
 
-**Development Guidelines**:
+```bash
+# Kill all ROS 2 daemon (if nodes not responding)
+ros2 daemon stop
+ros2 daemon start
+```
 
-1. **Code Style**: Follow PEP 8 for Python code
-2. **Documentation**: Update README and inline comments for significant changes
-3. **Testing**: Include unit tests for new functionality
-4. **Pull Requests**: Provide clear descriptions of changes and their purpose
+```bash
+# Nuclear option - kill everything ROS/Gazebo related
+pkill -9 -f ros && pkill -9 -f gz && pkill -9 -f gazebo && pkill -9 -f ruby
+```
+
+### 📊 ROS 2 Introspection
+
+```bash
+# List all active nodes
+ros2 node list
+```
+
+```bash
+# Get info about a specific node
+ros2 node info /vostok1_node
+```
+
+```bash
+# List all active topics
+ros2 topic list
+```
+
+```bash
+# Monitor topic data in real-time
+ros2 topic echo /wamv/sensors/gps/gps/fix
+ros2 topic echo /wamv/thrusters/left/thrust
+```
+
+```bash
+# Check topic publishing frequency
+ros2 topic hz /wamv/sensors/gps/gps/fix
+```
+
+```bash
+# List all parameters of a node
+ros2 param list /vostok1_node
+```
+
+```bash
+# Get a parameter value
+ros2 param get /vostok1_node kp
+```
+
+```bash
+# Set a parameter at runtime
+ros2 param set /vostok1_node kp 500.0
+```
+
+### 🔧 Build & Environment
+
+```bash
+# Source ROS 2 environment (required in each new terminal)
+source /opt/ros/jazzy/setup.bash
+source ~/seal_ws/install/setup.bash
+```
+
+```bash
+# Edit bashrc to add auto-sourcing (so you don't need to source manually)
+gedit ~/.bashrc
+# Add these lines at the end of the file:
+#   export PATH="$HOME/.local/bin:$PATH"
+#   source /opt/ros/jazzy/setup.bash
+#   source ~/seal_ws/install/setup.bash
+#   export ROS_DOMAIN_ID=56 # The domain ID for VRX simulation can be any number between 0-1013.
+```
+
+```bash
+# Or add to bashrc via command line (one-time setup)
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
+echo "source ~/seal_ws/install/setup.bash" >> ~/.bashrc
+echo "export ROS_DOMAIN_ID=56" >> ~/.bashrc # The domain ID for VRX simulation can be any number between 0-1013.
+```
+
+```bash
+# Build all packages
+cd ~/seal_ws && colcon build --merge-install
+```
+
+```bash
+# Build specific package only
+colcon build --packages-select plan control
+```
+
+```bash
+# Build with symlink (faster rebuilds for Python)
+colcon build --symlink-install
+```
+
+```bash
+# Build with parallel jobs (faster on multi-core)
+colcon build --parallel-workers 4
+```
+
+```bash
+# Build with verbose output (debugging build issues)
+colcon build --event-handlers console_direct+
+```
+
+```bash
+# Build with CMake arguments (e.g., Release mode)
+colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release
+```
+
+```bash
+# Build only packages that changed
+colcon build --packages-up-to plan
+```
+
+```bash
+# Clean build (when things go wrong)
+rm -rf build install log && colcon build --merge-install
+```
+
+```bash
+# Clean specific package only
+rm -rf build/plan install/plan && colcon build --packages-select plan
+```
+
+```bash
+# Install dependencies
+rosdep install --from-paths src --ignore-src -r -y
+```
+
+```bash
+# Check package dependencies
+rosdep check --from-paths src --ignore-src
+```
+
+### 🚀 Launch Commands
+
+```bash
+# Start Gazebo simulation
+ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+```
+
+```bash
+# Start Gazebo headless (no GUI, faster)
+ros2 launch vrx_gz competition.launch.py headless:=true
+```
+
+```bash
+# Run autonomous navigation
+ros2 run plan vostok1
+ros2 run plan apollo11
+```
+
+```bash
+# Launch modular navigation with custom PID
+ros2 launch plan vostok1_modular_navigation.launch.py kp:=500.0 ki:=30.0 kd:=150.0
+```
+
+```bash
+# Start rosbridge for web dashboard (delay_between_messages fixes Jazzy bug)
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
+```
+
+```bash
+# Start web server for dashboard
+cd ~/seal_ws/src/uvautoboat/web_dashboard && python3 -m http.server 8000
+```
+
+### 🐛 Debugging
+
+```bash
+# Check if GPS is publishing
+ros2 topic echo /wamv/sensors/gps/gps/fix --once
+```
+
+```bash
+# Check LIDAR data (without array flood)
+ros2 topic echo /wamv/sensors/lidars/lidar_wamv_sensor/points --no-arr
+```
+
+```bash
+# View TF tree
+ros2 run tf2_tools view_frames
+```
+
+```bash
+# Check transform between frames
+ros2 run tf2_ros tf2_echo world wamv/wamv/base_link
+```
+
+```bash
+# Run unit tests
+colcon test --packages-select plan control
+colcon test-result --verbose
+```
+
+### 🖥️ RQT Tools
+
+> 📚 RQT is a Qt-based GUI framework for ROS 2. See [RQT Documentation](https://docs.ros.org/en/jazzy/Concepts/Intermediate/About-RQt.html)
+
+```bash
+# Launch RQT main window (access all plugins from menu)
+rqt
+```
+
+```bash
+# Topic Monitor - view all topics and their data
+rqt_topic
+```
+
+```bash
+# Node Graph - visualize node connections
+rqt_graph
+```
+
+```bash
+# Plot - real-time data plotting
+rqt_plot /wamv/thrusters/left/thrust/data /wamv/thrusters/right/thrust/data
+```
+
+```bash
+# Console - view ROS logs with filtering
+rqt_console
+```
+
+```bash
+# TF Tree - visualize transform hierarchy
+rqt_tf_tree
+```
+
+```bash
+# Image View - display camera feeds
+rqt_image_view
+```
+
+```bash
+# Parameter Reconfigure - tune parameters live
+rqt_reconfigure
+```
+
+### 💾 Git Quick Commands
+
+> 📚 For comprehensive Git documentation, see [Git Reference](https://git-scm.com/docs)
+
+```bash
+# Check status
+git status
+```
+
+```bash
+# Stage and commit
+git add -A && git commit -m "Your message"
+```
+
+```bash
+# Push to remote
+git push origin main
+```
+
+```bash
+# Pull latest changes
+git pull origin main
+```
+
+```bash
+# Discard local changes
+git checkout -- .
+```
+
+```bash
+# Stash changes temporarily (save work without committing)
+git stash
+```
+
+```bash
+# Stash with a descriptive message
+git stash push -m "WIP: feature description"
+```
+
+```bash
+# List all stashes
+git stash list
+```
+
+```bash
+# Apply most recent stash (keep stash in list)
+git stash apply
+```
+
+```bash
+# Apply and remove most recent stash
+git stash pop
+```
+
+```bash
+# Apply a specific stash
+git stash apply stash@{1}
+```
+
+```bash
+# Drop a specific stash
+git stash drop stash@{0}
+```
+
+```bash
+# Clear all stashes
+git stash clear
+```
+
+---
+
+## Contributing
+
+This project is developed as part of the ROS 2 Autonomous Systems course at IMT Nord Europe.
+
+### Development Guidelines
+
+1. **Code Style**: Follow PEP 8 for Python
+2. **Documentation**: Update README for significant changes
+3. **Testing**: Include unit tests for new features
+4. **Commits**: Use clear, descriptive commit messages
+
+### Reporting Issues
+
+Open an issue on [GitHub](https://github.com/Erk732/uvautoboat/issues) with:
+
+- Problem description
+- Steps to reproduce
+- Expected vs actual behavior
+- System information (OS, ROS version, etc.)
+
+---
 
 ## References
 
-- [Virtual RobotX (VRX) Competition](https://github.com/osrf/vrx)
-- [ROS 2 Documentation](https://docs.ros.org/en/jazzy/)
-- [Gazebo Simulation](https://gazebosim.org/)
+### Documentation
+
+- [ROS 2 Jazzy Documentation](https://docs.ros.org/en/jazzy/)
+- [Gazebo Harmonic Documentation](https://gazebosim.org/docs/harmonic)
+- [VRX Wiki](https://github.com/osrf/vrx/wiki)
+- [RQT Tools Documentation](https://docs.ros.org/en/jazzy/Concepts/Intermediate/About-RQt.html)
+- [Git Reference Manual](https://git-scm.com/docs)
+
+### Message Types
+
+- [sensor_msgs/NavSatFix](http://docs.ros.org/en/api/sensor_msgs/html/msg/NavSatFix.html)
+- [sensor_msgs/PointCloud2](http://docs.ros.org/en/api/sensor_msgs/html/msg/PointCloud2.html)
+- [sensor_msgs/Imu](http://docs.ros.org/en/api/sensor_msgs/html/msg/Imu.html)
+
+### Related Projects
+
+- [Virtual RobotX (VRX)](https://github.com/osrf/vrx)
+- [ros2_control](https://github.com/ros-controls/ros2_control)
+
+---
 
 ## Acknowledgments
 
-This project utilizes the Virtual RobotX (VRX) simulation environment developed by Open Source Robotics Foundation (OSRF). Simulation assets and base environment courtesy of the VRX project.
+- **Open Source Robotics Foundation**: VRX simulation environment
+- **IMT Nord Europe**: Academic support and guidance
+- **Development Teams**:
+  - Apollo11 — Planning Team
+  - Vostok1 — Control Team
+
+---
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see individual package files for details.
+This project is licensed under the Apache License 2.0.
 
-## Contact
+See [LICENSE](LICENSE) for details.
 
-For questions or issues, please open an issue on the [GitHub repository](https://github.com/Erk732/uvautoboat).
+---
+
+**AutoBoat** — Autonomous Navigation for VRX Competition
+
+Built with ROS 2 Jazzy + Gazebo Harmonic
+
+[Report Bug](https://github.com/Erk732/uvautoboat/issues) · [Request Feature](https://github.com/Erk732/uvautoboat/issues)
