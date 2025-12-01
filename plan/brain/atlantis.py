@@ -423,7 +423,7 @@ class Atlantis(Node):
         self.previous_error = angle_error
 
         # Power Limits
-        turn_power = max(-800.0, min(800.0, turn_power))
+        turn_power = max(-800.0, min(800.0, turn_power)) #change it?
         
         # Adaptive Speed (Slow down for sharp turns)
         speed = self.base_speed

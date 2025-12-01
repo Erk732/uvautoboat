@@ -34,7 +34,7 @@ setup(
             # Modular nodes (TNO style names)
             'oko_perception = brain.oko_perception:main',
             'sputnik_planner = brain.sputnik_planner:main',
-            # new code for advanced testing unfortunatly still has the control and the planning parts together! 
+            # new code for advanced testing unfortunately still has the control and the planning parts together! 
             'atlantis = brain.atlantis:main',
         ],
     },
