@@ -15,12 +15,13 @@ setup(
             'launch/path_follower.launch.py',
         ]),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'tf2_ros'],
     zip_safe=True,
     maintainer='ghostzero',
     maintainer_email='yinpuchen0@gmail.com',
     description='Control package for VRX WAM-V thruster-based path following.',
     license='Apache-2.0',
+    tests_require=['pytest'],
     extras_require={
         'test': [
             'pytest',
@@ -32,10 +33,16 @@ setup(
             'path_follower = control.path_follower:main',
             # Modular controller (TNO style name)
             'buran_controller = control.buran_controller:main',
+
             #NEW CODE FOR SEPERATED CONTROL AND PLANNING
             'atlantis_controller = control.atlantis_controller:main',
             # Keyboard teleop for manual control
             'keyboard_teleop = control.keyboard_teleop:main',
+
+            'all_in_one_stack = control.all_in_one_stack:main',
+            
+            'gps_imu_pose = control.gps_imu_pose:main',
+
         ],
     },
 )
