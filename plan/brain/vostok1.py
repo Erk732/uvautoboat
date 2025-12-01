@@ -145,6 +145,9 @@ class Vostok1(Node):
         self.pub_obstacle_status = self.create_publisher(String, '/vostok1/obstacle_status', 10)
         self.pub_anti_stuck = self.create_publisher(String, '/vostok1/anti_stuck_status', 10)
         
+        # Waypoint publisher for RViz visualization
+        self.pub_waypoints = self.create_publisher(String, '/vostok1/waypoints', 10)
+        
         # Parameter configuration publisher (for web dashboard)
         self.pub_config = self.create_publisher(String, '/vostok1/config', 10)
         
@@ -165,6 +168,9 @@ class Vostok1(Node):
         
         # Publish config at 1Hz
         self.create_timer(1.0, self.publish_config)
+        
+        # Publish waypoints at 2Hz (for RViz visualizer)
+        self.create_timer(0.5, self.publish_waypoints_periodic)
         
         # Publish anti-stuck status at 2Hz
         self.create_timer(0.5, self.publish_anti_stuck_status)
@@ -366,6 +372,25 @@ class Vostok1(Node):
 
         self.get_logger().info(f"Generated {total_waypoints} waypoints")
         self.get_logger().info(f"Estimated path length: {estimated_distance:.1f}m")
+        
+        # Publish waypoints for RViz visualization
+        self.publish_waypoints()
+
+    def publish_waypoints(self):
+        """Publish waypoints for RViz visualizer"""
+        if not self.waypoints:
+            return
+        waypoint_data = {
+            'waypoints': [{'x': wp[0], 'y': wp[1]} for wp in self.waypoints],
+            'no_go_zones': [(z[0], z[1], z[2]) for z in self.no_go_zones] if self.no_go_zones else []
+        }
+        msg = String()
+        msg.data = json.dumps(waypoint_data)
+        self.pub_waypoints.publish(msg)
+        
+    def publish_waypoints_periodic(self):
+        """Periodic waypoint publish (called by timer)"""
+        self.publish_waypoints()
 
     def publish_config(self):
         """Publish current configuration for web dashboard"""
