@@ -148,7 +148,6 @@ class AtlantisController(Node):
         
         # Full PID (KP/KD/KI)
         self.integral_error += angle_error * dt
-        self.integral_error += angle_error * dt
         # Anti-windup: clamp integral term
         self.integral_error = max(-100.0, min(100.0, self.integral_error))
         derivative_error = (angle_error - self.previous_error) / dt
