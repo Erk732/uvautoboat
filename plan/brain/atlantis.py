@@ -35,7 +35,7 @@ class Atlantis(Node):
         self.declare_parameter('critical_distance', 5.0)
         self.declare_parameter('obstacle_slow_factor', 0.3)
         self.declare_parameter('hysteresis_distance', 2.0)  
-        self.declare_parameter('reverse_timeout', 3.0)  # Max seconds to reverse
+        self.declare_parameter('reverse_timeout', 3.0) 
 
         # Stuck detection parameters
         self.declare_parameter('stuck_timeout', 5.0)  
@@ -123,6 +123,7 @@ class Atlantis(Node):
         # --- SUBSCRIBERS ---
         self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, 10)
         self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_callback, 10)
+        # VOSTOK VISION: Using PointCloud2
         self.create_subscription(PointCloud2, '/wamv/sensors/lidars/lidar_wamv_sensor/points', self.lidar_callback, 10)
 
         # --- PUBLISHERS ---
@@ -133,14 +134,10 @@ class Atlantis(Node):
         self.pub_mission_status = self.create_publisher(String, '/atlantis/mission_status', 10)
         self.pub_obstacle_status = self.create_publisher(String, '/atlantis/obstacle_status', 10)
         self.pub_anti_stuck = self.create_publisher(String, '/atlantis/anti_stuck_status', 10)
-        
-        # Parameter configuration publisher 
         self.pub_config = self.create_publisher(String, '/atlantis/config', 10)
         
         # Parameter update subscriber 
         self.create_subscription(String, '/atlantis/set_config', self.config_callback, 10)
-        
-        # Add parameter change callback
         self.add_on_set_parameters_callback(self.parameter_callback)
 
         # --- CONTROL LOOP (20Hz) ---
@@ -151,7 +148,7 @@ class Atlantis(Node):
 
         self.get_logger().info("=" * 60)
         self.get_logger().info("OV-104 'ATLANTIS' - Autonomous Navigation System")
-        self.get_logger().info("+ Stuck Avoidance System 2.0")
+        self.get_logger().info("+ Vostok-Class Lidar Vision System")
         self.get_logger().info("=" * 60)
         self.get_logger().info(f"Scan Zone: {self.scan_length}m x {self.scan_width * self.lanes}m")
         self.get_logger().info("Waiting for GPS signal...")
@@ -159,15 +156,13 @@ class Atlantis(Node):
 
     def gps_callback(self, msg):
         self.current_gps = (msg.latitude, msg.longitude)
-
-        # First GPS fix - initialize mission
         if self.start_gps is None:
             self.start_gps = (msg.latitude, msg.longitude)
             self.start_time = self.get_clock().now()
-            self.get_logger().info(f"Launch position has been established: {self.start_gps[0]:.6f}, {self.start_gps[1]:.6f}")
+            self.get_logger().info(f"Launch Pad Established: {self.start_gps[0]:.6f}, {self.start_gps[1]:.6f}")
             self.generate_lawnmower_path()
             self.state = "DRIVING"
-            self.get_logger().info("Mission Started.")
+            self.get_logger().info("ATLANTIS LAUNCHED! Mission Started.")
             self.get_logger().info("=" * 60)
 
     def imu_callback(self, msg):
@@ -176,8 +171,11 @@ class Atlantis(Node):
         cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
         self.current_yaw = math.atan2(siny_cosp, cosy_cosp)
 
+    # =========================================================
+    #  VISION SYSTEM - LIDAR POINTCLOUD PROCESSING
+    # =========================================================
     def lidar_callback(self, msg):
-        """Process 3D LIDAR point cloud for obstacle detection"""
+        """Process 3D LIDAR point cloud using better logic (Sectors)"""
         points = []
         point_step = msg.point_step
         data = msg.data
@@ -198,7 +196,8 @@ class Atlantis(Node):
                 dist = math.sqrt(x*x + y*y)
                 if dist < 1.0 or dist > 100.0: continue
                 
-                # Ignore points BEHIND the lidar (x < 0) to avoid self-detection
+                # VOSTOK LOGIC: Ignore points BEHIND the lidar (x < 0.5) 
+                # This prevents self-detection but allows wide side vision
                 if x < 0.5: continue
                 
                 points.append((x, y, z, dist))
@@ -230,7 +229,7 @@ class Atlantis(Node):
         self.analyze_scan_sectors_3d(points)
 
     def analyze_scan_sectors_3d(self, points):
-        """Divide 3D point cloud into sectors"""
+        """Divide 3D point cloud into sectors (Vostok Logic)"""
         front_points = []
         left_points = []
         right_points = []
@@ -238,6 +237,7 @@ class Atlantis(Node):
         for x, y, z, dist in points:
             angle = math.atan2(y, x) 
             
+            # Vostok Sectors:
             if -math.pi/4 < angle < math.pi/4:  # Front ±45°
                 front_points.append(dist)
             elif math.pi/4 <= angle <= 3*math.pi/4:  # Left
@@ -247,17 +247,17 @@ class Atlantis(Node):
         
         max_range = 100.0
         
-        # Helper to get safe min
+        # Helper to get safe min (10th percentile filter)
         def get_sector_min(pts):
             if not pts: return max_range
             pts.sort()
-            # Use 10th percentile to ignore noise spikes
             idx = len(pts) // 10
             return min(max_range, pts[idx]) if len(pts) > 10 else pts[0]
 
         self.front_clear = get_sector_min(front_points)
         self.left_clear = get_sector_min(left_points)
         self.right_clear = get_sector_min(right_points)
+    # =========================================================
 
     def latlon_to_meters(self, lat, lon):
         R = 6371000.0 
@@ -279,7 +279,7 @@ class Atlantis(Node):
                 next_y = (i + 1) * self.scan_width
                 self.waypoints.append((x_end, next_y))
 
-        self.get_logger().info(f"Voyage Plan Generated: {len(self.waypoints)} waypoints")
+        self.get_logger().info(f"Flight Plan Generated: {len(self.waypoints)} waypoints")
 
     def publish_config(self):
         config = {
@@ -350,7 +350,7 @@ class Atlantis(Node):
         dy = target_y - curr_y
         dist = math.hypot(dx, dy)
 
-        # Check whatever it is reached the waypoint ?
+        # Waypoint reached?
         if dist < self.waypoint_tolerance:
             self.get_logger().info(f"Waypoint {self.current_wp_index + 1} reached.")
             self.current_wp_index += 1
@@ -367,11 +367,10 @@ class Atlantis(Node):
         if self.min_obstacle_distance < self.critical_distance:
             if self.reverse_start_time is None:
                 self.reverse_start_time = self.get_clock().now()
-                self.get_logger().warn("OBSTACLE DETECTED - REVERSING!")
+                self.get_logger().warn("CRITICAL OBSTACLE - REVERSING!")
 
             elapsed = (self.get_clock().now() - self.reverse_start_time).nanoseconds / 1e9
             if elapsed > self.reverse_timeout:
-                # Timed out, stop reversing
                 self.reverse_start_time = None
             else:
                 self.send_thrust(-800.0, -800.0)
@@ -380,12 +379,13 @@ class Atlantis(Node):
         else:
             self.reverse_start_time = None
 
-        # --- OBSTACLE AVOIDANCE STEERING ---
+        # --- OBSTACLE AVOIDANCE STEERING (VOSTOK LOGIC) ---
         if self.obstacle_detected:
             if not self.avoidance_mode:
                 self.integral_error = 0.0 # Reset PID
             self.avoidance_mode = True
 
+            # Use Vostok Sector Logic (Left vs Right clearance)
             if self.left_clear > self.right_clear:
                 # Turn Left
                 target_angle = self.current_yaw + math.pi / 2
@@ -412,7 +412,7 @@ class Atlantis(Node):
 
         # PID Controller Calculation
         self.integral_error += angle_error * self.dt
-        self.integral_error = max(-0.5, min(0.5, self.integral_error)) # Anti-windup
+        self.integral_error = max(-0.5, min(0.5, self.integral_error)) 
         
         derivative_error = (angle_error - self.previous_error) / self.dt
         
@@ -423,9 +423,9 @@ class Atlantis(Node):
         self.previous_error = angle_error
 
         # Power Limits
-        turn_power = max(-800.0, min(800.0, turn_power)) #change it?
+        turn_power = max(-800.0, min(800.0, turn_power))
         
-        # Adaptive Speed (Slow down for sharp turns)
+        # Adaptive Speed 
         speed = self.base_speed
         if abs(math.degrees(angle_error)) > 20:
             speed *= 0.75
@@ -454,7 +454,7 @@ class Atlantis(Node):
         self.state = "FINISHED"
         self.stop_boat()
         self.get_logger().info("=" * 60)
-        self.get_logger().info("MISSION COMPLETE! Thruster full stop.")
+        self.get_logger().info("MISSION COMPLETE! Wheel stop.")
         self.get_logger().info("=" * 60)
 
     def send_thrust(self, left, right):
@@ -487,7 +487,7 @@ class Atlantis(Node):
                     self.escape_phase = 0
                     self.consecutive_stuck_count += 1
                     self.calculate_adaptive_escape_duration()
-                    self.get_logger().warn(f"WAMV IS STUCK! (Attempt {self.consecutive_stuck_count})")
+                    self.get_logger().warn(f"STUCK DETECTED! (Attempt {self.consecutive_stuck_count})")
             else:
                 self.is_stuck = False
                 self.consecutive_stuck_count = 0
@@ -541,7 +541,7 @@ class Atlantis(Node):
             return
 
         else:
-            self.get_logger().info("Escape Manuver Complete. Resuming.")
+            self.get_logger().info("Escape Complete. Resuming.")
             self.escape_mode = False
             self.is_stuck = False
             self.last_position = self.latlon_to_meters(self.current_gps[0], self.current_gps[1])
