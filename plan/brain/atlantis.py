@@ -162,7 +162,7 @@ class Atlantis(Node):
             self.get_logger().info(f"Launch Pad Established: {self.start_gps[0]:.6f}, {self.start_gps[1]:.6f}")
             self.generate_lawnmower_path()
             self.state = "DRIVING"
-            self.get_logger().info("ATLANTIS LAUNCHED! Mission Started.")
+            self.get_logger().info("WAMV IS DEPARTED FROM DOCK! Mission Started.")
             self.get_logger().info("=" * 60)
 
     def imu_callback(self, msg):
@@ -367,7 +367,7 @@ class Atlantis(Node):
         if self.min_obstacle_distance < self.critical_distance:
             if self.reverse_start_time is None:
                 self.reverse_start_time = self.get_clock().now()
-                self.get_logger().warn("CRITICAL OBSTACLE - REVERSING!")
+                self.get_logger().warn("OBSTACLE - ALL THRUSTERS FULL ASTERN!")
 
             elapsed = (self.get_clock().now() - self.reverse_start_time).nanoseconds / 1e9
             if elapsed > self.reverse_timeout:
@@ -454,7 +454,7 @@ class Atlantis(Node):
         self.state = "FINISHED"
         self.stop_boat()
         self.get_logger().info("=" * 60)
-        self.get_logger().info("MISSION COMPLETE! Wheel stop.")
+        self.get_logger().info("MISSION COMPLETE! All thrusters stop.")
         self.get_logger().info("=" * 60)
 
     def send_thrust(self, left, right):
@@ -487,7 +487,7 @@ class Atlantis(Node):
                     self.escape_phase = 0
                     self.consecutive_stuck_count += 1
                     self.calculate_adaptive_escape_duration()
-                    self.get_logger().warn(f"STUCK DETECTED! (Attempt {self.consecutive_stuck_count})")
+                    self.get_logger().warn(f"WAMV IS STUCK! (Attempt {self.consecutive_stuck_count})")
             else:
                 self.is_stuck = False
                 self.consecutive_stuck_count = 0
