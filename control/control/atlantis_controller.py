@@ -27,8 +27,8 @@ class AtlantisController(Node):
         self.declare_parameter('reverse_timeout', 5.0)
 
         # Stuck detection parameters
-        self.declare_parameter('stuck_timeout', 3.0)
-        self.declare_parameter('stuck_threshold', 0.5)
+        self.declare_parameter('stuck_timeout', 5.0) #try 5 seconds 
+        self.declare_parameter('stuck_threshold', 1.0)
         
         # Smart anti-stuck parameters
         self.declare_parameter('no_go_zone_radius', 8.0)
@@ -384,6 +384,8 @@ class AtlantisController(Node):
                     self.best_escape_direction = None
                     self.probe_results = {'left': 0.0, 'right': 0.0, 'back': 0.0}
                     self.add_no_go_zone(curr_x, curr_y)
+                    self.last_position = (curr_x, curr_y)  # Reset reference position
+                    self.stuck_check_time = self.get_clock().now()  # Reset timer
                     
                     if self.last_stuck_waypoint == self.current_wp_index:
                         self.consecutive_stuck_count += 1
