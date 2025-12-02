@@ -187,6 +187,9 @@ class BuranController(Node):
         self.current_x = 0.0
         self.current_y = 0.0
         self.distance_to_target = float('inf')
+        
+        # Mission state (from planner)
+        self.mission_active = False  # True only when planner is in DRIVING state
 
         # Obstacle state (from perception)
         self.obstacle_detected = False
@@ -261,6 +264,14 @@ class BuranController(Node):
             self.obstacle_callback,
             10
         )
+        
+        # Subscribe to mission status to know when to stop
+        self.create_subscription(
+            String,
+            '/planning/mission_status',
+            self.mission_status_callback,
+            10
+        )
 
         # --- PUBLISHERS ---
         self.pub_left = self.create_publisher(Float64, '/wamv/thrusters/left/thrust', 10)
@@ -322,8 +333,31 @@ class BuranController(Node):
         except (json.JSONDecodeError, KeyError) as e:
             self.get_logger().warn(f"Invalid obstacle message: {e}")
 
+    def mission_status_callback(self, msg):
+        """Receive mission status from planner - stop if not DRIVING"""
+        try:
+            data = json.loads(msg.data)
+            state = data.get('state', '')
+            # Only active when planner is in DRIVING state
+            was_active = self.mission_active
+            self.mission_active = (state == "DRIVING")
+            
+            # If mission just became inactive, clear target and stop
+            if was_active and not self.mission_active:
+                self.target_x = None
+                self.target_y = None
+                self.stop()
+                self.get_logger().info(f"🛑 Mission inactive (state={state}) - stopping")
+        except (json.JSONDecodeError, KeyError) as e:
+            self.get_logger().warn(f"Invalid mission status: {e}")
+
     def control_loop(self):
         """Main control loop - PID heading control with obstacle avoidance and smart anti-stuck"""
+        # Check if mission is active
+        if not self.mission_active:
+            self.stop()
+            return
+            
         # Check if we have a target
         if self.target_x is None or self.target_y is None:
             self.stop()
