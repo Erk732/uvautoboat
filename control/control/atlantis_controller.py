@@ -6,6 +6,7 @@ from std_msgs.msg import Float64, String
 import math
 import struct
 import json
+import time # Added for safety sleep
 
 class AtlantisController(Node):
     def __init__(self):
@@ -74,6 +75,9 @@ class AtlantisController(Node):
         self.obstacle_detected = False
         self.avoidance_mode = False
         self.reverse_start_time = None
+        # NEW: Avoidance Commitment State
+        self.avoidance_commit_time = None 
+        self.avoidance_direction = None
         
         # Stuck Detection
         self.last_position = None
@@ -97,7 +101,6 @@ class AtlantisController(Node):
         # Statistics & Time
         self.total_distance = 0.0
         self.start_time = None
-        # --- FIX 1: Initialize timer correctly to avoid TypeError ---
         self._last_log_time = self.get_clock().now() 
 
         # --- SUBSCRIBERS ---
@@ -121,12 +124,10 @@ class AtlantisController(Node):
         self.get_logger().info("Atlantis Controller Ready - Waiting for GPS and Path...")
 
     def path_callback(self, msg):
-        """Receive path from Planner"""
         new_waypoints = []
         for pose in msg.poses:
             new_waypoints.append((pose.pose.position.x, pose.pose.position.y))
         
-        # --- FIX 2: Handle Empty Path (Safety Stop) ---
         if len(new_waypoints) == 0:
             self.stop_boat()
             self.waypoints = []
@@ -158,7 +159,6 @@ class AtlantisController(Node):
         self.current_yaw = math.atan2(siny_cosp, cosy_cosp)
 
     def lidar_callback(self, msg):
-        """Process 3D LIDAR point cloud for obstacle detection"""
         points = []
         point_step = msg.point_step
         data = msg.data
@@ -166,22 +166,18 @@ class AtlantisController(Node):
         for i in range(0, len(data) - point_step, point_step * 10):
             try:
                 x, y, z = struct.unpack_from('fff', data, i)
-                
-                # 1. Basic Filters
                 if math.isnan(x) or math.isinf(x): continue
                 if z < -0.2 or z > 3.0: continue
                 dist = math.sqrt(x*x + y*y)
                 if dist > 100.0: continue
 
-                # 2. DANGER TUNNEL LOGIC (Fix for cones)
+                # DANGER TUNNEL LOGIC
                 is_in_center_gap = abs(y) < 1.0
 
                 if not is_in_center_gap:
-                    # Side logic: Strict to avoid pontoons
                     if dist < 1.0: continue 
                     if x < 0.5: continue    
                 else:
-                    # Center logic: Sensitive for cones
                     if x < 0.1: continue 
 
                 points.append((x, y, z, dist))
@@ -199,7 +195,6 @@ class AtlantisController(Node):
         distances = [p[3] for p in points]
         self.min_obstacle_distance = min(distances)
         
-        # Hysteresis
         if self.obstacle_detected:
             exit_threshold = self.min_safe_distance + self.hysteresis_distance
             self.obstacle_detected = self.min_obstacle_distance < exit_threshold
@@ -249,7 +244,6 @@ class AtlantisController(Node):
 
         self.check_stuck_condition(curr_x, curr_y)
 
-        # Check if finished
         if self.current_wp_index >= len(self.waypoints):
             self.finish_mission(curr_x, curr_y)
             return
@@ -266,11 +260,14 @@ class AtlantisController(Node):
             self.integral_error = 0.0
             return
 
-        # Navigation Logic (Stuck -> Obs -> Drive)
+        # --- OBSTACLE & AVOIDANCE LOGIC ---
+        
+        # 1. Stuck Escape (Highest Priority)
         if self.is_stuck and self.escape_mode:
             self.execute_escape_maneuver()
             return
 
+        # 2. Critical Reverse (Panic)
         if self.min_obstacle_distance < self.critical_distance:
             if self.reverse_start_time is None:
                 self.reverse_start_time = self.get_clock().now()
@@ -279,7 +276,7 @@ class AtlantisController(Node):
             
             elapsed = (self.get_clock().now() - self.reverse_start_time).nanoseconds / 1e9
             if elapsed > self.reverse_timeout:
-                self.reverse_start_time = None # Try turning
+                self.reverse_start_time = None
             else:
                 self.send_thrust(-800.0, -800.0)
                 self.avoidance_mode = True
@@ -287,25 +284,52 @@ class AtlantisController(Node):
         else:
             self.reverse_start_time = None
 
-        if self.obstacle_detected:
+        # 3. Standard Avoidance with COMMITMENT
+        now = self.get_clock().now()
+        
+        # Check if we are currently committed to a turn
+        is_committed = False
+        if self.avoidance_commit_time is not None:
+             commit_elapsed = (now - self.avoidance_commit_time).nanoseconds / 1e9
+             if commit_elapsed < 1.5: # Commit to turn for 1.5 seconds minimum
+                 is_committed = True
+             else:
+                 self.avoidance_commit_time = None
+                 self.avoidance_direction = None
+
+        if self.obstacle_detected or is_committed:
             if not self.avoidance_mode:
                 self.integral_error = 0.0
                 self.previous_error = 0.0
             self.avoidance_mode = True
 
-            if self.left_clear > self.right_clear:
+            # Decide direction (or use committed direction)
+            if is_committed and self.avoidance_direction:
+                direction = self.avoidance_direction
+            else:
+                # New decision
+                if self.left_clear > self.right_clear:
+                    direction = "LEFT"
+                else:
+                    direction = "RIGHT"
+                
+                # Start commitment
+                self.avoidance_commit_time = now
+                self.avoidance_direction = direction
+
+            # Execute Turn
+            if direction == "LEFT":
                 avoidance_heading = self.current_yaw + 1.57
-                direction = "LEFT"
             else:
                 avoidance_heading = self.current_yaw - 1.57
-                direction = "RIGHT"
             
             angle_error = avoidance_heading - self.current_yaw
             while angle_error > math.pi: angle_error -= 2.0 * math.pi
             while angle_error < -math.pi: angle_error += 2.0 * math.pi
             
-            self.get_logger().warn(f"OBSTACLE! Turning {direction}", throttle_duration_sec=1.0)
+            self.get_logger().warn(f"OBSTACLE! Turning {direction} (Locked)", throttle_duration_sec=1.0)
         else:
+            # CLEAR PATH
             if self.avoidance_mode:
                 self.avoidance_mode = False
                 self.integral_error = 0.0
@@ -340,7 +364,6 @@ class AtlantisController(Node):
         self.publish_dashboard_status(curr_x, curr_y, target_x, target_y, dist)
         
         # Logging
-        now = self.get_clock().now()
         if (now - self._last_log_time).nanoseconds / 1e9 > 2.0:
             self.log_status(curr_x, curr_y, target_x, target_y, dist, angle_error)
             self._last_log_time = now
@@ -529,8 +552,10 @@ class AtlantisController(Node):
         return 'LEFT' if left_score >= right_score else 'RIGHT'
 
     def send_thrust(self, left, right):
-        self.pub_left.publish(Float64(data=float(left)))
-        self.pub_right.publish(Float64(data=float(right)))
+        # Safety check: ensure rclpy is okay
+        if rclpy.ok():
+            self.pub_left.publish(Float64(data=float(left)))
+            self.pub_right.publish(Float64(data=float(right)))
 
     def stop_boat(self):
         self.send_thrust(0.0, 0.0)
@@ -572,12 +597,16 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
-    finally:
-        # --- FIX 3: Robust Stop on Shutdown ---
-        node.stop_boat()
         node.get_logger().warn("SHUTDOWN: Stopping boat...")
-        node.stop_boat() # Send twice to be sure
+        
+        # Send stop command explicitly
+        node.stop_boat()
+        
+        # Small sleep to ensure message goes out before context dies
+        time.sleep(0.1) 
+        
+    finally:
+        # Don't try to use node methods here that require active context if it's already dead
         node.destroy_node()
         rclpy.shutdown()
 
