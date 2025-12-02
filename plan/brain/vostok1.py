@@ -513,8 +513,8 @@ class Vostok1(Node):
         row_step = msg.row_step
         data = msg.data
         
-        # Process points - sample every 10th point (LIDAR has 3750 samples now)
-        for i in range(0, len(data) - point_step, point_step * 10):
+        # Process points - sample every 3rd point for better small obstacle detection
+        for i in range(0, len(data) - point_step, point_step * 3):
             try:
                 # Extract x, y, z from point cloud data
                 x, y, z = struct.unpack_from('fff', data, i)
@@ -533,13 +533,13 @@ class Vostok1(Node):
                 dist = math.sqrt(x*x + y*y)
                 
                 # Focus on relevant range: ignore boat itself and very far objects
-                # Stricter filtering: must be at least 1.0m away AND in front (x > 0)
-                if dist < 1.0 or dist > 100.0:
+                # Reduced min distance for better small obstacle detection
+                if dist < 0.5 or dist > 100.0:
                     continue
                 
                 # Only consider points in front of the boat (positive x direction)
-                # This prevents seeing the boat's own structure at wide angles
-                if x < 0.5:
+                # Reduced threshold from 0.5 to 0.2 to catch more obstacles
+                if x < 0.2:
                     continue
                 
                 points.append((x, y, z, dist))

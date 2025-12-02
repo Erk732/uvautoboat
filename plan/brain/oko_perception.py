@@ -33,14 +33,15 @@ class OkoPerception(Node):
         super().__init__('oko_perception_node')
 
         # --- PARAMETERS ---
-        self.declare_parameter('min_safe_distance', 15.0)
-        self.declare_parameter('critical_distance', 5.0)
-        self.declare_parameter('hysteresis_distance', 2.0)
+        # Increased sensitivity for small obstacles like buoys
+        self.declare_parameter('min_safe_distance', 12.0)  # Reduced from 15 for earlier detection
+        self.declare_parameter('critical_distance', 4.0)   # Reduced from 5
+        self.declare_parameter('hysteresis_distance', 1.5) # Reduced from 2
         self.declare_parameter('min_height', -10.0)  # Relaxed - LiDAR frame varies
         self.declare_parameter('max_height', 20.0)   # Relaxed - catch all obstacles
-        self.declare_parameter('min_range', 1.0)    # Ignore points closer than this
+        self.declare_parameter('min_range', 0.5)    # Reduced from 1.0 to catch closer objects
         self.declare_parameter('max_range', 100.0)  # Ignore points farther than this
-        self.declare_parameter('sample_rate', 5)    # Process every 5th point (was 10)
+        self.declare_parameter('sample_rate', 2)    # Process every 2nd point for better detection
 
         # Get parameters
         self.min_safe_distance = self.get_parameter('min_safe_distance').value
@@ -126,7 +127,8 @@ class OkoPerception(Node):
                     continue
                 
                 # Only consider points in front (positive x)
-                if x < 0.5:
+                # Reduced threshold from 0.5 to 0.2 to catch more obstacles
+                if x < 0.2:
                     behind_filtered += 1
                     continue
                 
