@@ -13,7 +13,8 @@ let currentWaypointMarker = null;  // Highlight current target
 
 // Configuration publisher
 let configPublisher = null;
-let missionCommandPublisher = null;  // NEW: Mission command publisher
+let modularConfigPublisher = null;  // For sputnik planner
+let missionCommandPublisher = null;  // Mission command publisher
 
 // Track which config inputs have been modified by user (prevents ROS from overwriting)
 let dirtyInputs = new Set();
@@ -331,12 +332,54 @@ function subscribeToTopics() {
         const data = JSON.parse(message.data);
         console.log('Modular mission status:', data);
         // Convert modular format to vostok1 format
+        // Sputnik uses: current_waypoint, total_waypoints, progress_percent, elapsed_time, position
         updateMissionStatus({
             state: data.state,
             waypoint: data.current_waypoint,
             total_waypoints: data.total_waypoints,
-            distance_to_waypoint: 0  // Not provided in modular format
+            distance_to_waypoint: data.distance_to_target || 0,
+            // Add local position from sputnik's position array
+            local_x: data.position ? data.position[0] : 0,
+            local_y: data.position ? data.position[1] : 0
         });
+    });
+    
+    // Modular current target from sputnik_planner (for distance info)
+    const modularTargetTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/planning/current_target',
+        messageType: 'std_msgs/String'
+    });
+    
+    modularTargetTopic.subscribe((message) => {
+        const data = JSON.parse(message.data);
+        console.log('Modular current target:', data);
+        // Update distance to waypoint display
+        if (data.distance_to_target !== undefined) {
+            document.getElementById('distance').textContent = data.distance_to_target.toFixed(1) + 'm';
+        }
+    });
+    
+    // Modular waypoints from sputnik_planner
+    const modularWaypointsTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/planning/waypoints',
+        messageType: 'std_msgs/String'
+    });
+    
+    modularWaypointsTopic.subscribe((message) => {
+        const data = JSON.parse(message.data);
+        console.log('Modular waypoints received:', data);
+        if (data.waypoints && data.waypoints.length > 0) {
+            // Check if waypoints actually changed
+            const newWpString = JSON.stringify(data.waypoints);
+            const oldWpString = JSON.stringify(missionState.waypoints);
+            const waypointsChanged = newWpString !== oldWpString;
+            
+            missionState.waypoints = data.waypoints;
+            missionState.totalWaypoints = data.total || data.waypoints.length;
+            displayWaypointsOnMap(data.waypoints, waypointsChanged);
+        }
     });
     
     // Modular obstacle status from oko_perception
@@ -380,14 +423,21 @@ function subscribeToTopics() {
     console.log('Subscribed to all topics (integrated + modular)');
     addLog('Subscribed to topics (Vostok1 + Modular)', 'info');
     
-    // Create publisher for configuration updates
+    // Create publisher for configuration updates (supports both modes)
     configPublisher = new ROSLIB.Topic({
         ros: ros,
         name: '/vostok1/set_config',
         messageType: 'std_msgs/String'
     });
     
-    // Subscribe to current config
+    // Also create modular config publisher for sputnik
+    modularConfigPublisher = new ROSLIB.Topic({
+        ros: ros,
+        name: '/sputnik/set_config',
+        messageType: 'std_msgs/String'
+    });
+    
+    // Subscribe to current config (vostok1)
     const configTopic = new ROSLIB.Topic({
         ros: ros,
         name: '/vostok1/config',
@@ -396,11 +446,24 @@ function subscribeToTopics() {
     
     configTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
-        console.log('Config received:', data);
+        console.log('Config received (vostok1):', data);
         updateConfigFromROS(data);
     });
     
-    // Subscribe to waypoints for map preview
+    // Subscribe to current config (modular sputnik)
+    const modularConfigTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/sputnik/config',
+        messageType: 'std_msgs/String'
+    });
+    
+    modularConfigTopic.subscribe((message) => {
+        const data = JSON.parse(message.data);
+        console.log('Config received (sputnik):', data);
+        updateConfigFromROS(data);
+    });
+    
+    // Subscribe to waypoints for map preview (vostok1)
     const waypointsTopic = new ROSLIB.Topic({
         ros: ros,
         name: '/vostok1/waypoints',
@@ -420,7 +483,7 @@ function subscribeToTopics() {
         }
     });
     
-    // Create mission command publisher
+    // Create mission command publisher (supports both modes)
     missionCommandPublisher = new ROSLIB.Topic({
         ros: ros,
         name: '/vostok1/mission_command',
@@ -828,9 +891,13 @@ function sendConfig(pidOnly = false, restart = false) {
         data: JSON.stringify(config)
     });
     
+    // Publish to both vostok1 and modular (sputnik) topics
     configPublisher.publish(message);
+    if (modularConfigPublisher) {
+        modularConfigPublisher.publish(message);
+    }
     addLog('Конфигурация отправлена | Config sent!', 'info');
-    console.log('Config sent:', config);
+    console.log('Config sent to both vostok1 and sputnik:', config);
 }
 
 // ========== TERMINAL OUTPUT FUNCTIONS ==========
