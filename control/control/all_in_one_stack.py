@@ -106,6 +106,8 @@ class AllInOneStack(Node):
         self.declare_parameter('avoid_diff_gain', 40.0)    # Left/right bias gain
         self.declare_parameter('avoid_clear_margin', 3.0)  # Clearance to exit hard avoid
         self.declare_parameter('avoid_max_turn_time', 5.0) # Max time to stay in hard avoid
+        # Hull radius (m) used to inflate obstacles for clearance
+        self.declare_parameter('hull_radius', 1.5)
         # Planning avoidance params
         self.declare_parameter('plan_avoid_margin', 5.0)
 
@@ -135,6 +137,7 @@ class AllInOneStack(Node):
         self.avoid_diff_gain = float(self.get_parameter('avoid_diff_gain').value)
         self.avoid_clear_margin = float(self.get_parameter('avoid_clear_margin').value)
         self.avoid_max_turn_time = float(self.get_parameter('avoid_max_turn_time').value)
+        self.hull_radius = float(self.get_parameter('hull_radius').value)
         self.plan_avoid_margin = float(self.get_parameter('plan_avoid_margin').value)
         self.pose_timeout = float(self.get_parameter('pose_timeout').value)
         self.scan_timeout = float(self.get_parameter('scan_timeout').value)
@@ -375,12 +378,14 @@ class AllInOneStack(Node):
 
             angle += scan.angle_increment
 
+        # If nothing valid, fall back to sensor range_max to avoid None/-1
+        fallback = scan.range_max if not math.isinf(scan.range_max) else 50.0
         if front_min == float('inf'):
-            front_min = None
+            front_min = fallback
         if left_min == float('inf'):
-            left_min = None
+            left_min = fallback
         if right_min == float('inf'):
-            right_min = None
+            right_min = fallback
 
         return front_min, left_min, right_min
 
@@ -486,7 +491,7 @@ class AllInOneStack(Node):
         desired_yaw = math.atan2(dy, dx)
         e_yaw = normalize_angle(desired_yaw - yaw)
 
-        # Recovery behavior
+        # Recovery behavior (stuck) or hard-avoid behavior (cul-de-sac handling)
         if self.recovering:
             now_s = self.get_clock().now().nanoseconds / 1e9
             if self.recover_phase == 'reverse':
@@ -506,6 +511,7 @@ class AllInOneStack(Node):
                 self.recover_phase = ''
                 self.last_goal_dist = float('inf')
                 self.last_progress_time = now_s
+                # let normal control resume after recovery
 
         # Stuck detection: if no progress toward goal within timeout, stop
         now_s = self.get_clock().now().nanoseconds / 1e9
@@ -558,57 +564,70 @@ class AllInOneStack(Node):
 
         # Hard-avoid state machine to avoid oscillation
         now_s = self.get_clock().now().nanoseconds / 1e9
-        if self.avoid_mode == 'turn':
-            clear_dist = self.obstacle_stop_dist + self.avoid_clear_margin
-            time_in_turn = now_s - self.avoid_start_time
-            if (front_min is None or front_min > clear_dist) or (time_in_turn > self.avoid_max_turn_time):
-                self.avoid_mode = ''
-                self.avoid_start_time = 0.0
-            else:
-                turn_cmd = self.avoid_turn_thrust * self.avoid_turn_dir
-                self.publish_thrust(-turn_cmd, turn_cmd)
-                return
+        if self.avoid_mode in ('reverse', 'turn'):
+            # sequential reverse then turn based on side clearance
+            if self.avoid_mode == 'reverse':
+                if (now_s - self.avoid_start_time) < self.recover_reverse_time:
+                    self.publish_thrust(self.recover_reverse_thrust, self.recover_reverse_thrust)
+                    return
+                self.avoid_mode = 'turn'
+                self.avoid_start_time = now_s
+            if self.avoid_mode == 'turn':
+                clear_dist = self.obstacle_stop_dist + self.avoid_clear_margin
+                time_in_turn = now_s - self.avoid_start_time
+                if (front_min is None or front_min > clear_dist) or (time_in_turn > self.avoid_max_turn_time):
+                    self.avoid_mode = ''
+                    self.avoid_start_time = 0.0
+                else:
+                    turn_cmd = self.avoid_turn_thrust * self.avoid_turn_dir
+                    self.publish_thrust(-turn_cmd, turn_cmd)
+                    return
 
         if front_min is not None:
+            # Inflate obstacles by hull radius for clearance
+            front_min_eff = max(0.0, front_min - self.hull_radius)
+            left_min_eff = max(0.0, left_min - self.hull_radius) if left_min is not None else None
+            right_min_eff = max(0.0, right_min - self.hull_radius) if right_min is not None else None
+
             # Hard avoidance: too close, turn in place
-            if front_min < self.obstacle_stop_dist:
-                if left_min is not None and right_min is not None:
-                    turn_dir = 1.0 if left_min > right_min else -1.0
-                elif left_min is not None:
+            if front_min_eff < self.obstacle_stop_dist:
+                if left_min_eff is not None and right_min_eff is not None:
+                    turn_dir = 1.0 if left_min_eff > right_min_eff else -1.0
+                elif left_min_eff is not None:
                     turn_dir = 1.0
-                elif right_min is not None:
+                elif right_min_eff is not None:
                     turn_dir = -1.0
                 else:
                     turn_dir = 1.0   # Default turn left without side info
 
-                self.avoid_mode = 'turn'
+                self.avoid_mode = 'reverse'
                 self.avoid_start_time = now_s
                 self.avoid_turn_dir = turn_dir
 
-                left_cmd = -turn_dir * self.avoid_turn_thrust
-                right_cmd = turn_dir * self.avoid_turn_thrust
+                left_cmd = self.recover_reverse_thrust
+                right_cmd = self.recover_reverse_thrust
 
                 self.get_logger().info(
                     f'EMERGENCY AVOID: obstacle at {front_min:.1f} m, '
-                    f'turning {"left" if turn_dir > 0 else "right"}.'
+                    f'reversing then turning {"left" if turn_dir > 0 else "right"}.'
                 )
 
             # Soft avoidance: slow down, then bias
-            elif front_min < self.obstacle_slow_dist:
+            elif front_min_eff < self.obstacle_slow_dist:
                 denom = max(self.obstacle_slow_dist - self.obstacle_stop_dist, 0.1)
-                scale = (front_min - self.obstacle_stop_dist) / denom
+                scale = (front_min_eff - self.obstacle_stop_dist) / denom
                 scale = max(0.2, min(1.0, scale))
 
                 left_cmd *= scale
                 right_cmd *= scale
 
                 diff_bias = 0.0
-                if left_min is not None and right_min is not None:
-                    norm = max(max(left_min, right_min), 1e-3)
-                    diff_bias = (right_min - left_min) / norm * self.avoid_diff_gain
-                elif left_min is not None:
+                if left_min_eff is not None and right_min_eff is not None:
+                    norm = max(max(left_min_eff, right_min_eff), 1e-3)
+                    diff_bias = (right_min_eff - left_min_eff) / norm * self.avoid_diff_gain
+                elif left_min_eff is not None:
                     diff_bias = 0.5 * self.avoid_diff_gain
-                elif right_min is not None:
+                elif right_min_eff is not None:
                     diff_bias = -0.5 * self.avoid_diff_gain
 
                 left_cmd -= diff_bias

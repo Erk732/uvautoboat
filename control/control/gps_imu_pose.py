@@ -16,7 +16,7 @@ from rclpy.time import Time
 
 from geometry_msgs.msg import PoseStamped, TransformStamped
 from sensor_msgs.msg import Imu, NavSatFix
-from tf2_ros import TransformBroadcaster
+from tf2_ros import TransformBroadcaster, Buffer, TransformListener, LookupException, ExtrapolationException
 
 
 def yaw_from_quaternion(q) -> float:
@@ -44,9 +44,13 @@ class GpsImuPose(Node):
         self.declare_parameter('imu_topic', '/wamv/sensors/imu/imu/data')
         self.declare_parameter('pose_topic', '/wamv/pose')
         self.declare_parameter('frame_id', 'world')
-        # VRX 默认 TF 名称为 wamv/wamv/base_link
+        # Default TF frame in VRX is wamv/wamv/base_link
         self.declare_parameter('base_link_frame', 'wamv/wamv/base_link')
         self.declare_parameter('publish_rate', 10.0)
+        # Use TF directly to publish world pose (ignores GPS/IMU relative origin)
+        self.declare_parameter('use_tf_pose', False)
+        self.declare_parameter('tf_target_frame', 'world')
+        self.declare_parameter('tf_source_frame', 'wamv/wamv/base_link')
 
         gps_topic = str(self.get_parameter('gps_topic').value)
         imu_topic = str(self.get_parameter('imu_topic').value)
@@ -54,23 +58,36 @@ class GpsImuPose(Node):
         self.frame_id = str(self.get_parameter('frame_id').value)
         self.base_link_frame = str(self.get_parameter('base_link_frame').value)
         publish_rate = float(self.get_parameter('publish_rate').value)
+        self.use_tf_pose = bool(self.get_parameter('use_tf_pose').value)
+        self.tf_target_frame = str(self.get_parameter('tf_target_frame').value)
+        self.tf_source_frame = str(self.get_parameter('tf_source_frame').value)
 
         self.origin: Optional[Tuple[float, float]] = None
         self.latest_gps: Optional[NavSatFix] = None
         self.latest_imu: Optional[Imu] = None
 
         self.pose_pub = self.create_publisher(PoseStamped, pose_topic, 10)
-        self.create_subscription(NavSatFix, gps_topic, self.gps_callback, 10)
-        self.create_subscription(Imu, imu_topic, self.imu_callback, 10)
 
-        self.tf_broadcaster = TransformBroadcaster(self)
+        if not self.use_tf_pose:
+            self.create_subscription(NavSatFix, gps_topic, self.gps_callback, 10)
+            self.create_subscription(Imu, imu_topic, self.imu_callback, 10)
+            self.tf_broadcaster = TransformBroadcaster(self)
+        else:
+            self.tf_broadcaster = None
+            self.tf_buffer = Buffer()
+            self.tf_listener = TransformListener(self.tf_buffer, self)
 
         dt = 1.0 / max(publish_rate, 1.0)
         self.create_timer(dt, self.publish_pose)
 
-        self.get_logger().info(
-            f'GPS->Pose bridge started. gps={gps_topic}, imu={imu_topic}, output={pose_topic}, frame={self.frame_id}'
-        )
+        if self.use_tf_pose:
+            self.get_logger().info(
+                f'TF->Pose bridge started. source={self.tf_source_frame}, target={self.tf_target_frame}, output={pose_topic}'
+            )
+        else:
+            self.get_logger().info(
+                f'GPS->Pose bridge started. gps={gps_topic}, imu={imu_topic}, output={pose_topic}, frame={self.frame_id}'
+            )
 
     def gps_callback(self, msg: NavSatFix) -> None:
         if self.origin is None:
@@ -84,6 +101,25 @@ class GpsImuPose(Node):
         self.latest_imu = msg
 
     def publish_pose(self) -> None:
+        if self.use_tf_pose:
+            try:
+                tf = self.tf_buffer.lookup_transform(
+                    self.tf_target_frame,
+                    self.tf_source_frame,
+                    rclpy.time.Time())
+            except (LookupException, ExtrapolationException):
+                return
+
+            pose = PoseStamped()
+            pose.header = tf.header
+            pose.header.frame_id = self.tf_target_frame
+            pose.pose.position.x = tf.transform.translation.x
+            pose.pose.position.y = tf.transform.translation.y
+            pose.pose.position.z = tf.transform.translation.z
+            pose.pose.orientation = tf.transform.rotation
+            self.pose_pub.publish(pose)
+            return
+
         if self.latest_gps is None or self.latest_imu is None or self.origin is None:
             return
 
@@ -106,14 +142,15 @@ class GpsImuPose(Node):
         self.pose_pub.publish(pose)
 
         # Broadcast TF world -> base_link for visualization and consumers needing TF
-        tf_msg = TransformStamped()
-        tf_msg.header = pose.header
-        tf_msg.child_frame_id = self.base_link_frame
-        tf_msg.transform.translation.x = pose.pose.position.x
-        tf_msg.transform.translation.y = pose.pose.position.y
-        tf_msg.transform.translation.z = 0.0
-        tf_msg.transform.rotation = pose.pose.orientation
-        self.tf_broadcaster.sendTransform(tf_msg)
+        if self.tf_broadcaster:
+            tf_msg = TransformStamped()
+            tf_msg.header = pose.header
+            tf_msg.child_frame_id = self.base_link_frame
+            tf_msg.transform.translation.x = pose.pose.position.x
+            tf_msg.transform.translation.y = pose.pose.position.y
+            tf_msg.transform.translation.z = 0.0
+            tf_msg.transform.rotation = pose.pose.orientation
+            self.tf_broadcaster.sendTransform(tf_msg)
 
 
 def main(args=None):

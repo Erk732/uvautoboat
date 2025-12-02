@@ -13,6 +13,7 @@ setup(
         ('share/' + package_name + '/launch', [
             'launch/simple_controller.launch.py',
             'launch/path_follower.launch.py',
+            'launch/all_in_one_bringup.launch.py',
         ]),
     ],
     install_requires=['setuptools', 'tf2_ros'],
