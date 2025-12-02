@@ -2,66 +2,180 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
-from std_msgs.msg import Empty
-import math
-import threading
+from std_msgs.msg import Empty, String
+from sensor_msgs.msg import PointCloud2
 from rcl_interfaces.msg import SetParametersResult
+import json
+import threading
+import sys
+import time
+import math
+import struct
 
 class AtlantisPlanner(Node):
     def __init__(self):
         super().__init__('atlantis_planner')
 
         # --- PARAMETERS ---
-        # These can now be changed dynamically via command line or GUI
         self.declare_parameter('scan_length', 150.0)
-        self.declare_parameter('scan_width', 20.0)
+        self.declare_parameter('scan_width', 20.0) 
         self.declare_parameter('lanes', 4)
-        self.declare_parameter('frame_id', 'map') # Frame for RViz
+        self.declare_parameter('frame_id', 'map') 
 
-        # Publisher for the controller and RViz
+        # --- GEOFENCE PARAMETERS ---
+        self.declare_parameter('geo_min_x', -50.0)
+        self.declare_parameter('geo_max_x', 200.0)
+        self.declare_parameter('geo_min_y', -100.0)
+        self.declare_parameter('geo_max_y', 100.0)
+        
+        # --- OBSTACLE AVOIDANCE PARAMETERS ---
+        self.declare_parameter('planner_safe_dist', 10.0) # Keep waypoints 10m away from obstacles
+
+        # Publishers
         self.path_pub = self.create_publisher(Path, '/atlantis/path', 10)
-        
-        # Subscriber to trigger replanning (optional, e.g. from dashboard)
-        self.create_subscription(Empty, '/atlantis/replan', self.replan_callback, 10)
+        self.pub_waypoints = self.create_publisher(String, '/atlantis/waypoints', 10)
+        self.pub_config = self.create_publisher(String, '/atlantis/config', 10)
 
-        # Timer to publish path periodically (so RViz and Controller get it even if they start late)
-        self.create_timer(1.0, self.publish_path)
+        # Subscribers
+        self.create_subscription(Empty, '/atlantis/replan', self.replan_callback, 10)
         
-        # Add callback for parameter changes
+        # NEW: Listen to LIDAR to map obstacles
+        self.create_subscription(
+            PointCloud2, 
+            '/wamv/sensors/lidars/lidar_wamv_sensor/points', 
+            self.lidar_callback, 
+            10
+        )
+        
         self.add_on_set_parameters_callback(self.parameter_callback)
+
+        # Timers
+        self.create_timer(1.0, self.publish_path)
+        self.create_timer(1.0, self.publish_config)
 
         # State
         self.path_msg = Path()
-        self.ready_to_plan = False  # Wait for user input
+        self.waypoints = []
+        self.shutdown_flag = False
+        self.known_obstacles = [] # List of (x, y) tuples
         
-        self.get_logger().info("Atlantis Planner Started - Press ENTER to generate path")
+        # --- AUTO START ---
+        # Wait a moment for LIDAR to warm up before generating first path
+        threading.Timer(2.0, self.generate_lawnmower_path).start()
         
-        # Start thread waiting for user input
-        threading.Thread(target=self.wait_for_start, daemon=True).start()
+        # Start Input Thread
+        self.input_thread = threading.Thread(target=self.input_loop, daemon=True)
+        self.input_thread.start()
+        
+        self.get_logger().info("Atlantis Planner Started - Path Generated Automatically")
 
-    def wait_for_start(self):
-        input("Press ENTER to generate and publish path...") # could be change to any other input method
-        self.ready_to_plan = True
-        self.generate_lawnmower_path()
-        self.get_logger().info("Path generated! Controller will start driving.")
+    def input_loop(self):
+        time.sleep(1.0)
+        print("\n" + "="*40)
+        print("  ATLANTIS MISSION CONTROL")
+        print("  Type 'r' + ENTER -> Regenerate Lawnmower Path (Checks Obstacles)")
+        print("  Type 'b' + ENTER -> Return to Home Base (0,0)")
+        print("  [Ctrl+C]         -> STOP everything")
+        print("="*40 + "\n")
+
+        while rclpy.ok() and not self.shutdown_flag:
+            try:
+                user_input = input("Command (r/b) > ").strip().lower()
+                if user_input == 'b':
+                    self.generate_return_home_path()
+                elif user_input == 'r':
+                    self.generate_lawnmower_path()
+            except EOFError:
+                break
+            except Exception:
+                pass
+
+    def lidar_callback(self, msg):
+        """Builds a simple map of obstacles for the planner"""
+        # We only update this occasionally or if empty to save CPU
+        if len(self.known_obstacles) > 500: 
+            self.known_obstacles = [] # Reset occasionally to clear moving objects
+            
+        point_step = msg.point_step
+        data = msg.data
+        
+        # Sample points to find big obstacles (skip every 50 points to save CPU)
+        for i in range(0, len(data) - point_step, point_step * 50):
+            try:
+                x, y, z = struct.unpack_from('fff', data, i)
+                if math.isnan(x) or math.isinf(x): continue
+                
+                # We only care about obstacles that are somewhat close (within 50m) 
+                # but not TOO close (ignore self)
+                dist = math.sqrt(x*x + y*y)
+                if dist > 5.0 and dist < 50.0:
+                    # Convert to World Coordinates (Approximate, assuming planner is at 0,0 relative)
+                    # NOTE: Ideally this needs TF2, but for now we assume Lidar Frame ~ Map Frame
+                    # relative to start position if boat hasn't moved much.
+                    self.known_obstacles.append((x, y))
+            except:
+                continue
+
+    def is_point_safe(self, x, y):
+        """Checks if a point is too close to a known obstacle"""
+        safe_dist = self.get_parameter('planner_safe_dist').value
+        
+        for obs_x, obs_y in self.known_obstacles:
+            # Simple distance check
+            dist = math.sqrt((x - obs_x)**2 + (y - obs_y)**2)
+            if dist < safe_dist:
+                return False, obs_x, obs_y
+        return True, None, None
+
+    def adjust_point_for_obstacles(self, x, y):
+        """If point is unsafe, shifts it until it is safe"""
+        is_safe, obs_x, obs_y = self.is_point_safe(x, y)
+        
+        if not is_safe:
+            # Simple avoidance: Shift the point "Up" (positive Y) or "Down"
+            # This is a basic heuristic.
+            self.get_logger().warn(f"Waypoint ({x:.1f}, {y:.1f}) is unsafe! Adjusting...")
+            return x, y + 15.0 # Shift 15m away
+            
+        return x, y
 
     def parameter_callback(self, params):
         for param in params:
-            if param.name in ['scan_length', 'scan_width', 'lanes']:
+            if param.name in ['scan_length', 'scan_width', 'lanes', 'geo_max_x']:
                 self.get_logger().info(f"Parameter {param.name} changed to {param.value}")
-                # Update local variable (not strictly needed as we read from param in generate, 
-                # but good for safety if cached)
         
-        # Regenerate path immediately on parameter change
-        if self.ready_to_plan:
-            self.generate_lawnmower_path()
+        if len(self.waypoints) > 0 and len(self.waypoints) > 2:
+             self.generate_lawnmower_path()
         return SetParametersResult(successful=True)
 
     def replan_callback(self, msg):
-        """Handle replan request from dashboard or other sources"""
-        self.ready_to_plan = True  # Enable planning on remote trigger
         self.generate_lawnmower_path()
-        self.get_logger().info("Path regenerated via /atlantis/replan")
+
+    def apply_geofence(self, x, y):
+        min_x = self.get_parameter('geo_min_x').value
+        max_x = self.get_parameter('geo_max_x').value
+        min_y = self.get_parameter('geo_min_y').value
+        max_y = self.get_parameter('geo_max_y').value
+        safe_x = max(min_x, min(x, max_x))
+        safe_y = max(min_y, min(y, max_y))
+        return safe_x, safe_y
+
+    def generate_return_home_path(self):
+        frame_id = self.get_parameter('frame_id').value
+        self.path_msg = Path()
+        self.path_msg.header.frame_id = frame_id
+        self.path_msg.header.stamp = self.get_clock().now().to_msg()
+        self.waypoints = []
+
+        pose = PoseStamped()
+        pose.header = self.path_msg.header
+        pose.pose.position.x = 0.0
+        pose.pose.position.y = 0.0
+        self.path_msg.poses.append(pose)
+        self.waypoints.append((0.0, 0.0))
+
+        self.get_logger().info("GENERATED: Return to Home Path")
+        self.publish_path()
 
     def generate_lawnmower_path(self):
         scan_length = self.get_parameter('scan_length').value
@@ -72,60 +186,94 @@ class AtlantisPlanner(Node):
         self.path_msg = Path()
         self.path_msg.header.frame_id = frame_id
         self.path_msg.header.stamp = self.get_clock().now().to_msg()
+        self.waypoints = [] 
 
-        # Assuming Local Tangent Plane (Start is 0,0)
-        # Note: In the original code, you converted GPS to meters. 
-        # The planner should work in meters relative to start.
-        
         for i in range(lanes):
-            # Alternate direction
             if i % 2 == 0:
                 x_start = 0.0
                 x_end = scan_length
             else:
                 x_start = scan_length
                 x_end = 0.0
-
             y_pos = i * scan_width
 
-            # Create Pose for Start of Lane (optional, depending on granularity needed)
+            # 1. Apply Geofence
+            safe_start_x, safe_start_y = self.apply_geofence(x_start, y_pos)
+            safe_end_x, safe_end_y = self.apply_geofence(x_end, y_pos)
+            
+            # 2. Check Obstacles (NEW)
+            safe_start_x, safe_start_y = self.adjust_point_for_obstacles(safe_start_x, safe_start_y)
+            safe_end_x, safe_end_y = self.adjust_point_for_obstacles(safe_end_x, safe_end_y)
+
+            # Start of lane
             pose_start = PoseStamped()
             pose_start.header = self.path_msg.header
-            pose_start.pose.position.x = x_start
-            pose_start.pose.position.y = y_pos
+            pose_start.pose.position.x = safe_start_x
+            pose_start.pose.position.y = safe_start_y
             self.path_msg.poses.append(pose_start)
-
-            # Create Pose for End of Lane
+            
+            # End of lane
             pose_end = PoseStamped()
             pose_end.header = self.path_msg.header
-            pose_end.pose.position.x = x_end
-            pose_end.pose.position.y = y_pos
+            pose_end.pose.position.x = safe_end_x
+            pose_end.pose.position.y = safe_end_y
             self.path_msg.poses.append(pose_end)
+            
+            self.waypoints.append((safe_start_x, safe_start_y))
+            self.waypoints.append((safe_end_x, safe_end_y))
 
-            # Add transition to next lane if not last lane
             if i < lanes - 1:
                 next_y = (i + 1) * scan_width
+                safe_next_x, safe_next_y = self.apply_geofence(x_end, next_y)
+                # Check Obstacles for transition
+                safe_next_x, safe_next_y = self.adjust_point_for_obstacles(safe_next_x, safe_next_y)
+                
                 pose_trans = PoseStamped()
                 pose_trans.header = self.path_msg.header
-                pose_trans.pose.position.x = x_end
-                pose_trans.pose.position.y = next_y
+                pose_trans.pose.position.x = safe_next_x
+                pose_trans.pose.position.y = safe_next_y
                 self.path_msg.poses.append(pose_trans)
+                self.waypoints.append((safe_next_x, safe_next_y))
 
-        self.get_logger().info(f"Generated Path with {len(self.path_msg.poses)} waypoints")
+        self.get_logger().info(f"GENERATED: Mission Path ({len(self.waypoints)} points)")
         self.publish_path()
 
     def publish_path(self):
-        if not self.ready_to_plan:
-            return
         self.path_msg.header.stamp = self.get_clock().now().to_msg()
         self.path_pub.publish(self.path_msg)
+        waypoint_data = {'waypoints': [{'x': wp[0], 'y': wp[1]} for wp in self.waypoints]}
+        msg = String()
+        msg.data = json.dumps(waypoint_data)
+        self.pub_waypoints.publish(msg)
+
+    def publish_config(self):
+        config = {
+            'scan_length': self.get_parameter('scan_length').value,
+            'scan_width': self.get_parameter('scan_width').value,
+            'lanes': self.get_parameter('lanes').value
+        }
+        msg = String()
+        msg.data = json.dumps(config)
+        self.pub_config.publish(msg)
+        
+    def stop_all(self):
+        self.shutdown_flag = True
+        empty = Path()
+        empty.header.frame_id = self.get_parameter('frame_id').value
+        self.path_pub.publish(empty)
+        self.get_logger().warn("Planner stopping - Sent STOP command to controller")
 
 def main(args=None):
     rclpy.init(args=args)
     node = AtlantisPlanner()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.stop_all()
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
