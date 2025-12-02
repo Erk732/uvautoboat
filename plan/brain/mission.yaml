@@ -1,3 +1,4 @@
+#need to work on the manual entry of geoposition still
 pollutant_mission:
   target_pollutant: "trash"
   # search_area: polygon (list of lat,lon). Use at least 3 points (closed polygon not required)
