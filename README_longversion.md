@@ -1295,7 +1295,16 @@ df -h
 
 ```bash
 # Kill all Gazebo processes completely
-pkill -9 -f gazebo && pkill -9 -f gz && pkill -9 -f ruby
+pkill -9 -f "gz sim" && pkill -9 -f "gzserver" && pkill -9 -f "gzclient" && sleep 1 && echo "All Gazebo processes killed"
+
+pkill -9 -f "gz sim"; pkill -9 -f "parameter_bridge"; sleep 1; ps aux | grep -E "gz.*sim" | grep -v grep
+```
+
+Prevention - Always clean up before launching:
+
+```bash
+pkill -9 -f "gz sim"   # Kill Gazebo
+ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
 ```
 
 ```bash

@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Path
 from sensor_msgs.msg import NavSatFix, Imu, PointCloud2
-from std_msgs.msg import Float64, String
+from std_msgs.msg import Float64, String, Bool, Empty
 import math
 import struct
 import json
@@ -98,12 +98,20 @@ class AtlantisController(Node):
         self.total_distance = 0.0
         self.start_time = None
         self._last_log_time = self.get_clock().now()
+        
+        # Mission Control
+        self.mission_enabled = False
 
         # --- SUBSCRIBERS ---
         self.create_subscription(Path, '/atlantis/path', self.path_callback, 10)
         self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, 10)
         self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_callback, 10)
         self.create_subscription(PointCloud2, '/wamv/sensors/lidars/lidar_wamv_sensor/points', self.lidar_callback, rclpy.qos.qos_profile_sensor_data)
+        
+        # Mission control subscribers
+        self.create_subscription(Bool, '/atlantis/enable', self.enable_callback, 10)
+        self.create_subscription(Empty, '/atlantis/start', self.start_callback, 10)
+        self.create_subscription(Empty, '/atlantis/stop', self.stop_callback, 10)
 
         # --- PUBLISHERS ---
         self.pub_left = self.create_publisher(Float64, '/wamv/thrusters/left/thrust', 10)
@@ -118,6 +126,38 @@ class AtlantisController(Node):
         self.create_timer(0.5, self.publish_anti_stuck_status)
         
         self.get_logger().info("Atlantis Controller Ready - Waiting for GPS and Path...")
+
+    # =========================================
+    # MISSION CONTROL CALLBACKS
+    # =========================================
+    def enable_callback(self, msg):
+        """Enable or disable mission execution"""
+        self.mission_enabled = msg.data
+        if self.mission_enabled:
+            self.get_logger().info("Mission ENABLED")
+            if len(self.waypoints) > 0 and self.start_gps is not None:
+                self.state = "DRIVING"
+        else:
+            self.get_logger().info("Mission DISABLED - Stopping boat")
+            self.stop_boat()
+            self.state = "PAUSED"
+
+    def start_callback(self, msg):
+        """Start mission execution"""
+        self.mission_enabled = True
+        self.get_logger().info("Mission START command received")
+        if len(self.waypoints) > 0 and self.start_gps is not None:
+            self.state = "DRIVING"
+            self.start_time = self.get_clock().now()
+        else:
+            self.get_logger().warn("Cannot start: No waypoints or GPS not ready")
+
+    def stop_callback(self, msg):
+        """Stop mission execution"""
+        self.mission_enabled = False
+        self.stop_boat()
+        self.state = "PAUSED"
+        self.get_logger().info("Mission STOP command received")
 
     def path_callback(self, msg):
         """Receive path from Planner"""
@@ -274,6 +314,10 @@ class AtlantisController(Node):
         return y, x
 
     def control_loop(self):
+        # Check if mission is enabled
+        if not self.mission_enabled:
+            return
+            
         if self.state != "DRIVING" or self.current_gps is None or not self.waypoints:
             return
 
@@ -625,7 +669,8 @@ class AtlantisController(Node):
         self.get_logger().info("="*60)
 
     def publish_dashboard_status(self, curr_x, curr_y, target_x, target_y, dist):
-        state_key = "STUCK_ESCAPING" if self.escape_mode else \
+        state_key = "PAUSED" if not self.mission_enabled else \
+                    "STUCK_ESCAPING" if self.escape_mode else \
                     "OBSTACLE_AVOIDING" if self.avoidance_mode else \
                     "MISSION_COMPLETE" if self.state == "FINISHED" else \
                     "MOVING_TO_WAYPOINT" if self.state == "DRIVING" else self.state
@@ -633,9 +678,13 @@ class AtlantisController(Node):
         msg = String()
         msg.data = json.dumps({
             "state": state_key,
+            "mission_enabled": self.mission_enabled,
             "waypoint": self.current_wp_index + 1,
             "total_waypoints": len(self.waypoints),
-            "distance_to_waypoint": round(dist, 1)
+            "distance_to_waypoint": round(dist, 1),
+            "local_x": round(curr_x, 1),
+            "local_y": round(curr_y, 1),
+            "yaw_deg": round(math.degrees(self.current_yaw), 1)
         })
         self.pub_mission_status.publish(msg)
         
@@ -655,8 +704,12 @@ class AtlantisController(Node):
         msg.data = json.dumps({
             'is_stuck': self.is_stuck,
             'escape_mode': self.escape_mode,
+            'escape_phase': self.escape_phase,
+            'best_direction': self.best_escape_direction,
             'consecutive_attempts': self.consecutive_stuck_count,
-            'adaptive_duration': round(self.adaptive_escape_duration, 1)
+            'adaptive_duration': round(self.adaptive_escape_duration, 1),
+            'no_go_zones': len(self.no_go_zones),
+            'drift_magnitude': round(math.hypot(self.drift_vector[0], self.drift_vector[1]), 2)
         })
         self.pub_anti_stuck.publish(msg)
 

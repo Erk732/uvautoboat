@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atlantis Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>🚤 Atlantis Dashboard</h1>
+            </div>
+            <div class="header-right">
+                <div id="connection-status" class="status disconnected">Disconnected</div>
+                <button id="btn-connect" class="btn connect">Connect</button>
+            </div>
+        </header>
+
+        <div class="dashboard">
+            <!-- Mission Status Panel -->
+            <div class="panel">
+                <h2>📍 Mission Status</h2>
+                <div class="info-grid">
+                    <div class="info-item full-width">
+                        <span class="label">State:</span>
+                        <span id="mission-state" class="value badge idle">IDLE</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Waypoint:</span>
+                        <span id="current-waypoint" class="value">0 / 0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Distance:</span>
+                        <span id="distance-to-wp" class="value">-- m</span>
+                    </div>
+                </div>
+                <div class="button-row">
+                    <button id="btn-start" class="btn start">▶ Start</button>
+                    <button id="btn-stop" class="btn stop">⏹ Stop</button>
+                    <button id="btn-replan" class="btn secondary">🔄 Replan</button>
+                </div>
+            </div>
+
+            <!-- Position Panel -->
+            <div class="panel">
+                <h2>📐 Position</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="label">Local X:</span>
+                        <span id="local-x" class="value">0.0 m</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Local Y:</span>
+                        <span id="local-y" class="value">0.0 m</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Yaw:</span>
+                        <span id="local-yaw" class="value">0.0°</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">GPS:</span>
+                        <span id="gps-status" class="value">Waiting...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Obstacle Detection Panel -->
+            <div class="panel">
+                <h2>🛡️ Obstacle Detection</h2>
+                <div class="info-grid">
+                    <div class="info-item full-width">
+                        <span class="label">Status:</span>
+                        <span id="obstacle-badge" class="value badge clear">CLEAR</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Min Distance:</span>
+                        <span id="min-obstacle-dist" class="value">-- m</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Front:</span>
+                        <span id="sector-front" class="value">✓</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Left:</span>
+                        <span id="sector-left" class="value">✓</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Right:</span>
+                        <span id="sector-right" class="value">✓</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Thruster Output Panel -->
+            <div class="panel">
+                <h2>⚙️ Thruster Output</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="label">Left Thrust:</span>
+                        <span id="left-value" class="value">0 N</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Right Thrust:</span>
+                        <span id="right-value" class="value">0 N</span>
+                    </div>
+                </div>
+                <div class="thrust-bars">
+                    <div class="thrust-bar-container">
+                        <label>Left</label>
+                        <div class="thrust-bar">
+                            <div id="left-bar" class="thrust-fill"></div>
+                        </div>
+                    </div>
+                    <div class="thrust-bar-container">
+                        <label>Right</label>
+                        <div class="thrust-bar">
+                            <div id="right-bar" class="thrust-fill"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Anti-Stuck Panel -->
+            <div class="panel">
+                <h2>🔧 Anti-Stuck (SASS)</h2>
+                <div class="info-grid">
+                    <div class="info-item full-width">
+                        <span class="label">Status:</span>
+                        <span id="sass-badge" class="value badge clear">NORMAL</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Phase:</span>
+                        <span id="escape-phase" class="value">IDLE</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Direction:</span>
+                        <span id="escape-direction" class="value">--</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Attempts:</span>
+                        <span id="escape-attempts" class="value">0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">No-Go Zones:</span>
+                        <span id="no-go-zones" class="value">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration Panel -->
+            <div class="panel config-panel">
+                <h2>⚙️ Configuration</h2>
+                <div class="config-grid">
+                    <div class="config-section">
+                        <h3>Planner</h3>
+                        <div class="config-item">
+                            <label for="param-lanes">Lanes:</label>
+                            <input type="number" id="param-lanes" min="1" max="20" value="4">
+                        </div>
+                        <div class="config-item">
+                            <label for="param-scan-length">Length (m):</label>
+                            <input type="number" id="param-scan-length" min="10" max="500" step="10" value="150">
+                        </div>
+                        <div class="config-item">
+                            <label for="param-scan-width">Width (m):</label>
+                            <input type="number" id="param-scan-width" min="5" max="100" step="5" value="20">
+                        </div>
+                    </div>
+                    <div class="config-section">
+                        <h3>PID Control</h3>
+                        <div class="config-item">
+                            <label for="param-kp">Kp:</label>
+                            <input type="number" id="param-kp" min="0" max="1000" step="10" value="400">
+                        </div>
+                        <div class="config-item">
+                            <label for="param-ki">Ki:</label>
+                            <input type="number" id="param-ki" min="0" max="100" step="1" value="20">
+                        </div>
+                        <div class="config-item">
+                            <label for="param-kd">Kd:</label>
+                            <input type="number" id="param-kd" min="0" max="500" step="5" value="100">
+                        </div>
+                    </div>
+                    <div class="config-section">
+                        <h3>Speed</h3>
+                        <div class="config-item">
+                            <label for="param-base-speed">Base (N):</label>
+                            <input type="number" id="param-base-speed" min="100" max="1000" step="50" value="500">
+                        </div>
+                        <div class="config-item">
+                            <label for="param-max-speed">Max (N):</label>
+                            <input type="number" id="param-max-speed" min="100" max="1000" step="50" value="800">
+                        </div>
+                        <div class="config-item">
+                            <label for="param-safe-dist">Safe Dist (m):</label>
+                            <input type="number" id="param-safe-dist" min="5" max="30" step="1" value="15">
+                        </div>
+                    </div>
+                </div>
+                <div class="config-buttons">
+                    <button id="btn-apply-planner" class="btn apply">Apply Planner</button>
+                    <button id="btn-apply-controller" class="btn apply">Apply Controller</button>
+                </div>
+            </div>
+
+            <!-- Map Panel -->
+            <div class="panel map-panel">
+                <h2>🗺️ Navigation Map</h2>
+                <div class="map-legend">
+                    <span class="legend-item"><span class="legend-color boat"></span> Boat</span>
+                    <span class="legend-item"><span class="legend-color waypoint"></span> Waypoint</span>
+                    <span class="legend-item"><span class="legend-color current-wp"></span> Current</span>
+                    <span class="legend-item"><span class="legend-color path"></span> Path</span>
+                </div>
+                <div id="map"></div>
+            </div>
+
+            <!-- System Log Panel -->
+            <div class="panel logs-panel">
+                <h2>📋 System Log</h2>
+                <div class="log-header">
+                    <label class="auto-scroll-label">
+                        <input type="checkbox" id="auto-scroll" checked>
+                        Auto-scroll
+                    </label>
+                    <button id="btn-clear-log" class="btn small">Clear</button>
+                </div>
+                <div id="log-output" class="log-container">
+                    <div class="log-entry info">[INFO] Atlantis Dashboard ready. Connect to ROS bridge.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

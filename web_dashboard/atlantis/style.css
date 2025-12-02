@@ -1,0 +1,421 @@
+/* Atlantis Dashboard - Vostok1-like Style */
+
+/* ========== FONTS ========== */
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@300;400;500;600&display=swap');
+
+/* ========== CSS VARIABLES ========== */
+:root {
+    --bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --panel-bg: #ffffff;
+    --text: #333333;
+    --accent: #667eea;
+    --accent-2: #764ba2;
+    --success: #4caf50;
+    --warning: #ff9800;
+    --danger: #f44336;
+    --font: 'Roboto Condensed', 'Segoe UI', sans-serif;
+}
+
+/* ========== BASE ========== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+/* ========== HEADER ========== */
+header {
+    background: white;
+    padding: 15px 25px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header-left h1 {
+    color: var(--accent);
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+/* ========== CONNECTION STATUS ========== */
+.status {
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.status.connected {
+    background: var(--success);
+    color: white;
+}
+
+.status.disconnected {
+    background: var(--danger);
+    color: white;
+}
+
+/* ========== DASHBOARD GRID ========== */
+.dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 20px;
+}
+
+/* ========== PANELS ========== */
+.panel {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.panel h2 {
+    color: var(--accent);
+    font-size: 16px;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.panel h3 {
+    color: var(--accent-2);
+    font-size: 13px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
+
+.map-panel {
+    grid-column: span 2;
+}
+
+.logs-panel {
+    grid-column: span 2;
+}
+
+.config-panel {
+    grid-column: span 2;
+}
+
+/* ========== INFO GRID ========== */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #f5f5f5;
+    border-radius: 6px;
+}
+
+.info-item.full-width {
+    grid-column: span 2;
+}
+
+.info-item .label {
+    font-size: 13px;
+    color: #666;
+}
+
+.info-item .value {
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+}
+
+/* ========== BADGES ========== */
+.badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.badge.idle { background: #9e9e9e; color: white; }
+.badge.driving, .badge.active { background: var(--success); color: white; }
+.badge.avoiding { background: var(--warning); color: white; }
+.badge.stuck, .badge.escaping { background: var(--danger); color: white; animation: pulse 1s infinite; }
+.badge.finished { background: var(--accent); color: white; }
+.badge.clear { background: var(--success); color: white; }
+.badge.warning { background: var(--warning); color: white; }
+.badge.danger { background: var(--danger); color: white; }
+.badge.paused { background: #ff9800; color: white; }
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* ========== BUTTONS ========== */
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.btn.connect {
+    background: var(--success);
+    color: white;
+}
+
+.btn.start {
+    background: var(--success);
+    color: white;
+}
+
+.btn.stop {
+    background: var(--danger);
+    color: white;
+}
+
+.btn.secondary {
+    background: #e0e0e0;
+    color: #333;
+}
+
+.btn.apply {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: white;
+}
+
+.btn.small {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.button-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+/* ========== THRUST BARS ========== */
+.thrust-bars {
+    margin-top: 15px;
+}
+
+.thrust-bar-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.thrust-bar-container label {
+    width: 50px;
+    font-size: 13px;
+    color: #666;
+}
+
+.thrust-bar {
+    flex: 1;
+    height: 20px;
+    background: #e0e0e0;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+.thrust-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    border-radius: 10px;
+    width: 50%;
+    position: absolute;
+    left: 50%;
+    transition: all 0.1s ease;
+}
+
+.thrust-fill.forward {
+    background: var(--success);
+    left: 50%;
+}
+
+.thrust-fill.reverse {
+    background: var(--danger);
+    right: 50%;
+    left: auto;
+}
+
+/* ========== CONFIG GRID ========== */
+.config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.config-section {
+    background: #f9f9f9;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.config-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.config-item label {
+    font-size: 13px;
+    color: #666;
+}
+
+.config-item input {
+    width: 80px;
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    text-align: center;
+}
+
+.config-item input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.config-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+/* ========== MAP ========== */
+#map {
+    height: 400px;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+.map-legend {
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+    color: #666;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.legend-color.boat { background: var(--accent); }
+.legend-color.waypoint { background: var(--accent-2); }
+.legend-color.current-wp { background: var(--warning); }
+.legend-color.path { background: var(--accent); height: 3px; width: 20px; border-radius: 2px; }
+
+/* ========== LOG PANEL ========== */
+.log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.auto-scroll-label {
+    font-size: 13px;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.log-container {
+    background: #1e293b;
+    border-radius: 8px;
+    padding: 15px;
+    height: 150px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
+
+.log-entry {
+    padding: 3px 0;
+    color: #94a3b8;
+}
+
+.log-entry.info { color: #06b6d4; }
+.log-entry.warn { color: #f59e0b; }
+.log-entry.error { color: #ef4444; }
+.log-entry.success { color: #22c55e; }
+
+/* ========== SCROLLBAR ========== */
+.log-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.log-container::-webkit-scrollbar-track {
+    background: #0f172a;
+}
+
+.log-container::-webkit-scrollbar-thumb {
+    background: #475569;
+    border-radius: 4px;
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+    .dashboard {
+        grid-template-columns: 1fr;
+    }
+    
+    .map-panel, .logs-panel, .config-panel {
+        grid-column: span 1;
+    }
+    
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .info-item.full-width {
+        grid-column: span 1;
+    }
+}

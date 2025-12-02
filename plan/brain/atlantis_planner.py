@@ -58,8 +58,10 @@ class AtlantisPlanner(Node):
         return SetParametersResult(successful=True)
 
     def replan_callback(self, msg):
-        if self.ready_to_plan:
-            self.generate_lawnmower_path()
+        """Handle replan request from dashboard or other sources"""
+        self.ready_to_plan = True  # Enable planning on remote trigger
+        self.generate_lawnmower_path()
+        self.get_logger().info("Path regenerated via /atlantis/replan")
 
     def generate_lawnmower_path(self):
         scan_length = self.get_parameter('scan_length').value
