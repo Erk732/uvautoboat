@@ -14,9 +14,16 @@ class AtlantisPlanner(Node):
 
         # --- PARAMETERS ---
         self.declare_parameter('scan_length', 150.0)
-        self.declare_parameter('scan_width', 20.0) 
-        self.declare_parameter('lanes', 4)
+        self.declare_parameter('scan_width', 50.0) 
+        self.declare_parameter('lanes', 8)
         self.declare_parameter('frame_id', 'map') 
+
+        # --- GEOFENCE PARAMETERS (Added these) ---
+        # Safe box: -50m behind to 200m forward, and 100m wide left/right
+        self.declare_parameter('geo_min_x', -50.0)
+        self.declare_parameter('geo_max_x', 200.0)
+        self.declare_parameter('geo_min_y', -100.0)
+        self.declare_parameter('geo_max_y', 100.0)
 
         # Publishers
         self.path_pub = self.create_publisher(Path, '/atlantis/path', 10)
@@ -41,7 +48,7 @@ class AtlantisPlanner(Node):
         self.input_thread = threading.Thread(target=self.input_loop, daemon=True)
         self.input_thread.start()
         
-        self.get_logger().info("Atlantis Planner Started")
+        self.get_logger().info("Atlantis Planner Started with Geofence Protection")
 
     def input_loop(self):
         """Interactive command loop"""
@@ -67,7 +74,7 @@ class AtlantisPlanner(Node):
 
     def parameter_callback(self, params):
         for param in params:
-            if param.name in ['scan_length', 'scan_width', 'lanes']:
+            if param.name in ['scan_length', 'scan_width', 'lanes', 'geo_max_x']:
                 self.get_logger().info(f"Parameter {param.name} changed to {param.value}")
         
         # Only regenerate if we already have a path
@@ -77,6 +84,21 @@ class AtlantisPlanner(Node):
 
     def replan_callback(self, msg):
         self.generate_lawnmower_path()
+
+    # --- ADDED THIS MISSING FUNCTION ---
+    def apply_geofence(self, x, y):
+        """Clamps the coordinate to stay inside the Safe Box"""
+        min_x = self.get_parameter('geo_min_x').value
+        max_x = self.get_parameter('geo_max_x').value
+        min_y = self.get_parameter('geo_min_y').value
+        max_y = self.get_parameter('geo_max_y').value
+
+        # Clamp X
+        safe_x = max(min_x, min(x, max_x))
+        # Clamp Y
+        safe_y = max(min_y, min(y, max_y))
+            
+        return safe_x, safe_y
 
     def generate_return_home_path(self):
         """Generates a simple path back to (0,0)"""
@@ -118,32 +140,42 @@ class AtlantisPlanner(Node):
                 x_end = 0.0
             y_pos = i * scan_width
 
-            # Start of lane
+            # --- APPLY GEOFENCE ---
+            # We calculate the ideal points first, then clamp them
+            safe_start_x, safe_start_y = self.apply_geofence(x_start, y_pos)
+            safe_end_x, safe_end_y = self.apply_geofence(x_end, y_pos)
+            # ----------------------
+
+            # Start of lane (FIXED: Uses safe_start variables now)
             pose_start = PoseStamped()
             pose_start.header = self.path_msg.header
-            pose_start.pose.position.x = x_start
-            pose_start.pose.position.y = y_pos
+            pose_start.pose.position.x = safe_start_x
+            pose_start.pose.position.y = safe_start_y
             self.path_msg.poses.append(pose_start)
             
-            # End of lane
+            # End of lane (FIXED: Uses safe_end variables now)
             pose_end = PoseStamped()
             pose_end.header = self.path_msg.header
-            pose_end.pose.position.x = x_end
-            pose_end.pose.position.y = y_pos
+            pose_end.pose.position.x = safe_end_x
+            pose_end.pose.position.y = safe_end_y
             self.path_msg.poses.append(pose_end)
             
-            self.waypoints.append((x_start, y_pos))
-            self.waypoints.append((x_end, y_pos))
+            self.waypoints.append((safe_start_x, safe_start_y))
+            self.waypoints.append((safe_end_x, safe_end_y))
 
-            # Transition
+            # Transition to next lane
             if i < lanes - 1:
                 next_y = (i + 1) * scan_width
+                
+                # Geofence the transition point too
+                safe_next_x, safe_next_y = self.apply_geofence(x_end, next_y)
+                
                 pose_trans = PoseStamped()
                 pose_trans.header = self.path_msg.header
-                pose_trans.pose.position.x = x_end
-                pose_trans.pose.position.y = next_y
+                pose_trans.pose.position.x = safe_next_x
+                pose_trans.pose.position.y = safe_next_y
                 self.path_msg.poses.append(pose_trans)
-                self.waypoints.append((x_end, next_y))
+                self.waypoints.append((safe_next_x, safe_next_y))
 
         self.get_logger().info(f"GENERATED: Mission Path ({len(self.waypoints)} points)")
         self.publish_path()
