@@ -211,18 +211,38 @@
             <!-- Map Panel -->
             <div class="panel map-panel">
                 <h2>🗺️ Navigation Map</h2>
-                <div class="map-legend">
-                    <span class="legend-item"><span class="legend-color boat"></span> Boat</span>
-                    <span class="legend-item"><span class="legend-color waypoint"></span> Waypoint</span>
-                    <span class="legend-item"><span class="legend-color current-wp"></span> Current</span>
-                    <span class="legend-item"><span class="legend-color path"></span> Path</span>
+                <div class="map-header">
+                    <div class="map-legend">
+                        <span class="legend-item"><span class="legend-color boat"></span> Boat</span>
+                        <span class="legend-item"><span class="legend-color waypoint"></span> Waypoint</span>
+                        <span class="legend-item"><span class="legend-color current-wp"></span> Current</span>
+                        <span class="legend-item"><span class="legend-color path"></span> Path</span>
+                    </div>
+                    <div class="map-controls">
+                        <span id="waypoint-info" class="waypoint-info">No waypoints</span>
+                    </div>
                 </div>
                 <div id="map"></div>
             </div>
 
+            <!-- Terminal Output Panel -->
+            <div class="panel terminal-panel">
+                <h2>💻 Terminal Output</h2>
+                <div class="terminal-header">
+                    <label class="auto-scroll-label">
+                        <input type="checkbox" id="terminal-auto-scroll" checked>
+                        Auto-scroll
+                    </label>
+                    <button id="btn-clear-terminal" class="btn small">Clear</button>
+                </div>
+                <div id="terminal-output" class="terminal-container">
+                    <div class="terminal-line system">[SYSTEM] Atlantis Terminal ready.</div>
+                </div>
+            </div>
+
             <!-- System Log Panel -->
             <div class="panel logs-panel">
-                <h2>📋 System Log</h2>
+                <h2>📋 Dashboard Log</h2>
                 <div class="log-header">
                     <label class="auto-scroll-label">
                         <input type="checkbox" id="auto-scroll" checked>

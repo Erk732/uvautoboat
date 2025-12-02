@@ -113,7 +113,7 @@ header {
 }
 
 .logs-panel {
-    grid-column: span 2;
+    grid-column: span 1;
 }
 
 .config-panel {
@@ -327,11 +327,33 @@ header {
     margin-top: 10px;
 }
 
+.map-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
 .map-legend {
     display: flex;
     gap: 20px;
     font-size: 12px;
     color: #666;
+}
+
+.map-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.waypoint-info {
+    font-size: 12px;
+    color: #666;
+    padding: 4px 8px;
+    background: #f0f0f0;
+    border-radius: 4px;
 }
 
 .legend-item {
@@ -350,6 +372,114 @@ header {
 .legend-color.waypoint { background: var(--accent-2); }
 .legend-color.current-wp { background: var(--warning); }
 .legend-color.path { background: var(--accent); height: 3px; width: 20px; border-radius: 2px; }
+
+/* Follow Boat Control - added via Leaflet */
+.follow-boat-control {
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    overflow: hidden;
+}
+
+.follow-boat-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    border: none;
+    background: white;
+    transition: background 0.2s;
+}
+
+.follow-boat-btn:hover {
+    background: #f0f0f0;
+}
+
+.follow-boat-btn.active {
+    background: var(--accent);
+    color: white;
+}
+
+/* Waypoint markers */
+.waypoint-marker {
+    background: transparent;
+}
+
+.waypoint-tooltip {
+    font-size: 12px;
+    line-height: 1.4;
+    padding: 2px;
+}
+
+.waypoint-tooltip hr {
+    margin: 4px 0;
+    border: none;
+    border-top: 1px solid #ddd;
+}
+
+/* ========== TERMINAL PANEL ========== */
+.terminal-panel {
+    grid-column: span 1;
+}
+
+.terminal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.terminal-container {
+    background: #0f172a;
+    border-radius: 8px;
+    padding: 15px;
+    height: 200px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
+
+.terminal-line {
+    padding: 2px 0;
+    color: #94a3b8;
+}
+
+.terminal-line .timestamp {
+    color: #64748b;
+}
+
+.terminal-line .level {
+    font-weight: bold;
+    margin: 0 4px;
+}
+
+.terminal-line.info .level { color: #06b6d4; }
+.terminal-line.warn .level { color: #f59e0b; }
+.terminal-line.error .level { color: #ef4444; }
+.terminal-line.debug .level { color: #8b5cf6; }
+.terminal-line.system .level { color: #22c55e; }
+
+.terminal-line.info .message { color: #cbd5e1; }
+.terminal-line.warn .message { color: #fcd34d; }
+.terminal-line.error .message { color: #fca5a5; }
+.terminal-line.debug .message { color: #c4b5fd; }
+.terminal-line.system .message { color: #86efac; }
+
+.terminal-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.terminal-container::-webkit-scrollbar-track {
+    background: #0f172a;
+}
+
+.terminal-container::-webkit-scrollbar-thumb {
+    background: #475569;
+    border-radius: 4px;
+}
 
 /* ========== LOG PANEL ========== */
 .log-header {

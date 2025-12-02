@@ -17,6 +17,7 @@ let gpsSub = null;
 let leftThrustSub = null;
 let rightThrustSub = null;
 let pathSub = null;
+let rosoutSub = null;
 
 // Publishers
 let replanPub = null;
@@ -27,12 +28,17 @@ let stopPub = null;
 let boatPosition = { lat: 0, lon: 0 };
 let waypoints = [];
 let currentWpIndex = 0;
+let startPosition = { lat: null, lon: null };
 
 // Map
 let map = null;
 let boatMarker = null;
 let pathLine = null;
 let waypointMarkers = [];
+let currentWaypointMarker = null;
+let mapFollowBoat = true;  // Default to following boat
+let trajectoryLine = null;
+let trajectoryPoints = [];
 
 // ============================================
 // INITIALIZATION
@@ -40,6 +46,7 @@ let waypointMarkers = [];
 document.addEventListener('DOMContentLoaded', () => {
     initMap();
     initUI();
+    initTerminal();
     log('Dashboard ready. Click "Connect" to connect to ROS.', 'info');
 });
 
@@ -53,6 +60,39 @@ function initMap() {
         attribution: '© OpenStreetMap'
     }).addTo(map);
 
+    // Add Follow Boat Control
+    const FollowBoatControl = L.Control.extend({
+        options: { position: 'topright' },
+        onAdd: function(map) {
+            const container = L.DomUtil.create('div', 'follow-boat-control leaflet-bar');
+            const button = L.DomUtil.create('button', 'follow-boat-btn active', container);
+            button.innerHTML = '🎯';
+            button.title = 'Follow boat (click to toggle)';
+            
+            L.DomEvent.on(button, 'click', function(e) {
+                L.DomEvent.stopPropagation(e);
+                mapFollowBoat = !mapFollowBoat;
+                if (mapFollowBoat) {
+                    button.classList.add('active');
+                    button.innerHTML = '🎯';
+                    button.title = 'Following boat (click to unlock)';
+                    // Center on boat immediately
+                    if (boatPosition.lat && boatPosition.lon) {
+                        map.panTo([boatPosition.lat, boatPosition.lon]);
+                    }
+                } else {
+                    button.classList.remove('active');
+                    button.innerHTML = '🔓';
+                    button.title = 'Free movement (click to follow boat)';
+                }
+            });
+            
+            return container;
+        }
+    });
+    map.addControl(new FollowBoatControl());
+
+    // Boat marker with custom icon
     const boatIcon = L.divIcon({
         className: 'boat-marker',
         html: '<div style="font-size: 24px;">🚤</div>',
@@ -61,11 +101,19 @@ function initMap() {
     });
     boatMarker = L.marker([-33.724, 151.0], { icon: boatIcon }).addTo(map);
 
+    // Planned path line
     pathLine = L.polyline([], {
         color: '#667eea',
         weight: 3,
         opacity: 0.8,
         dashArray: '10, 5'
+    }).addTo(map);
+
+    // Trajectory line (actual path traveled)
+    trajectoryLine = L.polyline([], {
+        color: '#22c55e',
+        weight: 2,
+        opacity: 0.6
     }).addTo(map);
 }
 
@@ -77,6 +125,12 @@ function initUI() {
     document.getElementById('btn-apply-planner').addEventListener('click', applyPlannerParams);
     document.getElementById('btn-apply-controller').addEventListener('click', applyControllerParams);
     document.getElementById('btn-clear-log').addEventListener('click', clearLog);
+    document.getElementById('btn-clear-terminal').addEventListener('click', clearTerminal);
+}
+
+function initTerminal() {
+    // Terminal is already initialized via HTML
+    terminalLog('Terminal initialized. Connect to ROS to see node output.', 'system');
 }
 
 // ============================================
@@ -188,6 +242,25 @@ function setupSubscribers() {
         messageType: 'nav_msgs/Path'
     });
     pathSub.subscribe(handlePath);
+
+    // Subscribe to ROS logs (rosout) for terminal
+    rosoutSub = new ROSLIB.Topic({
+        ros: ros,
+        name: '/rosout',
+        messageType: 'rcl_interfaces/Log'
+    });
+    rosoutSub.subscribe((msg) => {
+        // Filter for atlantis node messages
+        if (msg.name && (
+            msg.name.includes('atlantis') ||
+            msg.name.includes('planner') ||
+            msg.name.includes('controller')
+        )) {
+            handleRosLog(msg);
+        }
+    });
+
+    terminalLog('Connected to ROS - receiving node output', 'system');
 }
 
 // ============================================
@@ -222,6 +295,13 @@ function handleMissionStatus(msg) {
         updateMissionState(data.state);
         document.getElementById('current-waypoint').textContent = `${data.waypoint} / ${data.total_waypoints}`;
         document.getElementById('distance-to-wp').textContent = `${data.distance_to_waypoint.toFixed(1)} m`;
+        
+        // Update current waypoint index for map display
+        const newWpIndex = data.waypoint - 1;  // Convert to 0-based index
+        if (newWpIndex !== currentWpIndex && waypoints.length > 0) {
+            currentWpIndex = newWpIndex;
+            displayWaypointsOnMap(waypoints);  // Refresh waypoint colors
+        }
         
         if (data.local_x !== undefined) {
             document.getElementById('local-x').textContent = `${data.local_x.toFixed(1)} m`;
@@ -287,18 +367,143 @@ function handleGPS(msg) {
     boatPosition.lat = msg.latitude;
     boatPosition.lon = msg.longitude;
     
+    // Store first GPS as start position
+    if (startPosition.lat === null) {
+        startPosition.lat = msg.latitude;
+        startPosition.lon = msg.longitude;
+    }
+    
     document.getElementById('gps-status').textContent = `${msg.latitude.toFixed(6)}, ${msg.longitude.toFixed(6)}`;
     
+    // Update boat marker
     boatMarker.setLatLng([msg.latitude, msg.longitude]);
+    
+    // Add to trajectory
+    trajectoryPoints.push([msg.latitude, msg.longitude]);
+    if (trajectoryPoints.length > 200) {
+        trajectoryPoints.shift();  // Keep last 200 points
+    }
+    trajectoryLine.setLatLngs(trajectoryPoints);
+    
+    // Center map on boat only if follow mode is enabled
+    if (mapFollowBoat) {
+        const center = map.getCenter();
+        const distance = map.distance(center, [msg.latitude, msg.longitude]);
+        if (distance > 30) {  // More than 30m from center
+            map.panTo([msg.latitude, msg.longitude]);
+        }
+    }
 }
 
 function handlePath(msg) {
+    // Clear existing waypoint markers
+    clearWaypointMarkers();
+    
     waypoints = msg.poses.map(p => ({
         x: p.pose.position.x,
         y: p.pose.position.y
     }));
     
     log(`Received path with ${waypoints.length} waypoints`, 'info');
+    terminalLog(`Path received: ${waypoints.length} waypoints`, 'info');
+    
+    // Update waypoint info display
+    document.getElementById('waypoint-info').textContent = `${waypoints.length} waypoints`;
+    
+    // Display waypoints on map if we have GPS reference
+    if (startPosition.lat !== null && waypoints.length > 0) {
+        displayWaypointsOnMap(waypoints);
+    }
+}
+
+function displayWaypointsOnMap(waypoints) {
+    // Clear existing markers
+    clearWaypointMarkers();
+    
+    if (!waypoints || waypoints.length === 0) return;
+    if (!startPosition.lat || !startPosition.lon) return;
+    
+    const pathCoords = [];
+    
+    waypoints.forEach((wp, idx) => {
+        // Convert local ENU to GPS
+        const gps = localToGPS(wp.x, wp.y, startPosition.lat, startPosition.lon);
+        pathCoords.push(gps);
+        
+        // Determine marker style based on waypoint status
+        const isCurrentTarget = idx === currentWpIndex;
+        const isPassed = idx < currentWpIndex;
+        
+        const markerColor = isPassed ? '#22c55e' : (isCurrentTarget ? '#f59e0b' : '#764ba2');
+        const markerSize = isCurrentTarget ? 14 : 10;
+        const statusText = isPassed ? '✓ Passed' : (isCurrentTarget ? '→ Current' : 'Pending');
+        
+        const icon = L.divIcon({
+            className: 'waypoint-marker',
+            html: `<div style="
+                background-color: ${markerColor};
+                width: ${markerSize}px;
+                height: ${markerSize}px;
+                border-radius: 50%;
+                border: 2px solid white;
+                box-shadow: 0 0 4px rgba(0,0,0,0.5);
+            "></div>`,
+            iconSize: [markerSize, markerSize],
+            iconAnchor: [markerSize/2, markerSize/2]
+        });
+        
+        const tooltipContent = `
+            <div class="waypoint-tooltip">
+                <strong>Waypoint ${idx + 1}/${waypoints.length}</strong><br>
+                <span style="color: ${markerColor}">${statusText}</span>
+                <hr>
+                <b>Local:</b> (${wp.x.toFixed(1)}, ${wp.y.toFixed(1)}) m<br>
+                <b>GPS:</b> ${gps[0].toFixed(6)}°, ${gps[1].toFixed(6)}°
+            </div>
+        `;
+        
+        const marker = L.marker(gps, { icon: icon })
+            .bindTooltip(tooltipContent, {
+                permanent: false,
+                direction: 'top',
+                offset: [0, -10]
+            })
+            .addTo(map);
+        
+        waypointMarkers.push(marker);
+    });
+    
+    // Update path line
+    pathLine.setLatLngs(pathCoords);
+    
+    // Fit map to show all waypoints (only first time)
+    if (pathCoords.length > 0 && !mapFollowBoat) {
+        const bounds = L.latLngBounds(pathCoords);
+        if (boatPosition.lat) {
+            bounds.extend([boatPosition.lat, boatPosition.lon]);
+        }
+        map.fitBounds(bounds, { padding: [50, 50] });
+    }
+}
+
+function clearWaypointMarkers() {
+    waypointMarkers.forEach(marker => map.removeLayer(marker));
+    waypointMarkers = [];
+}
+
+// Convert local ENU coordinates to GPS
+function localToGPS(x, y, refLat, refLon) {
+    const R = 6371000.0;  // Earth radius in meters
+    const refLatRad = refLat * Math.PI / 180;
+    
+    // x = East, y = North
+    const dLat = y / R;
+    const dLon = x / (R * Math.cos(refLatRad));
+    
+    const lat = refLat + dLat * 180 / Math.PI;
+    const lon = refLon + dLon * 180 / Math.PI;
+    
+    return [lat, lon];
 }
 
 function updateMissionState(state) {
@@ -449,4 +654,69 @@ function log(message, level = 'info') {
 function clearLog() {
     const logContainer = document.getElementById('log-output');
     logContainer.innerHTML = '<div class="log-entry info">[INFO] Log cleared.</div>';
+}
+
+// ============================================
+// TERMINAL OUTPUT
+// ============================================
+function handleRosLog(msg) {
+    // ROS log levels: DEBUG=10, INFO=20, WARN=30, ERROR=40, FATAL=50
+    let level = 'info';
+    let levelText = 'INFO';
+    
+    if (msg.level >= 40) {
+        level = 'error';
+        levelText = 'ERROR';
+    } else if (msg.level >= 30) {
+        level = 'warn';
+        levelText = 'WARN';
+    } else if (msg.level <= 10) {
+        level = 'debug';
+        levelText = 'DEBUG';
+    }
+    
+    const terminal = document.getElementById('terminal-output');
+    const line = document.createElement('div');
+    line.className = `terminal-line ${level}`;
+    
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString('en-US', { hour12: false });
+    
+    line.innerHTML = `<span class="timestamp">[${timestamp}]</span> <span class="level">[${levelText}]</span> <span class="message">${msg.msg}</span>`;
+    terminal.appendChild(line);
+    
+    // Auto-scroll if enabled
+    const autoScroll = document.getElementById('terminal-auto-scroll');
+    if (autoScroll && autoScroll.checked) {
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+    
+    // Limit lines
+    while (terminal.children.length > 200) {
+        terminal.removeChild(terminal.firstChild);
+    }
+}
+
+function terminalLog(message, level = 'info') {
+    const terminal = document.getElementById('terminal-output');
+    const line = document.createElement('div');
+    line.className = `terminal-line ${level}`;
+    
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString('en-US', { hour12: false });
+    const levelText = level.toUpperCase();
+    
+    line.innerHTML = `<span class="timestamp">[${timestamp}]</span> <span class="level">[${levelText}]</span> <span class="message">${message}</span>`;
+    terminal.appendChild(line);
+    
+    // Auto-scroll if enabled
+    const autoScroll = document.getElementById('terminal-auto-scroll');
+    if (autoScroll && autoScroll.checked) {
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+}
+
+function clearTerminal() {
+    const terminal = document.getElementById('terminal-output');
+    terminal.innerHTML = '<div class="terminal-line system"><span class="level">[SYSTEM]</span> <span class="message">Terminal cleared.</span></div>';
 }
