@@ -43,14 +43,14 @@ class AllInOneStack(Node):
     """
     Integrated planner + controller + lidar avoidance for WAM-V.
 
-    使用的接口（全部是原项目里定义的那些）：
+    Interfaces:
 
-    Sub:
+    Subscriptions:
       - /wamv/pose                        geometry_msgs/PoseStamped
       - /planning/goal                    geometry_msgs/PoseStamped
-      - /wamv/sensors/lidars/lidar_wamv/scan  sensor_msgs/LaserScan  (VRX 默认激光雷达, 名字可改参数)
+      - /wamv/sensors/lidars/lidar_wamv/scan  sensor_msgs/LaserScan  (VRX default lidar; can be changed via params)
 
-    Pub:
+    Publications:
       - /planning/path                    nav_msgs/Path
       - /wamv/thrusters/left/thrust      std_msgs/Float64
       - /wamv/thrusters/right/thrust     std_msgs/Float64
@@ -59,39 +59,54 @@ class AllInOneStack(Node):
     def __init__(self):
         super().__init__('all_in_one_stack')
 
-        # ---------------- 参数 ----------------
-        # 基础前进推力
+        # ---------------- Parameters ----------------
+        # Base forward thrust
         self.declare_parameter('forward_thrust', 400.0)
-        # 航向 P 控制增益
+        # Heading P gain
         self.declare_parameter('kp_yaw', 600.0)
-        # waypoint 切换距离
+        # Waypoint switch distance
         self.declare_parameter('waypoint_tolerance', 3.0)
-        # 最终 goal 的停止距离
+        # Stop distance for final goal
         self.declare_parameter('goal_tolerance', 4.0)
-        # 控制频率
+        # Control frequency
         self.declare_parameter('control_rate', 20.0)
-        # 直线路径离散步长
+        # Straight path step length
         self.declare_parameter('path_step', 5.0)
-        # 接近目标时减速距离
+        # Slow-down distance near goal
         self.declare_parameter('approach_slow_dist', 10.0)
-        # 数据超时时间
+        # Forward thrust heading alignment threshold (deg)
+        self.declare_parameter('heading_align_thresh_deg', 20.0)
+        # Overshoot margin at final goal
+        self.declare_parameter('overshoot_margin', 1.0)
+        # Stuck detection (no progress toward goal)
+        self.declare_parameter('stuck_timeout', 8.0)
+        self.declare_parameter('stuck_progress_epsilon', 0.1)
+        # Recovery behavior when stuck
+        self.declare_parameter('recover_reverse_time', 3.0)
+        self.declare_parameter('recover_turn_time', 3.0)
+        self.declare_parameter('recover_reverse_thrust', -200.0)
+        # Lidar debug log interval (seconds); 0 disables
+        self.declare_parameter('lidar_log_interval', 2.0)
+        # Data timeouts
         self.declare_parameter('pose_timeout', 1.0)
         self.declare_parameter('scan_timeout', 1.0)
-        # 位姿话题，可替换为仿真/现实的发布名
+        # Pose topic (can be remapped for sim/real)
         self.declare_parameter('pose_topic', '/wamv/pose')
 
-        # Lidar 参数（可后面调）
-        # 默认 VRX 有两个 scan 话题，primary 使用 /wamv/sensors/lidars/lidar_wamv_sensor/scan，
-        # secondary 使用 /wamv/sensors/lidars/lidar_wamv/scan，自动双订阅取最新
+        # Lidar params
+        # VRX has two scan topics; primary uses /wamv/sensors/lidars/lidar_wamv_sensor/scan,
+        # secondary uses /wamv/sensors/lidars/lidar_wamv/scan; subscribe to both and use latest
         self.declare_parameter('lidar_topic', '/wamv/sensors/lidars/lidar_wamv_sensor/scan')
         self.declare_parameter('lidar_topic_alt', '/wamv/sensors/lidars/lidar_wamv/scan')
-        self.declare_parameter('front_angle_deg', 30.0)    # 正前方扇区角度
-        self.declare_parameter('side_angle_deg', 60.0)     # 左右侧扇区角度
-        self.declare_parameter('obstacle_slow_dist', 15.0) # 开始减速距离
-        self.declare_parameter('obstacle_stop_dist', 8.0)  # 硬避障距离
-        self.declare_parameter('avoid_turn_thrust', 350.0) # 原地转向推力
-        self.declare_parameter('avoid_diff_gain', 40.0)    # 左右距离偏差增益
-        # 规划避障参数
+        self.declare_parameter('front_angle_deg', 30.0)    # Front sector angle
+        self.declare_parameter('side_angle_deg', 60.0)     # Side sector angle
+        self.declare_parameter('obstacle_slow_dist', 15.0) # Slow-down distance
+        self.declare_parameter('obstacle_stop_dist', 8.0)  # Hard-stop distance
+        self.declare_parameter('avoid_turn_thrust', 350.0) # In-place turn thrust
+        self.declare_parameter('avoid_diff_gain', 40.0)    # Left/right bias gain
+        self.declare_parameter('avoid_clear_margin', 3.0)  # Clearance to exit hard avoid
+        self.declare_parameter('avoid_max_turn_time', 5.0) # Max time to stay in hard avoid
+        # Planning avoidance params
         self.declare_parameter('plan_avoid_margin', 5.0)
 
         self.forward_thrust = float(self.get_parameter('forward_thrust').value)
@@ -101,6 +116,14 @@ class AllInOneStack(Node):
         self.control_rate = float(self.get_parameter('control_rate').value)
         self.path_step = float(self.get_parameter('path_step').value)
         self.approach_slow_dist = float(self.get_parameter('approach_slow_dist').value)
+        self.heading_align_thresh = math.radians(float(self.get_parameter('heading_align_thresh_deg').value))
+        self.overshoot_margin = float(self.get_parameter('overshoot_margin').value)
+        self.stuck_timeout = float(self.get_parameter('stuck_timeout').value)
+        self.stuck_progress_epsilon = float(self.get_parameter('stuck_progress_epsilon').value)
+        self.recover_reverse_time = float(self.get_parameter('recover_reverse_time').value)
+        self.recover_turn_time = float(self.get_parameter('recover_turn_time').value)
+        self.recover_reverse_thrust = float(self.get_parameter('recover_reverse_thrust').value)
+        self.lidar_log_interval = float(self.get_parameter('lidar_log_interval').value)
 
         lidar_topic = str(self.get_parameter('lidar_topic').value)
         lidar_topic_alt = str(self.get_parameter('lidar_topic_alt').value)
@@ -110,23 +133,36 @@ class AllInOneStack(Node):
         self.obstacle_stop_dist = float(self.get_parameter('obstacle_stop_dist').value)
         self.avoid_turn_thrust = float(self.get_parameter('avoid_turn_thrust').value)
         self.avoid_diff_gain = float(self.get_parameter('avoid_diff_gain').value)
+        self.avoid_clear_margin = float(self.get_parameter('avoid_clear_margin').value)
+        self.avoid_max_turn_time = float(self.get_parameter('avoid_max_turn_time').value)
         self.plan_avoid_margin = float(self.get_parameter('plan_avoid_margin').value)
         self.pose_timeout = float(self.get_parameter('pose_timeout').value)
         self.scan_timeout = float(self.get_parameter('scan_timeout').value)
         pose_topic = str(self.get_parameter('pose_topic').value)
 
-        # 推进器饱和
+        # Thruster saturation
         self.thrust_min = -1000.0
         self.thrust_max = 1000.0
 
-        # ---------------- 内部状态 ----------------
+        # ---------------- Internal state ----------------
         self.current_pose: PoseStamped | None = None
         self.path: Path | None = None
         self.current_waypoint_idx: int = 0
-        self.active: bool = False      # 是否在跟踪路径
+        self.active: bool = False      # Whether tracking a path
         self.latest_scan: LaserScan | None = None
+        self.min_goal_dist: float = float('inf')
+        self.last_progress_time: float = 0.0
+        self.last_goal_dist: float = float('inf')
+        self.last_lidar_log_time: float = 0.0
+        self.recovering: bool = False
+        self.recover_phase: str = ''
+        self.recover_start_time: float = 0.0
+        self.recover_turn_dir: float = 1.0
+        self.avoid_mode: str = ''
+        self.avoid_start_time: float = 0.0
+        self.avoid_turn_dir: float = 1.0
 
-        # ---------------- Publisher ----------------
+        # ---------------- Publishers ----------------
         self.left_thruster_pub = self.create_publisher(
             Float64,
             '/wamv/thrusters/left/thrust',
@@ -143,7 +179,7 @@ class AllInOneStack(Node):
             10
         )
 
-        # ---------------- Subscriber ----------------
+        # ---------------- Subscribers ----------------
         self.pose_sub = self.create_subscription(
             PoseStamped,
             pose_topic,
@@ -172,7 +208,7 @@ class AllInOneStack(Node):
         else:
             self.scan_sub_alt = None
 
-        # ---------------- 定时控制循环 ----------------
+        # ---------------- Timer control loop ----------------
         dt = 1.0 / self.control_rate
         self.timer = self.create_timer(dt, self.control_loop)
 
@@ -183,7 +219,7 @@ class AllInOneStack(Node):
         self.get_logger().info(f'Pose topic: {pose_topic}')
 
     # =====================================================
-    # 回调：位姿、目标、雷达
+    # Callbacks: pose, goal, lidar
     # =====================================================
 
     def pose_callback(self, msg: PoseStamped):
@@ -191,8 +227,8 @@ class AllInOneStack(Node):
 
     def goal_callback(self, msg: PoseStamped):
         """
-        收到 /planning/goal 后，在本节点内部生成直线路径并发布 /planning/path，
-        同时启动控制。
+        On receiving /planning/goal, generate a straight-line path, publish /planning/path,
+        and start control.
         """
         if self.current_pose is None:
             self.get_logger().warn('No current pose yet, cannot generate path.')
@@ -212,7 +248,7 @@ class AllInOneStack(Node):
         if frame_id == '':
             frame_id = 'world'
 
-        # 坐标系不一致时直接拒绝，避免生成错误路径
+        # Reject goals if frame mismatches to avoid wrong paths
         if self.current_pose.header.frame_id and frame_id != self.current_pose.header.frame_id:
             self.get_logger().warn(
                 f'Frame mismatch: goal in "{frame_id}", current pose in '
@@ -226,10 +262,10 @@ class AllInOneStack(Node):
 
         step = max(self.path_step, 0.5)
 
-        # 初步路径点（终点）
+        # Initial path points (goal)
         path_points = [(goal.x, goal.y)]
 
-        # 如果正前方有障碍，用当前激光快速生成一个侧向绕障点
+        # If obstacle ahead, add a side detour waypoint using current lidar
         front_min, left_min, right_min = self.analyze_lidar()
         if front_min is not None and front_min < self.obstacle_slow_dist and dist > 1e-3:
             prefer_left = True
@@ -240,7 +276,7 @@ class AllInOneStack(Node):
 
             side = 1.0 if prefer_left else -1.0
             offset = max(self.obstacle_stop_dist + self.plan_avoid_margin, self.waypoint_tolerance * 2.0)
-            # 垂直于目标方向的侧向偏移
+            # Lateral offset perpendicular to goal direction
             nx = -dy / dist
             ny = dx / dist
             detour_x = start.x + side * offset * nx
@@ -252,7 +288,7 @@ class AllInOneStack(Node):
                 f'({detour_x:.1f}, {detour_y:.1f}) to avoid.'
             )
 
-        # 逐段插值生成路径
+        # Interpolate path segment by segment
         waypoints = [(start.x, start.y)] + path_points
         for idx in range(len(waypoints) - 1):
             sx, sy = waypoints[idx]
@@ -265,7 +301,7 @@ class AllInOneStack(Node):
 
             for i in range(seg_steps + 1):
                 if idx > 0 and i == 0:
-                    # 避免重复上一个分段终点
+                    # Avoid duplicating previous segment end point
                     continue
                 t = float(i) / float(seg_steps)
                 px = sx + t * seg_dx
@@ -276,15 +312,22 @@ class AllInOneStack(Node):
                 pose_stamped.pose.position.x = px
                 pose_stamped.pose.position.y = py
                 pose_stamped.pose.position.z = 0.0
-                pose_stamped.pose.orientation.w = 1.0  # 不在这里用朝向
+                pose_stamped.pose.orientation.w = 1.0  # Heading is not set here
 
                 path_msg.poses.append(pose_stamped)
 
         self.path = path_msg
         self.current_waypoint_idx = 0
         self.active = True
+        self.min_goal_dist = float('inf')
+        self.last_goal_dist = float('inf')
+        self.last_progress_time = self.get_clock().now().nanoseconds / 1e9
+        self.recovering = False
+        self.recover_phase = ''
+        self.recover_turn_dir = 1.0
+        self.avoid_mode = ''
 
-        # 对外发布 /planning/path，保持原架构接口
+        # Publish /planning/path to keep external interface
         self.path_pub.publish(self.path)
 
         self.get_logger().info(
@@ -296,12 +339,12 @@ class AllInOneStack(Node):
         self.latest_scan = msg
 
     # =====================================================
-    # Lidar 分析
+    # Lidar analysis
     # =====================================================
 
     def analyze_lidar(self):
         """
-        返回 (front_min, left_min, right_min)，单位 m。
+        Return (front_min, left_min, right_min) in meters.
         front: [-front_angle, +front_angle]
         left:  [0, +side_angle]
         right: [-side_angle, 0]
@@ -342,12 +385,12 @@ class AllInOneStack(Node):
         return front_min, left_min, right_min
 
     # =====================================================
-    # 主控制循环
+    # Main control loop
     # =====================================================
 
     def control_loop(self):
         if not self.active:
-            # 没有路径要跟踪
+            # No path to track
             self.publish_thrust(0.0, 0.0)
             return
 
@@ -358,7 +401,7 @@ class AllInOneStack(Node):
 
         now = self.get_clock().now()
 
-        # 当前位置超时则停止，等待新数据
+        # Stop if pose is stale; wait for fresh data
         pose_time = Time.from_msg(self.current_pose.header.stamp)
         pose_age = (now - pose_time).nanoseconds / 1e9
         if pose_age > self.pose_timeout:
@@ -368,7 +411,7 @@ class AllInOneStack(Node):
             self.publish_thrust(0.0, 0.0)
             return
 
-        # 激光超时同样停车，避免盲航
+        # Stop if lidar is stale; avoid blind sailing
         if self.latest_scan is None:
             self.get_logger().warning('Waiting for lidar scan...')
             self.publish_thrust(0.0, 0.0)
@@ -403,7 +446,19 @@ class AllInOneStack(Node):
         dy = ty - y
         dist = math.hypot(dx, dy)
 
-        # waypoint / goal 切换逻辑
+        # Overshoot detection: if distance starts increasing after getting closer, stop
+        if self.current_waypoint_idx == last_idx:
+            if dist < self.min_goal_dist:
+                self.min_goal_dist = dist
+            elif self.min_goal_dist < float('inf') and dist > self.min_goal_dist + self.overshoot_margin:
+                self.get_logger().info(
+                    f'Overshoot detected at goal (closest {self.min_goal_dist:.2f} m, now {dist:.2f} m). Stopping.'
+                )
+                self.publish_thrust(0.0, 0.0)
+                self.active = False
+                return
+
+        # Waypoint / goal switching logic
         tolerance = self.goal_tolerance if self.current_waypoint_idx == last_idx \
             else self.waypoint_tolerance
 
@@ -420,25 +475,102 @@ class AllInOneStack(Node):
                     f'Waypoint {self.current_waypoint_idx} reached (dist={dist:.2f} m).'
                 )
                 self.current_waypoint_idx += 1
+                # Reset progress tracking for the new segment
+                self.last_goal_dist = float('inf')
+                self.last_progress_time = self.get_clock().now().nanoseconds / 1e9
+                self.recovering = False
+                self.recover_phase = ''
                 return
 
-        # ---------- 基础路径跟踪：航向 P 控制 ----------
+        # ---------- Basic path tracking: heading P control ----------
         desired_yaw = math.atan2(dy, dx)
         e_yaw = normalize_angle(desired_yaw - yaw)
+
+        # Recovery behavior
+        if self.recovering:
+            now_s = self.get_clock().now().nanoseconds / 1e9
+            if self.recover_phase == 'reverse':
+                if (now_s - self.recover_start_time) < self.recover_reverse_time:
+                    self.publish_thrust(self.recover_reverse_thrust, self.recover_reverse_thrust)
+                    return
+                # switch to turn phase
+                self.recover_phase = 'turn'
+                self.recover_start_time = now_s
+            if self.recover_phase == 'turn':
+                if (now_s - self.recover_start_time) < self.recover_turn_time:
+                    turn_cmd = self.avoid_turn_thrust * self.recover_turn_dir
+                    self.publish_thrust(-turn_cmd, turn_cmd)
+                    return
+                # end recovery
+                self.recovering = False
+                self.recover_phase = ''
+                self.last_goal_dist = float('inf')
+                self.last_progress_time = now_s
+
+        # Stuck detection: if no progress toward goal within timeout, stop
+        now_s = self.get_clock().now().nanoseconds / 1e9
+        if dist < self.last_goal_dist - self.stuck_progress_epsilon:
+            self.last_goal_dist = dist
+            self.last_progress_time = now_s
+        elif (now_s - self.last_progress_time) > self.stuck_timeout and dist > self.goal_tolerance:
+            self.get_logger().warning(
+                f'Stuck detected: no progress for {now_s - self.last_progress_time:.1f}s (dist={dist:.2f} m). Starting recovery.'
+            )
+            self.recovering = True
+            self.recover_phase = 'reverse'
+            self.recover_start_time = now_s
+            # Choose turn direction based on lidar
+            front_min, left_min, right_min = self.analyze_lidar()
+            if left_min is not None and right_min is not None:
+                self.recover_turn_dir = 1.0 if left_min >= right_min else -1.0
+            elif left_min is not None:
+                self.recover_turn_dir = 1.0
+            elif right_min is not None:
+                self.recover_turn_dir = -1.0
+            else:
+                self.recover_turn_dir = 1.0
+            self.last_goal_dist = float('inf')
+            self.last_progress_time = now_s
+            return
 
         T_forward = self.forward_thrust
         if self.approach_slow_dist > 0.0:
             T_forward *= max(0.1, min(1.0, dist / self.approach_slow_dist))
+        if self.heading_align_thresh > 0.0 and abs(e_yaw) > self.heading_align_thresh:
+            # Reduce forward thrust when heading error is large to prioritize turning toward goal
+            T_forward *= 0.2
         T_diff = self.kp_yaw * e_yaw
 
         left_cmd = T_forward - T_diff
         right_cmd = T_forward + T_diff
 
-        # ---------- 雷达避障修正 ----------
+        # ---------- Lidar-based avoidance correction ----------
         front_min, left_min, right_min = self.analyze_lidar()
+        if self.lidar_log_interval > 0.0:
+            now_log = self.get_clock().now().nanoseconds / 1e9
+            if now_log - self.last_lidar_log_time >= self.lidar_log_interval:
+                self.last_lidar_log_time = now_log
+                self.get_logger().info(
+                    f'Lidar mins (m): front={front_min if front_min is not None else -1:.2f}, '
+                    f'left={left_min if left_min is not None else -1:.2f}, '
+                    f'right={right_min if right_min is not None else -1:.2f}'
+                )
+
+        # Hard-avoid state machine to avoid oscillation
+        now_s = self.get_clock().now().nanoseconds / 1e9
+        if self.avoid_mode == 'turn':
+            clear_dist = self.obstacle_stop_dist + self.avoid_clear_margin
+            time_in_turn = now_s - self.avoid_start_time
+            if (front_min is None or front_min > clear_dist) or (time_in_turn > self.avoid_max_turn_time):
+                self.avoid_mode = ''
+                self.avoid_start_time = 0.0
+            else:
+                turn_cmd = self.avoid_turn_thrust * self.avoid_turn_dir
+                self.publish_thrust(-turn_cmd, turn_cmd)
+                return
 
         if front_min is not None:
-            # 硬避障：太近，原地转
+            # Hard avoidance: too close, turn in place
             if front_min < self.obstacle_stop_dist:
                 if left_min is not None and right_min is not None:
                     turn_dir = 1.0 if left_min > right_min else -1.0
@@ -447,7 +579,11 @@ class AllInOneStack(Node):
                 elif right_min is not None:
                     turn_dir = -1.0
                 else:
-                    turn_dir = 1.0   # 没侧向信息就默认向左
+                    turn_dir = 1.0   # Default turn left without side info
+
+                self.avoid_mode = 'turn'
+                self.avoid_start_time = now_s
+                self.avoid_turn_dir = turn_dir
 
                 left_cmd = -turn_dir * self.avoid_turn_thrust
                 right_cmd = turn_dir * self.avoid_turn_thrust
@@ -457,7 +593,7 @@ class AllInOneStack(Node):
                     f'turning {"left" if turn_dir > 0 else "right"}.'
                 )
 
-            # 软避障：先减速，再略微偏转
+            # Soft avoidance: slow down, then bias
             elif front_min < self.obstacle_slow_dist:
                 denom = max(self.obstacle_slow_dist - self.obstacle_stop_dist, 0.1)
                 scale = (front_min - self.obstacle_stop_dist) / denom
@@ -482,11 +618,11 @@ class AllInOneStack(Node):
                     f'Obstacle ahead at {front_min:.1f} m: slowing (scale={scale:.2f}).'
                 )
 
-        # ---------- 推力饱和 ----------
+        # ---------- Thrust saturation ----------
         left_cmd = max(self.thrust_min, min(self.thrust_max, left_cmd))
         right_cmd = max(self.thrust_min, min(self.thrust_max, right_cmd))
 
-        # 接近最终目标时整体降速
+        # Additional slow-down near final goal
         if self.current_waypoint_idx == last_idx and dist < self.goal_tolerance * 1.5:
             scale = max(0.2, dist / (self.goal_tolerance * 1.5))
             left_cmd *= scale
@@ -495,7 +631,7 @@ class AllInOneStack(Node):
         self.publish_thrust(left_cmd, right_cmd)
 
     # =====================================================
-    # 工具函数
+    # Utility functions
     # =====================================================
 
     def publish_thrust(self, left: float, right: float):

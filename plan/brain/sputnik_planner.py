@@ -49,14 +49,31 @@ class SputnikPlanner(Node):
         self.current_gps = None
         self.waypoints = []
         self.current_wp_index = 0
-        self.state = "INIT"  # INIT -> DRIVING -> FINISHED
+        self.state = "INIT"  # INIT -> WAITING_CONFIRM -> DRIVING -> FINISHED
         self.mission_start_time = None
+        self.mission_armed = False  # For manual start mode
 
-        # --- SUBSCRIBER ---
+        # --- SUBSCRIBERS ---
         self.create_subscription(
             NavSatFix,
             '/wamv/sensors/gps/gps/fix',
             self.gps_callback,
+            10
+        )
+        
+        # Mission command subscriber for CLI/dashboard control
+        self.create_subscription(
+            String,
+            '/sputnik/mission_command',
+            self.mission_command_callback,
+            10
+        )
+        
+        # Config subscriber for runtime parameter changes
+        self.create_subscription(
+            String,
+            '/sputnik/set_config',
+            self.config_callback,
             10
         )
 
@@ -64,9 +81,13 @@ class SputnikPlanner(Node):
         self.pub_waypoints = self.create_publisher(String, '/planning/waypoints', 10)
         self.pub_current_target = self.create_publisher(String, '/planning/current_target', 10)
         self.pub_mission_status = self.create_publisher(String, '/planning/mission_status', 10)
+        self.pub_config = self.create_publisher(String, '/sputnik/config', 10)
 
         # Control loop at 10Hz
         self.create_timer(0.1, self.planning_loop)
+        
+        # Publish config at 1Hz
+        self.create_timer(1.0, self.publish_config)
 
         self.get_logger().info("=" * 50)
         self.get_logger().info("СПУТНИК (SPUTNIK) - Система Планирования Маршрута")
@@ -74,20 +95,110 @@ class SputnikPlanner(Node):
         self.get_logger().info(f"Зона сканирования | Scan Area: {self.scan_length}m × {self.scan_width * self.lanes}m")
         self.get_logger().info(f"Lanes: {self.lanes}, Width: {self.scan_width}m")
         self.get_logger().info("Waiting for GPS signal...")
+        self.get_logger().info("Commands: ros2 run plan mission_cli --help")
         self.get_logger().info("=" * 50)
 
     def gps_callback(self, msg):
         """Handle GPS updates"""
         self.current_gps = (msg.latitude, msg.longitude)
 
-        # First GPS fix - initialize mission
+        # First GPS fix - store start position but wait for mission command
         if self.start_gps is None:
             self.start_gps = (msg.latitude, msg.longitude)
-            self.mission_start_time = self.get_clock().now()
             self.get_logger().info(f"Base Point: {self.start_gps[0]:.6f}, {self.start_gps[1]:.6f}")
-            self.generate_lawnmower_path()
-            self.state = "DRIVING"
-            self.get_logger().info("MISSION STARTED!")
+            self.get_logger().info("GPS acquired - run 'ros2 run plan mission_cli generate' to create waypoints")
+            
+    def mission_command_callback(self, msg):
+        """Handle mission commands from CLI/dashboard"""
+        import json
+        try:
+            cmd = json.loads(msg.data)
+            command = cmd.get('command', '')
+            
+            self.get_logger().info(f"MISSION COMMAND: {command}")
+            
+            if command == 'generate_waypoints':
+                if self.start_gps is not None:
+                    self.generate_lawnmower_path()
+                    self.state = "WAITING_CONFIRM"
+                    self.get_logger().info(f"Waypoints generated: {len(self.waypoints)} points")
+                else:
+                    self.get_logger().warn("GPS not available - cannot generate waypoints")
+                    
+            elif command == 'confirm_waypoints':
+                if self.waypoints:
+                    self.state = "READY"
+                    self.get_logger().info("Waypoints confirmed - ready to start")
+                    
+            elif command == 'start_mission':
+                if self.waypoints and self.state in ["READY", "WAITING_CONFIRM", "PAUSED", "FINISHED"]:
+                    if self.state == "FINISHED":
+                        self.current_wp_index = 0
+                    self.state = "DRIVING"
+                    self.mission_armed = True
+                    self.mission_start_time = self.get_clock().now()
+                    self.get_logger().info("🚀 MISSION STARTED!")
+                else:
+                    self.get_logger().warn(f"Cannot start - state={self.state}, waypoints={len(self.waypoints)}")
+                    
+            elif command == 'stop_mission':
+                self.state = "PAUSED"
+                self.mission_armed = False
+                self.get_logger().info("🛑 MISSION STOPPED")
+                
+            elif command == 'resume_mission':
+                if self.state == "PAUSED" and self.waypoints:
+                    self.state = "DRIVING"
+                    self.mission_armed = True
+                    self.get_logger().info("▶️ MISSION RESUMED")
+                    
+            elif command == 'reset_mission':
+                self.waypoints = []
+                self.current_wp_index = 0
+                self.state = "INIT"
+                self.mission_armed = False
+                self.get_logger().info("🔄 MISSION RESET")
+                
+        except Exception as e:
+            self.get_logger().error(f"Mission command error: {e}")
+            
+    def config_callback(self, msg):
+        """Handle runtime configuration changes"""
+        import json
+        try:
+            config = json.loads(msg.data)
+            regenerate = False
+            
+            if 'lanes' in config:
+                self.lanes = int(config['lanes'])
+                regenerate = True
+            if 'scan_length' in config:
+                self.scan_length = float(config['scan_length'])
+                regenerate = True
+            if 'scan_width' in config:
+                self.scan_width = float(config['scan_width'])
+                regenerate = True
+                
+            self.get_logger().info(f"Config updated: lanes={self.lanes}, length={self.scan_length}, width={self.scan_width}")
+            
+        except Exception as e:
+            self.get_logger().error(f"Config parse error: {e}")
+            
+    def publish_config(self):
+        """Publish current configuration"""
+        import json
+        config = {
+            'lanes': self.lanes,
+            'scan_length': self.scan_length,
+            'scan_width': self.scan_width,
+            'waypoint_tolerance': self.waypoint_tolerance,
+            'state': self.state,
+            'waypoint_count': len(self.waypoints),
+            'current_wp': self.current_wp_index
+        }
+        msg = String()
+        msg.data = json.dumps(config)
+        self.pub_config.publish(msg)
 
     def latlon_to_meters(self, lat, lon):
         """Convert GPS coordinates to local meters"""

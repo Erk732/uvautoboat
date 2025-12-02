@@ -149,6 +149,10 @@
                         <span id="drift-vector" class="value">Минимально | Minimal</span>
                     </div>
                     <div class="info-item">
+                        <span class="label">Калман σ | Kalman σ:</span>
+                        <span id="drift-uncertainty" class="value" title="Kalman filter uncertainty">-</span>
+                    </div>
+                    <div class="info-item">
                         <span class="label">История | History:</span>
                         <span id="escape-history" class="value">0 записей | records</span>
                     </div>
@@ -224,6 +228,9 @@
                         <button id="btn-resume-mission" class="mission-btn resume" disabled>
                             ▶️ ПРОДОЛЖИТЬ | RESUME
                         </button>
+                        <button id="btn-reset-mission" class="mission-btn reset">
+                            🔄 СБРОС | RESET
+                        </button>
                     </div>
                 </div>
                 
@@ -246,13 +253,40 @@
                         <span class="joystick-active">🎮 OVERRIDE ACTIVE - Autonomous control disabled</span>
                     </div>
                     <div id="joystick-instructions" class="joystick-instructions hidden">
-                        <div class="instructions-title">📋 Инструкция | Instructions:</div>
+                        <div class="instructions-title">🎮 War Thunder / GTA5 Style Controls</div>
                         <div class="instructions-content">
                             <p><strong>В новом терминале запустите | Run in a new terminal:</strong></p>
                             <code>ros2 run control keyboard_teleop</code>
-                            <p class="instructions-note">или | or</p>
+                            
+                            <div class="teleop-controls-grid">
+                                <div class="control-group">
+                                    <div class="control-header">⚡ Дроссель | Throttle</div>
+                                    <div class="control-keys">
+                                        <kbd>W</kbd> / <kbd>↑</kbd> = Вперёд | Ahead<br>
+                                        <kbd>S</kbd> / <kbd>↓</kbd> = Назад | Reverse<br>
+                                        <kbd>Space</kbd> = Полный стоп | All Stop<br>
+                                        <kbd>X</kbd> = Экстренный реверс | Emergency
+                                    </div>
+                                </div>
+                                <div class="control-group">
+                                    <div class="control-header">🧭 Руль | Rudder</div>
+                                    <div class="control-keys">
+                                        <kbd>A</kbd> / <kbd>←</kbd> = Лево | Left<br>
+                                        <kbd>D</kbd> / <kbd>→</kbd> = Право | Right<br>
+                                        <kbd>Q</kbd> = Резко влево | Hard Left<br>
+                                        <kbd>E</kbd> = Резко вправо | Hard Right
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="teleop-features">
+                                <span class="feature-tag">✅ Плавный дроссель | Smooth throttle ramp</span>
+                                <span class="feature-tag">✅ Авто-центровка руля | Auto-center rudder</span>
+                                <span class="feature-tag">✅ 30 Hz обновление | 30 Hz update rate</span>
+                            </div>
+                            
+                            <p class="instructions-note">или VRX джойстик | or VRX joystick</p>
                             <code>ros2 launch vrx_gz usv_joy_teleop.py</code>
-                            <p class="instructions-hint">⌨️ WASD/Arrows = движение | movement, Space = стоп | stop</p>
                         </div>
                     </div>
                 </div>

@@ -8,7 +8,7 @@ Includes advanced anti-stuck system with:
 - Adaptive escape duration
 - Multi-direction probing
 - No-go zone memory
-- Drift/current compensation
+- Drift/current compensation (Kalman filtered)
 - Detour waypoint insertion
 - Simple escape learning
 
@@ -30,9 +30,98 @@ import rclpy
 from rclpy.node import Node
 import math
 import json
+import numpy as np
 
 from sensor_msgs.msg import NavSatFix, Imu
 from std_msgs.msg import Float64, String
+
+
+# =============================================================================
+# BAYESIAN STATE ESTIMATION FUNDAMENTALS
+# =============================================================================
+#
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                        BAYES' THEOREM                                       │
+# │                                                                             │
+# │   P(State | Data) = P(Data | State) × P(State) / P(Data)                   │
+# │                                                                             │
+# │   In robotics terms:                                                        │
+# │     Posterior   = Likelihood × Prior / Evidence                             │
+# │     (new belief)   (sensor)    (old belief)                                 │
+# │                                                                             │
+# │   Example: "What is the drift/current affecting my boat?"                   │
+# │     Prior:      Previous estimate of water current velocity                 │
+# │     Likelihood: Observed velocity vs expected velocity (the difference)     │
+# │     Posterior:  Updated drift estimate combining prediction + observation   │
+# │                                                                             │
+# │   This is the foundation of ALL probabilistic robotics!                     │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                   KALMAN FILTER = BAYESIAN + GAUSSIAN                       │
+# │                                                                             │
+# │   For continuous states with Gaussian (bell curve) distributions:           │
+# │     - State described by mean μ (best estimate) and variance σ² (uncertainty)│
+# │     - Multiplying two Gaussians → another Gaussian (closed-form solution)  │
+# │                                                                             │
+# │   Predict-Update Cycle:                                                     │
+# │     PREDICT: x̂⁻ = F×x̂, P⁻ = F×P×Fᵀ+Q   (uncertainty grows)                │
+# │     UPDATE:  K = P⁻Hᵀ(HP⁻Hᵀ+R)⁻¹        (Kalman Gain)                      │
+# │              x̂ = x̂⁻ + K(z-Hx̂⁻)          (correct with measurement)         │
+# │              P = (I-KH)P⁻                (uncertainty shrinks)              │
+# │                                                                             │
+# │   Kalman Gain K: How much to trust the measurement vs prediction            │
+# │     K→0: High R (noisy sensor) → trust prediction more                      │
+# │     K→1: High Q (unstable model) → trust measurement more                   │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
+# =============================================================================
+# KALMAN FILTER FOR DRIFT ESTIMATION
+# =============================================================================
+class KalmanDriftEstimator:
+    """
+    2D Kalman Filter for estimating water/wind drift.
+    
+    BAYESIAN INTERPRETATION:
+        Prior:      Previous drift estimate with uncertainty P
+        Likelihood: How well observed velocity matches predicted velocity
+        Posterior:  Updated drift estimate after measurement
+    
+    State: [drift_x, drift_y] - velocity components (m/s)
+    
+    Tuning:
+        High Q, Low R → Trust measurements, respond quickly
+        Low Q, High R → Trust model, smooth out noise
+    """
+    
+    def __init__(self, process_noise=0.01, measurement_noise=0.5):
+        self.n = 2
+        self.x = np.zeros((self.n, 1))  # State estimate
+        self.P = np.eye(self.n) * 1.0   # Error covariance
+        self.F = np.eye(self.n)         # State transition (random walk)
+        self.H = np.eye(self.n)         # Measurement model
+        self.Q = np.eye(self.n) * process_noise    # Process noise
+        self.R = np.eye(self.n) * measurement_noise  # Measurement noise
+        self.last_kalman_gain = np.zeros((self.n, self.n))
+        
+    def predict(self):
+        self.x = self.F @ self.x
+        self.P = self.F @ self.P @ self.F.T + self.Q
+        
+    def update(self, z):
+        z = np.array(z).reshape((self.n, 1))
+        y = z - self.H @ self.x
+        S = self.H @ self.P @ self.H.T + self.R
+        K = self.P @ self.H.T @ np.linalg.inv(S)
+        self.last_kalman_gain = K.copy()
+        self.x = self.x + K @ y
+        self.P = (np.eye(self.n) - K @ self.H) @ self.P
+        
+    def get_drift(self):
+        return (float(self.x[0, 0]), float(self.x[1, 0]))
+    
+    def get_uncertainty(self):
+        return (float(np.sqrt(self.P[0, 0])), float(np.sqrt(self.P[1, 1])))
 
 
 class BuranController(Node):
@@ -64,6 +153,10 @@ class BuranController(Node):
         self.declare_parameter('no_go_zone_radius', 8.0)
         self.declare_parameter('drift_compensation_gain', 0.3)
         self.declare_parameter('detour_distance', 12.0)
+        
+        # Kalman filter parameters
+        self.declare_parameter('kalman_process_noise', 0.01)
+        self.declare_parameter('kalman_measurement_noise', 0.5)
 
         # Get parameters
         self.kp = self.get_parameter('kp').value
@@ -124,9 +217,15 @@ class BuranController(Node):
         # No-go zones (obstacle memory)
         self.no_go_zones = []  # List of (x, y, radius)
         
-        # Drift compensation
+        # Drift compensation with Kalman filter
         self.position_history = []
-        self.drift_vector = (0.0, 0.0)
+        kalman_process = self.get_parameter('kalman_process_noise').value
+        kalman_measurement = self.get_parameter('kalman_measurement_noise').value
+        self.drift_kalman = KalmanDriftEstimator(
+            process_noise=kalman_process,
+            measurement_noise=kalman_measurement
+        )
+        self.drift_vector = (0.0, 0.0)  # Updated by Kalman filter
         
         # Escape learning
         self.escape_history = []
@@ -590,23 +689,31 @@ class BuranController(Node):
             return self.get_learned_escape_direction()
     
     def estimate_drift(self):
-        """Estimate drift from position history"""
+        """Estimate drift using Kalman filter for optimal estimation."""
         if len(self.position_history) < 20:
+            # Still run predict to advance uncertainty
+            self.drift_kalman.predict()
+            self.drift_vector = self.drift_kalman.get_drift()
             return
         
+        # Prediction step
+        self.drift_kalman.predict()
+        
+        # Measurement from position history
         recent = self.position_history[-20:]
         total_dx = recent[-1][0] - recent[0][0]
         total_dy = recent[-1][1] - recent[0][1]
         time_diff = (recent[-1][2] - recent[0][2]).nanoseconds / 1e9
         
         if time_diff > 0.5:
-            alpha = 0.1
-            new_drift_x = total_dx / time_diff
-            new_drift_y = total_dy / time_diff
-            self.drift_vector = (
-                alpha * new_drift_x + (1 - alpha) * self.drift_vector[0],
-                alpha * new_drift_y + (1 - alpha) * self.drift_vector[1]
-            )
+            measured_drift_x = total_dx / time_diff
+            measured_drift_y = total_dy / time_diff
+            
+            # Update step with Kalman filter
+            self.drift_kalman.update([measured_drift_x, measured_drift_y])
+        
+        # Update legacy tuple for backward compatibility
+        self.drift_vector = self.drift_kalman.get_drift()
     
     def calculate_drift_compensation(self):
         """Calculate thrust compensation for drift"""
@@ -675,6 +782,8 @@ class BuranController(Node):
     
     def publish_anti_stuck_status(self):
         """Publish anti-stuck system status for dashboard"""
+        drift_uncertainty = self.drift_kalman.get_uncertainty()
+        
         msg = String()
         msg.data = json.dumps({
             'is_stuck': self.is_stuck,
@@ -684,6 +793,11 @@ class BuranController(Node):
             'adaptive_duration': round(self.adaptive_escape_duration, 1),
             'no_go_zones': len(self.no_go_zones),
             'drift_vector': [round(self.drift_vector[0], 3), round(self.drift_vector[1], 3)],
+            'drift_uncertainty': [round(drift_uncertainty[0], 3), round(drift_uncertainty[1], 3)],
+            'drift_kalman_gain': [
+                round(float(self.drift_kalman.last_kalman_gain[0, 0]), 3),
+                round(float(self.drift_kalman.last_kalman_gain[1, 1]), 3)
+            ],
             'escape_history_count': len(self.escape_history),
             'best_direction': self.best_escape_direction,
             'probe_results': {

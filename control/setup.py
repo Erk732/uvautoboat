@@ -40,8 +40,8 @@ setup(
             'keyboard_teleop = control.keyboard_teleop:main',
 
             'all_in_one_stack = control.all_in_one_stack:main',
-            #NEW CODE FOR SEPERATED CONTROL AND PLANNING
             'gps_imu_pose = control.gps_imu_pose:main',
+            'pose_filter = control.pose_filter:main',
 
         ],
     },

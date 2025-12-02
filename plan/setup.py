@@ -34,6 +34,8 @@ setup(
             'apollo11 = brain.apollo11:main',
             'vostok1 = brain.vostok1:main',
             'waypoint_visualizer = brain.waypoint_visualizer:main',
+            # Mission CLI - terminal control for Vostok1
+            'mission_cli = brain.mission_cli:main',
             # Modular nodes (TNO style names)
             'oko_perception = brain.oko_perception:main',
             'sputnik_planner = brain.sputnik_planner:main',

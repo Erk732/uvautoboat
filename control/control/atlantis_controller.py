@@ -158,11 +158,32 @@ class AtlantisController(Node):
         for i in range(0, len(data) - point_step, point_step * 10):
             try:
                 x, y, z = struct.unpack_from('fff', data, i)
+                
+                # 1. Basic Filters (Invalid numbers or Height)
                 if math.isnan(x) or math.isinf(x): continue
                 if z < -0.2 or z > 3.0: continue
+                
                 dist = math.sqrt(x*x + y*y)
-                if dist < 1.0 or dist > 100.0: continue
-                if x < 0.5: continue # Only forward points
+                
+                # 2. Global Max Range Check
+                if dist > 100.0: continue
+
+                # 3. The "Danger Tunnel" Logic
+                # Check if the object is in the Center Gap (1.0m left to 1.0m right)
+                is_in_center_gap = abs(y) < 1.0
+
+                if not is_in_center_gap:
+                    # SIDE LOGIC: Be strict to ignore pontoons
+                    if dist < 1.0: continue 
+                    if x < 0.5: continue    
+                else:
+                    # CENTER LOGIC: Be sensitive to detect cones
+                    # Only ignore if it is literally inside the sensor (< 0.1m)
+                    if x < 0.1: continue 
+
+                # --- DELETE THE OLD LINES THAT WERE HERE ---
+                # (The old "if dist < 1.0" and "if x < 0.5" lines MUST GO)
+
                 points.append((x, y, z, dist))
             except struct.error:
                 continue
@@ -186,6 +207,18 @@ class AtlantisController(Node):
             self.obstacle_detected = self.min_obstacle_distance < self.min_safe_distance
 
         self.analyze_scan_sectors_3d(points)
+
+        distances = [p[3] for p in points]
+        self.min_obstacle_distance = min(distances)
+        
+        # Hysteresis
+        if self.obstacle_detected:
+            exit_threshold = self.min_safe_distance + self.hysteresis_distance
+            self.obstacle_detected = self.min_obstacle_distance < exit_threshold
+        else:
+            self.obstacle_detected = self.min_obstacle_distance < self.min_safe_distance
+
+        #self.analyze_scan_sectors_3d(points) duplicate line for copy-paste
 
     def analyze_scan_sectors_3d(self, points):
         """Divide 3D point cloud into sectors"""
