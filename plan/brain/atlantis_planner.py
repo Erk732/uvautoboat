@@ -14,8 +14,8 @@ class AtlantisPlanner(Node):
         # --- PARAMETERS ---
         # These can now be changed dynamically via command line or GUI
         self.declare_parameter('scan_length', 150.0)
-        self.declare_parameter('scan_width', 50.0)
-        self.declare_parameter('lanes', 8)
+        self.declare_parameter('scan_width', 20.0)
+        self.declare_parameter('lanes', 4)
         self.declare_parameter('frame_id', 'map') # Frame for RViz
 
         # Publisher for the controller and RViz
