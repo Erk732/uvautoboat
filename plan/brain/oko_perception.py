@@ -36,11 +36,11 @@ class OkoPerception(Node):
         self.declare_parameter('min_safe_distance', 15.0)
         self.declare_parameter('critical_distance', 5.0)
         self.declare_parameter('hysteresis_distance', 2.0)
-        self.declare_parameter('min_height', -0.2)  # Below this is water
-        self.declare_parameter('max_height', 3.0)   # Above this is sky/noise
+        self.declare_parameter('min_height', -10.0)  # Relaxed - LiDAR frame varies
+        self.declare_parameter('max_height', 20.0)   # Relaxed - catch all obstacles
         self.declare_parameter('min_range', 1.0)    # Ignore points closer than this
         self.declare_parameter('max_range', 100.0)  # Ignore points farther than this
-        self.declare_parameter('sample_rate', 10)   # Process every Nth point
+        self.declare_parameter('sample_rate', 5)    # Process every 5th point (was 10)
 
         # Get parameters
         self.min_safe_distance = self.get_parameter('min_safe_distance').value
@@ -89,6 +89,11 @@ class OkoPerception(Node):
     def lidar_callback(self, msg):
         """Process 3D LIDAR point cloud for obstacle detection"""
         points = []
+        total_points = 0
+        valid_points = 0
+        height_filtered = 0
+        range_filtered = 0
+        behind_filtered = 0
         
         point_step = msg.point_step
         data = msg.data
@@ -97,6 +102,7 @@ class OkoPerception(Node):
         for i in range(0, len(data) - point_step, point_step * self.sample_rate):
             try:
                 x, y, z = struct.unpack_from('fff', data, i)
+                total_points += 1
                 
                 # Skip invalid points
                 if math.isnan(x) or math.isnan(y) or math.isnan(z):
@@ -104,8 +110,11 @@ class OkoPerception(Node):
                 if math.isinf(x) or math.isinf(y) or math.isinf(z):
                     continue
                 
+                valid_points += 1
+                
                 # Filter by height
                 if z < self.min_height or z > self.max_height:
+                    height_filtered += 1
                     continue
                 
                 # Calculate horizontal distance
@@ -113,16 +122,26 @@ class OkoPerception(Node):
                 
                 # Filter by range
                 if dist < self.min_range or dist > self.max_range:
+                    range_filtered += 1
                     continue
                 
                 # Only consider points in front (positive x)
                 if x < 0.5:
+                    behind_filtered += 1
                     continue
                 
                 points.append((x, y, z, dist))
                     
             except (struct.error, Exception):
                 continue
+        
+        # Debug logging (throttled)
+        self.get_logger().info(
+            f"LiDAR: {total_points} total, {valid_points} valid, "
+            f"height_filt={height_filtered}, range_filt={range_filtered}, behind={behind_filtered}, "
+            f"final={len(points)}",
+            throttle_duration_sec=2.0
+        )
         
         if not points:
             self.min_obstacle_distance = self.max_range

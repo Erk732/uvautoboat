@@ -15,6 +15,7 @@ let currentWaypointMarker = null;  // Highlight current target
 let configPublisher = null;
 let modularConfigPublisher = null;  // For sputnik planner
 let missionCommandPublisher = null;  // Mission command publisher
+let modularMissionCommandPublisher = null;  // For sputnik planner
 
 // Track which config inputs have been modified by user (prevents ROS from overwriting)
 let dirtyInputs = new Set();
@@ -423,6 +424,9 @@ function subscribeToTopics() {
     console.log('Subscribed to all topics (integrated + modular)');
     addLog('Subscribed to topics (Vostok1 + Modular)', 'info');
     
+    // Enable mission control UI when connected (before config received)
+    updateMissionControlUI({ state: 'IDLE', gps_ready: true });
+    
     // Create publisher for configuration updates (supports both modes)
     configPublisher = new ROSLIB.Topic({
         ros: ros,
@@ -487,6 +491,13 @@ function subscribeToTopics() {
     missionCommandPublisher = new ROSLIB.Topic({
         ros: ros,
         name: '/vostok1/mission_command',
+        messageType: 'std_msgs/String'
+    });
+    
+    // Create modular mission command publisher for sputnik
+    modularMissionCommandPublisher = new ROSLIB.Topic({
+        ros: ros,
+        name: '/sputnik/mission_command',
         messageType: 'std_msgs/String'
     });
     
@@ -1053,6 +1064,11 @@ function generateWaypoints() {
     });
     configPublisher.publish(configMsg);
     
+    // Also publish to modular sputnik planner
+    if (modularConfigPublisher) {
+        modularConfigPublisher.publish(configMsg);
+    }
+    
     // Then send generate command
     sendMissionCommand('generate_waypoints');
     
@@ -1085,15 +1101,21 @@ function sendMissionCommand(command) {
         data: JSON.stringify({ command: command })
     });
     
+    // Publish to both vostok1 and modular (sputnik) topics
     missionCommandPublisher.publish(msg);
+    if (modularMissionCommandPublisher) {
+        modularMissionCommandPublisher.publish(msg);
+    }
     addLog(`Mission command: ${command}`, 'info');
-    console.log('Mission command sent:', command);
+    console.log('Mission command sent to both vostok1 and sputnik:', command);
 }
 
 // Update mission control UI based on state
 function updateMissionControlUI(state) {
+    console.log('updateMissionControlUI called with state:', state);
     missionState.state = state.state || 'IDLE';
-    missionState.gpsReady = state.gps_ready || false;
+    // If no gps_ready field, assume true when connected (for testing)
+    missionState.gpsReady = (state.gps_ready !== undefined) ? state.gps_ready : connected;
     missionState.missionArmed = state.mission_armed || false;
     missionState.joystickOverride = state.joystick_override || false;
     missionState.totalWaypoints = state.total_waypoints || 0;
@@ -1117,10 +1139,13 @@ function updateMissionControlUI(state) {
     const stateBadge = document.getElementById('mission-state-badge');
     if (stateBadge) {
         const stateLabels = {
+            'INIT': '🔄 ИНИТ | INIT',
             'IDLE': 'ОЖИДАНИЕ | IDLE',
+            'WAITING_CONFIRM': '👁️ ПОДТВЕРЖДЕНИЕ | CONFIRM',
             'WAYPOINTS_PREVIEW': '👁️ ПРЕДПРОСМОТР | PREVIEW',
             'READY': '✅ ГОТОВ | READY',
             'RUNNING': '🚀 ВЫПОЛНЯЕТСЯ | RUNNING',
+            'DRIVING': '🚀 ВЫПОЛНЯЕТСЯ | DRIVING',
             'PAUSED': '⏸️ ПАУЗА | PAUSED',
             'JOYSTICK': '🎮 ДЖОЙСТИК | JOYSTICK',
             'FINISHED': '🏁 ЗАВЕРШЕНО | FINISHED'
@@ -1146,13 +1171,15 @@ function updateMissionControlUI(state) {
     
     // Enable buttons based on state
     switch (missionState.state) {
+        case 'INIT':  // Modular sputnik uses INIT instead of IDLE
         case 'IDLE':
             if (missionState.gpsReady) {
                 btnGenerate.disabled = false;
             }
             btnJoyEnable.disabled = false;
             break;
-            
+        
+        case 'WAITING_CONFIRM':  // Modular sputnik uses this instead of WAYPOINTS_PREVIEW
         case 'WAYPOINTS_PREVIEW':
             btnGenerate.disabled = false;
             btnConfirm.disabled = false;
@@ -1165,7 +1192,8 @@ function updateMissionControlUI(state) {
             btnCancel.disabled = false;
             btnJoyEnable.disabled = false;
             break;
-            
+        
+        case 'DRIVING':  // Modular sputnik uses DRIVING instead of RUNNING
         case 'RUNNING':
             btnStop.disabled = false;
             break;
@@ -1220,9 +1248,12 @@ function displayWaypointsOnMap(waypoints, fitToWaypoints = false) {
     const startLon = missionState.startLon;
     
     // Convert local coordinates to GPS
+    // Handle both formats: [{x, y}] from vostok1 or [[x, y]] from sputnik
     const waypointLatLngs = waypoints.map((wp, idx) => {
-        const latLng = localToGPS(wp.x, wp.y, startLat, startLon);
-        return { lat: latLng[0], lon: latLng[1], x: wp.x, y: wp.y, idx: idx };
+        const x = Array.isArray(wp) ? wp[0] : wp.x;
+        const y = Array.isArray(wp) ? wp[1] : wp.y;
+        const latLng = localToGPS(x, y, startLat, startLon);
+        return { lat: latLng[0], lon: latLng[1], x: x, y: y, idx: idx };
     });
     
     // Create waypoint markers

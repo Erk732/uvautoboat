@@ -152,12 +152,31 @@ class SputnikPlanner(Node):
                     self.mission_armed = True
                     self.get_logger().info("▶️ MISSION RESUMED")
                     
+            elif command == 'cancel_waypoints':
+                # Cancel waypoints, go back to init
+                self.waypoints = []
+                self.current_wp_index = 0
+                self.state = "INIT"
+                self.mission_armed = False
+                self.get_logger().info("Waypoints ОТМЕНЕНЫ | CANCELLED")
+                    
             elif command == 'reset_mission':
                 self.waypoints = []
                 self.current_wp_index = 0
                 self.state = "INIT"
                 self.mission_armed = False
                 self.get_logger().info("🔄 MISSION RESET")
+                
+            elif command == 'joystick_enable':
+                # Enable joystick override mode
+                self.state = "JOYSTICK"
+                self.mission_armed = False
+                self.get_logger().info("🎮 ДЖОЙСТИК АКТИВЕН | JOYSTICK MODE ENABLED")
+                
+            elif command == 'joystick_disable':
+                # Disable joystick mode
+                self.state = "INIT" if not self.waypoints else "WAITING_CONFIRM"
+                self.get_logger().info("🎮 ДЖОЙСТИК ВЫКЛЮЧЕН | JOYSTICK MODE DISABLED")
                 
         except Exception as e:
             self.get_logger().error(f"Mission command error: {e}")
@@ -194,7 +213,12 @@ class SputnikPlanner(Node):
             'waypoint_tolerance': self.waypoint_tolerance,
             'state': self.state,
             'waypoint_count': len(self.waypoints),
-            'current_wp': self.current_wp_index
+            'current_wp': self.current_wp_index,
+            'gps_ready': self.start_gps is not None,
+            'start_lat': self.start_gps[0] if self.start_gps else None,
+            'start_lon': self.start_gps[1] if self.start_gps else None,
+            'mission_armed': self.mission_armed,
+            'joystick_override': self.state == "JOYSTICK"
         }
         msg = String()
         msg.data = json.dumps(config)

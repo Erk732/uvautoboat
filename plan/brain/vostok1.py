@@ -17,7 +17,7 @@ from std_msgs.msg import Float64, String
 # ┌─────────────────────────────────────────────────────────────────────────────┐
 # │                        BAYES' THEOREM                                       │
 # │                                                                             │
-# │   P(State | Data) = P(Data | State) × P(State) / P(Data)                   │
+# │   P(State | Data) = P(Data | State) × P(State) / P(Data)                    │
 # │                                                                             │
 # │   In robotics terms:                                                        │
 # │     Posterior   = Likelihood × Prior / Evidence                             │
@@ -525,8 +525,8 @@ class Vostok1(Node):
                 if math.isinf(x) or math.isinf(y) or math.isinf(z):
                     continue
                 
-                # Filter by height - obstacles are between -0.2m (water surface) and 3.0m
-                if z < -0.2 or z > 3.0:
+                # Filter by height - relaxed range to catch obstacles in any LiDAR frame
+                if z < -10.0 or z > 20.0:
                     continue
                 
                 # Calculate horizontal distance

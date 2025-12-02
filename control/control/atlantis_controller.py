@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Path
 from sensor_msgs.msg import NavSatFix, Imu, PointCloud2
-from std_msgs.msg import Float64, String
+from std_msgs.msg import Float64, String, Empty
 import math
 import struct
 import json
@@ -101,13 +101,20 @@ class AtlantisController(Node):
         # Statistics & Time
         self.total_distance = 0.0
         self.start_time = None
-        self._last_log_time = self.get_clock().now() 
+        self._last_log_time = self.get_clock().now()
+        
+        # Mission control
+        self.mission_enabled = False  # Wait for start command
 
         # --- SUBSCRIBERS ---
         self.create_subscription(Path, '/atlantis/path', self.path_callback, 10)
         self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, 10)
         self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_callback, 10)
         self.create_subscription(PointCloud2, '/wamv/sensors/lidars/lidar_wamv_sensor/points', self.lidar_callback, rclpy.qos.qos_profile_sensor_data)
+        
+        # Dashboard control subscribers
+        self.create_subscription(Empty, '/atlantis/start', self.start_callback, 10)
+        self.create_subscription(Empty, '/atlantis/stop', self.stop_callback, 10)
 
         # --- PUBLISHERS ---
         self.pub_left = self.create_publisher(Float64, '/wamv/thrusters/left/thrust', 10)
@@ -139,7 +146,7 @@ class AtlantisController(Node):
             self.waypoints = new_waypoints
             self.current_wp_index = 0
             self.get_logger().info(f"Received new plan with {len(self.waypoints)} waypoints")
-            if self.start_gps is not None:
+            if self.start_gps is not None and self.mission_enabled:
                 self.state = "DRIVING"
                 self.start_time = self.get_clock().now()
 
@@ -148,9 +155,24 @@ class AtlantisController(Node):
         if self.start_gps is None:
             self.start_gps = (msg.latitude, msg.longitude)
             self.get_logger().info(f"Home Position Set: {self.start_gps}")
-            if len(self.waypoints) > 0:
+            if len(self.waypoints) > 0 and self.mission_enabled:
                 self.state = "DRIVING"
                 self.start_time = self.get_clock().now()
+
+    def start_callback(self, msg):
+        """Enable mission from dashboard"""
+        self.mission_enabled = True
+        if self.start_gps is not None and len(self.waypoints) > 0:
+            self.state = "DRIVING"
+            self.start_time = self.get_clock().now()
+        self.get_logger().info("🚀 Mission ENABLED from dashboard")
+
+    def stop_callback(self, msg):
+        """Disable mission from dashboard"""
+        self.mission_enabled = False
+        self.state = "PAUSED"
+        self.stop_boat()
+        self.get_logger().info("⏹ Mission PAUSED from dashboard")
 
     def imu_callback(self, msg):
         q = msg.orientation
@@ -232,6 +254,12 @@ class AtlantisController(Node):
         return y, x
 
     def control_loop(self):
+        # Check mission_enabled first
+        if not self.mission_enabled:
+            if self.state == "DRIVING":
+                self.state = "PAUSED"
+            return
+            
         if self.state not in ["DRIVING"] or self.current_gps is None or not self.waypoints:
             if self.state == "STOPPED": self.stop_boat()
             return
@@ -577,9 +605,19 @@ class AtlantisController(Node):
         state_key = "STUCK_ESCAPING" if self.escape_mode else \
                     "OBSTACLE_AVOIDING" if self.avoidance_mode else \
                     "MISSION_COMPLETE" if self.state == "FINISHED" else \
+                    "PAUSED" if self.state == "PAUSED" else \
                     "MOVING_TO_WAYPOINT" if self.state == "DRIVING" else self.state
         msg = String()
-        msg.data = json.dumps({"state": state_key, "waypoint": self.current_wp_index + 1, "total_waypoints": len(self.waypoints), "distance_to_waypoint": round(dist, 1)})
+        msg.data = json.dumps({
+            "state": state_key,
+            "waypoint": self.current_wp_index + 1,
+            "total_waypoints": len(self.waypoints),
+            "distance_to_waypoint": round(dist, 1),
+            "local_x": round(curr_x, 2),
+            "local_y": round(curr_y, 2),
+            "yaw_deg": round(math.degrees(self.current_yaw), 1),
+            "mission_enabled": self.mission_enabled
+        })
         self.pub_mission_status.publish(msg)
         status_text = f"OBSTACLE {round(self.min_obstacle_distance, 1)}m" if self.min_obstacle_distance < self.min_safe_distance else "CLEAR"
         obs_msg = String()
