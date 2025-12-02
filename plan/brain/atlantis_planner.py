@@ -14,8 +14,8 @@ class AtlantisPlanner(Node):
 
         # --- PARAMETERS ---
         self.declare_parameter('scan_length', 150.0)
-        self.declare_parameter('scan_width', 50.0) 
-        self.declare_parameter('lanes', 8)
+        self.declare_parameter('scan_width', 20.0) 
+        self.declare_parameter('lanes', 4)
         self.declare_parameter('frame_id', 'map') 
 
         # --- GEOFENCE PARAMETERS (Added these) ---
