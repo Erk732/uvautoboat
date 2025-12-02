@@ -1,0 +1,27 @@
+pollutant_mission:
+  target_pollutant: "trash"
+  # search_area: polygon (list of lat,lon). Use at least 3 points (closed polygon not required)
+  search_area:
+    - {lat: -33.722710, lon: 150.673974}
+    - {lat: -33.722710, lon: 150.673995}
+    - {lat: -33.721175, lon: 150.673995}
+    - {lat: -33.721175, lon: 150.673974}
+
+  detection_threshold:
+    min_confidence: 0.70
+    min_area_pixels: 500
+
+  on_detection: "stop_and_mark"
+
+  mission_output:
+    - "pollutant_geolocation"
+    - "pollutant_image"
+    - "pollutant_type"
+    - "confidence"
+
+  # Planner-specific tunables (optional)
+  planner:
+    swath_m: 1.0           # smaller than polygon width (~2 m)
+    overlap: 0.1
+    point_spacing_m: 1.0   # dense sampling along tracks
+
