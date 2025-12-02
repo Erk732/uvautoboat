@@ -97,7 +97,7 @@ class AtlantisController(Node):
         # Statistics
         self.total_distance = 0.0
         self.start_time = None
-        self._last_log_time = None
+        self._last_log_time = self.get_clock().now()
 
         # --- SUBSCRIBERS ---
         self.create_subscription(Path, '/atlantis/path', self.path_callback, 10)
