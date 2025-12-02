@@ -601,6 +601,24 @@ function updateAntiStuckStatus(data) {
         }
     }
     
+    // Display Kalman filter uncertainty
+    const driftUncertainty = document.getElementById('drift-uncertainty');
+    if (driftUncertainty && data.drift_uncertainty) {
+        const ux = data.drift_uncertainty[0];
+        const uy = data.drift_uncertainty[1];
+        const avgUncertainty = Math.hypot(ux, uy);
+        if (avgUncertainty < 0.1) {
+            driftUncertainty.textContent = `Высокая | High conf.`;
+            driftUncertainty.style.color = '#4CAF50';
+        } else if (avgUncertainty < 0.5) {
+            driftUncertainty.textContent = `σ=${avgUncertainty.toFixed(2)}`;
+            driftUncertainty.style.color = '#FFC107';
+        } else {
+            driftUncertainty.textContent = `σ=${avgUncertainty.toFixed(2)} (сходится)`;
+            driftUncertainty.style.color = '#FF9800';
+        }
+    }
+    
     if (escapeHistory) {
         escapeHistory.textContent = `${data.escape_history_count} записей | records`;
     }
@@ -696,8 +714,10 @@ function initConfigPanel() {
     // Apply all config button (now applies PID/Speed only)
     document.getElementById('btn-apply-config').addEventListener('click', () => {
         sendConfig(true, false);  // PID only
-        // Clear dirty state for applied inputs
-        clearDirtyInputs(['cfg-kp', 'cfg-ki', 'cfg-kd', 'cfg-base-speed', 'cfg-max-speed', 'cfg-safe-dist']);
+        // Don't clear dirty state immediately - wait for ROS to confirm
+        // The dirty state will be cleared when we receive matching values from ROS
+        // For now, just give feedback
+        addLog('Config sent - waiting for confirmation...', 'info');
     });
     
     console.log('Config panel initialized');
@@ -742,6 +762,11 @@ function updateConfigFromROS(data) {
         if (el && !dirtyInputs.has(id) && document.activeElement !== el && value !== undefined) {
             el.value = value;
         }
+        // Clear dirty state if ROS value matches what we sent (confirmation)
+        if (el && dirtyInputs.has(id) && parseFloat(el.value) === value) {
+            dirtyInputs.delete(id);
+            el.classList.remove('input-dirty');
+        }
     }
     
     for (const [id, value] of Object.entries(wpInputs)) {
@@ -749,6 +774,11 @@ function updateConfigFromROS(data) {
         // Don't update if input is dirty (user modified) or focused
         if (el && !dirtyInputs.has(id) && document.activeElement !== el && value !== undefined) {
             el.value = value;
+        }
+        // Clear dirty state if ROS value matches what we sent (confirmation)
+        if (el && dirtyInputs.has(id) && parseFloat(el.value) === value) {
+            dirtyInputs.delete(id);
+            el.classList.remove('input-dirty');
         }
     }
     
@@ -892,7 +922,7 @@ function initMissionControl() {
         clearWaypointPreview();
     });
     
-    // Step 3: Start/Stop/Resume Mission
+    // Step 3: Start/Stop/Resume/Reset Mission
     document.getElementById('btn-start-mission').addEventListener('click', () => {
         sendMissionCommand('start_mission');
     });
@@ -903,6 +933,14 @@ function initMissionControl() {
     
     document.getElementById('btn-resume-mission').addEventListener('click', () => {
         sendMissionCommand('resume_mission');
+    });
+    
+    document.getElementById('btn-reset-mission').addEventListener('click', () => {
+        if (confirm('Сбросить миссию? | Reset mission and clear waypoints?')) {
+            sendMissionCommand('reset_mission');
+            clearWaypointPreview();
+            addLog('Mission reset - ready for new waypoints', 'warning');
+        }
     });
     
     // Joystick Override
@@ -934,8 +972,7 @@ function generateWaypoints() {
     document.getElementById('cfg-scan-length').value = length;
     document.getElementById('cfg-scan-width').value = width;
     
-    // Clear dirty state for waypoint inputs since we're applying them
-    clearDirtyInputs(['wp-lanes', 'wp-length', 'wp-width', 'cfg-lanes', 'cfg-scan-length', 'cfg-scan-width']);
+    // Don't clear dirty state immediately - wait for ROS confirmation
     
     // Send config update first
     const config = {

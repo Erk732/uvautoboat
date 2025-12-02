@@ -357,6 +357,16 @@ h2 {
     color: white;
 }
 
+.mission-btn.reset {
+    background: linear-gradient(135deg, #fd7e14, #dc6a10);
+    color: white;
+}
+
+.mission-btn.reset:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(253, 126, 20, 0.5);
+}
+
 .mission-btn.joystick {
     background: linear-gradient(135deg, #e83e8c, #d63384);
     color: white;
@@ -418,6 +428,72 @@ h2 {
     font-weight: bold;
     color: #667eea;
     margin-bottom: 10px;
+    font-size: 14px;
+}
+
+/* War Thunder / GTA5 Style Control Grid */
+.teleop-controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 12px 0;
+}
+
+.control-group {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    padding: 10px;
+    border-left: 3px solid #667eea;
+}
+
+.control-header {
+    font-weight: bold;
+    font-size: 12px;
+    color: #667eea;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+.control-keys {
+    font-size: 11px;
+    line-height: 1.8;
+    color: #666;
+}
+
+.control-keys kbd {
+    display: inline-block;
+    background: linear-gradient(180deg, #f0f0f0 0%, #ddd 100%);
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 10px;
+    font-weight: bold;
+    color: #333;
+    box-shadow: 0 2px 0 #999;
+    min-width: 20px;
+    text-align: center;
+}
+
+/* Feature tags */
+.teleop-features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0;
+    padding: 8px;
+    background: rgba(76, 175, 80, 0.1);
+    border-radius: 4px;
+}
+
+.feature-tag {
+    font-size: 10px;
+    color: #4CAF50;
+    background: rgba(76, 175, 80, 0.15);
+    padding: 3px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(76, 175, 80, 0.3);
 }
 
 .joystick-instructions code {
@@ -1513,6 +1589,66 @@ body.bureau-mode .input-dirty {
     background-color: rgba(231, 198, 96, 0.1);
 }
 
+/* Bureau Mode - War Thunder / GTA5 Style Teleop Controls */
+body.bureau-mode .teleop-controls-grid {
+    gap: 15px;
+}
+
+body.bureau-mode .control-group {
+    background: rgba(204, 53, 52, 0.05);
+    border: 1px solid rgba(204, 53, 52, 0.3);
+    border-left: 3px solid var(--bureau-soviet-red);
+}
+
+body.bureau-mode .control-header {
+    color: var(--bureau-soviet-red);
+    border-bottom-color: rgba(204, 53, 52, 0.3);
+    font-family: var(--font-subheader);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+body.bureau-mode .control-keys {
+    color: var(--bureau-text-secondary);
+    font-family: var(--font-body);
+}
+
+body.bureau-mode .control-keys kbd {
+    background: linear-gradient(180deg, var(--bureau-bg-highlight) 0%, var(--bureau-bg-panel) 100%);
+    border: 1px solid var(--bureau-soviet-red);
+    color: var(--bureau-text-main);
+    box-shadow: 0 2px 0 var(--bureau-bg-main);
+}
+
+body.bureau-mode .teleop-features {
+    background: rgba(204, 53, 52, 0.05);
+    border: 1px solid rgba(204, 53, 52, 0.2);
+}
+
+body.bureau-mode .feature-tag {
+    color: var(--bureau-teal);
+    background: rgba(58, 145, 168, 0.1);
+    border-color: rgba(58, 145, 168, 0.4);
+}
+
+body.bureau-mode .instructions-title {
+    color: var(--bureau-soviet-red);
+    font-family: var(--font-subheader);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+body.bureau-mode .joystick-instructions {
+    background: rgba(204, 53, 52, 0.03);
+    border-color: rgba(204, 53, 52, 0.3);
+}
+
+body.bureau-mode .joystick-instructions code {
+    background: var(--bureau-bg-inset);
+    color: var(--bureau-teal);
+    border-left-color: var(--bureau-soviet-red);
+}
+
 
 /* ============================================================ */
 /* ========== TERMINAL MODE (CRT Green Phosphor) ============== */
@@ -1961,6 +2097,65 @@ body.terminal-mode .input-dirty {
     border-color: #FFCC00 !important;
     box-shadow: 0 0 8px rgba(255, 204, 0, 0.4);
     background-color: rgba(255, 204, 0, 0.1);
+}
+
+/* Terminal Mode - War Thunder / GTA5 Style Teleop Controls */
+body.terminal-mode .teleop-controls-grid {
+    gap: 15px;
+}
+
+body.terminal-mode .control-group {
+    background: rgba(51, 204, 255, 0.05);
+    border: 1px solid rgba(51, 204, 255, 0.3);
+    border-left: 3px solid #33CCFF;
+}
+
+body.terminal-mode .control-header {
+    color: #33CCFF;
+    text-shadow: 0 0 8px rgba(51, 204, 255, 0.5);
+    border-bottom-color: rgba(51, 204, 255, 0.3);
+}
+
+body.terminal-mode .control-keys {
+    color: rgba(51, 204, 255, 0.8);
+    font-family: 'Courier New', monospace;
+}
+
+body.terminal-mode .control-keys kbd {
+    background: linear-gradient(180deg, #1a1a1a 0%, #0d0d0d 100%);
+    border: 1px solid #33CCFF;
+    color: #33CCFF;
+    box-shadow: 0 2px 0 #1a4a5a, 0 0 8px rgba(51, 204, 255, 0.3);
+    text-shadow: 0 0 5px rgba(51, 204, 255, 0.5);
+}
+
+body.terminal-mode .teleop-features {
+    background: rgba(51, 204, 255, 0.05);
+    border: 1px solid rgba(51, 204, 255, 0.2);
+}
+
+body.terminal-mode .feature-tag {
+    color: #33CCFF;
+    background: rgba(51, 204, 255, 0.1);
+    border-color: rgba(51, 204, 255, 0.4);
+    text-shadow: 0 0 5px rgba(51, 204, 255, 0.3);
+}
+
+body.terminal-mode .instructions-title {
+    color: #33CCFF;
+    text-shadow: 0 0 10px rgba(51, 204, 255, 0.5);
+}
+
+body.terminal-mode .joystick-instructions {
+    background: rgba(51, 204, 255, 0.03);
+    border-color: rgba(51, 204, 255, 0.3);
+}
+
+body.terminal-mode .joystick-instructions code {
+    background: rgba(0, 0, 0, 0.5);
+    color: #33FF99;
+    border-left-color: #33CCFF;
+    text-shadow: 0 0 5px rgba(51, 255, 153, 0.5);
 }
 
 /* Scrollbars - Terminal Mode */

@@ -9,6 +9,268 @@ import json
 from sensor_msgs.msg import NavSatFix, Imu, PointCloud2
 from std_msgs.msg import Float64, String
 
+
+# =============================================================================
+# BAYESIAN STATE ESTIMATION FUNDAMENTALS
+# =============================================================================
+#
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                        BAYES' THEOREM                                       │
+# │                                                                             │
+# │   P(State | Data) = P(Data | State) × P(State) / P(Data)                   │
+# │                                                                             │
+# │   In robotics terms:                                                        │
+# │     Posterior   = Likelihood × Prior / Evidence                             │
+# │     (new belief)   (sensor)    (old belief)                                 │
+# │                                                                             │
+# │   Example: "Where is my boat?"                                              │
+# │     Prior:      Before GPS reading, I think I'm somewhere near (x,y)        │
+# │     Likelihood: GPS says I'm at position z with some accuracy               │
+# │     Posterior:  Combining both, my best estimate of true position           │
+# │                                                                             │
+# │   This is the foundation of ALL probabilistic robotics!                     │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                   KALMAN FILTER = BAYESIAN + GAUSSIAN                       │
+# │                                                                             │
+# │   For continuous states with Gaussian (bell curve) distributions:           │
+# │     - Instead of P(x), we track μ (mean) and σ² (variance)                  │
+# │     - Multiplying two Gaussians gives another Gaussian                      │
+# │     - This makes Bayes' theorem computable in closed form!                  │
+# │                                                                             │
+# │   Why Gaussians?                                                            │
+# │     1. Central Limit Theorem: Sum of many small errors → Gaussian           │
+# │     2. Mathematically tractable: Products and sums stay Gaussian            │
+# │     3. Only need 2 parameters (μ, σ²) to fully describe distribution        │
+# │                                                                             │
+# │   Kalman Filter is OPTIMAL for linear systems with Gaussian noise!          │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
+# =============================================================================
+# KALMAN FILTER FOR DRIFT ESTIMATION
+# =============================================================================
+# 
+# A Kalman filter is an optimal recursive estimator that combines:
+# 1. A prediction model (how we expect the system to evolve)
+# 2. Noisy measurements (what we actually observe)
+# 
+# For drift estimation, our state is [drift_x, drift_y] - the water/wind current
+# pushing our boat. This drift is typically slowly varying, so our model assumes
+# the drift stays roughly constant between updates (random walk model).
+#
+# The Kalman filter maintains:
+# - x: state estimate (our best guess of drift)
+# - P: error covariance (how uncertain we are about x)
+#
+# Each cycle:
+# 1. PREDICT: Project state forward using our model
+#    x_pred = F @ x  (F is state transition matrix)
+#    P_pred = F @ P @ F.T + Q  (Q is process noise - models how drift changes)
+#
+# 2. UPDATE: Correct prediction using measurement
+#    K = P_pred @ H.T @ inv(H @ P_pred @ H.T + R)  (K is Kalman gain)
+#    x = x_pred + K @ (z - H @ x_pred)  (z is measurement)
+#    P = (I - K @ H) @ P_pred
+#
+# Key insight: Kalman gain K balances trust between prediction and measurement.
+# High measurement noise R → trust prediction more
+# High process noise Q → trust measurement more
+# =============================================================================
+
+class KalmanDriftEstimator:
+    """
+    2D Kalman Filter for estimating water/wind drift affecting the boat.
+    
+    State vector: [drift_x, drift_y]
+    These represent the velocity components (m/s) of environmental forces
+    pushing the boat off course.
+    
+    Learning Points:
+    - Process noise Q: How much we expect drift to change between updates
+      (small Q = assume drift is very stable, large Q = drift can change quickly)
+    - Measurement noise R: How noisy our velocity/position measurements are
+      (small R = trust measurements, large R = trust predictions)
+    """
+    
+    def __init__(self, process_noise=0.01, measurement_noise=0.5):
+        """
+        Initialize the Kalman filter for drift estimation.
+        
+        Args:
+            process_noise: Variance of drift change per timestep (Q diagonal)
+                          Small value (~0.01) = assume drift changes slowly
+                          Large value (~0.1) = drift can change quickly
+            measurement_noise: Variance of velocity measurements (R diagonal)
+                              Small value (~0.1) = GPS/IMU very accurate
+                              Large value (~1.0) = sensors quite noisy
+        """
+        # State dimension: 2 (drift_x, drift_y)
+        self.n = 2
+        
+        # --- STATE ESTIMATE ---
+        # x: Current best estimate of drift [drift_x, drift_y]
+        # Start with zero drift assumption
+        self.x = np.zeros((self.n, 1))
+        
+        # --- ERROR COVARIANCE ---
+        # P: Uncertainty in our state estimate
+        # Start with high uncertainty (we don't know initial drift)
+        # This 2x2 matrix represents variance in each component and their correlation
+        self.P = np.eye(self.n) * 1.0  # Initial uncertainty = 1 m²/s²
+        
+        # --- STATE TRANSITION MODEL ---
+        # F: How state evolves over time
+        # For drift, we use a random walk model: drift stays constant + small noise
+        # x(k+1) = F @ x(k) + w, where w ~ N(0, Q)
+        self.F = np.eye(self.n)  # Identity = drift doesn't change systematically
+        
+        # --- MEASUREMENT MODEL ---
+        # H: How measurements relate to state
+        # We directly observe drift through position/velocity errors
+        # z = H @ x + v, where v ~ N(0, R)
+        self.H = np.eye(self.n)  # We measure drift directly
+        
+        # --- PROCESS NOISE COVARIANCE ---
+        # Q: Uncertainty in our motion model
+        # Larger Q = drift can change more between updates = more responsive
+        # Smaller Q = drift assumed more stable = smoother estimates
+        self.Q = np.eye(self.n) * process_noise
+        
+        # --- MEASUREMENT NOISE COVARIANCE ---
+        # R: Uncertainty in our measurements
+        # Larger R = measurements less reliable = filter more sluggish
+        # Smaller R = measurements more trusted = filter more responsive
+        self.R = np.eye(self.n) * measurement_noise
+        
+        # Store for diagnostics
+        self.last_innovation = np.zeros((self.n, 1))  # Measurement surprise
+        self.last_kalman_gain = np.zeros((self.n, self.n))
+        
+    def predict(self, dt=0.1):
+        """
+        PREDICTION STEP: Project state and covariance forward in time.
+        
+        This is the "prior" in Bayesian terms - our belief before seeing data.
+        
+        Args:
+            dt: Time step (currently unused since we assume constant drift,
+                but could scale Q for variable-rate updates)
+        
+        Math:
+            x_pred = F @ x     (state prediction)
+            P_pred = F @ P @ F.T + Q  (covariance prediction)
+        
+        The process noise Q gets added, representing our uncertainty about
+        how drift might have changed since last update.
+        """
+        # State prediction: x(k|k-1) = F @ x(k-1|k-1)
+        # For random walk: x stays the same (drift is persistent)
+        self.x = self.F @ self.x
+        
+        # Covariance prediction: P(k|k-1) = F @ P(k-1|k-1) @ F.T + Q
+        # Uncertainty grows due to process noise
+        self.P = self.F @ self.P @ self.F.T + self.Q
+        
+    def update(self, z):
+        """
+        UPDATE STEP: Correct prediction using measurement.
+        
+        This is the "posterior" in Bayesian terms - our belief after seeing data.
+        The Kalman gain K optimally weights prediction vs measurement.
+        
+        Args:
+            z: Measurement vector [measured_drift_x, measured_drift_y]
+               This comes from comparing expected vs actual position change.
+        
+        Math:
+            Innovation: y = z - H @ x  (measurement surprise)
+            Innovation covariance: S = H @ P @ H.T + R
+            Kalman gain: K = P @ H.T @ S^(-1)
+            State update: x = x + K @ y
+            Covariance update: P = (I - K @ H) @ P
+        
+        Key insight: If measurement noise R is large, K is small, and we
+        mostly trust our prediction. If R is small, K is large, and we
+        mostly trust the measurement.
+        """
+        # Ensure z is column vector
+        z = np.array(z).reshape((self.n, 1))
+        
+        # --- INNOVATION (MEASUREMENT RESIDUAL) ---
+        # y = z - H @ x: How much measurement differs from prediction
+        # Large innovation = big surprise = either real drift change or noise
+        y = z - self.H @ self.x
+        self.last_innovation = y.copy()
+        
+        # --- INNOVATION COVARIANCE ---
+        # S = H @ P @ H.T + R: Combined uncertainty from prediction and measurement
+        S = self.H @ self.P @ self.H.T + self.R
+        
+        # --- KALMAN GAIN ---
+        # K = P @ H.T @ S^(-1): Optimal weighting factor
+        # K near 1 = trust measurement, K near 0 = trust prediction
+        # Note: np.linalg.solve is numerically more stable than explicit inverse
+        K = self.P @ self.H.T @ np.linalg.inv(S)
+        self.last_kalman_gain = K.copy()
+        
+        # --- STATE UPDATE ---
+        # x = x + K @ y: Correct prediction with weighted innovation
+        self.x = self.x + K @ y
+        
+        # --- COVARIANCE UPDATE ---
+        # P = (I - K @ H) @ P: Reduce uncertainty (we gained information)
+        I = np.eye(self.n)
+        self.P = (I - K @ self.H) @ self.P
+        
+    def get_drift(self):
+        """
+        Get current drift estimate as a tuple.
+        
+        Returns:
+            (drift_x, drift_y): Estimated drift velocity in m/s
+        """
+        return (float(self.x[0, 0]), float(self.x[1, 0]))
+    
+    def get_uncertainty(self):
+        """
+        Get current estimation uncertainty (standard deviation).
+        
+        Returns:
+            (std_x, std_y): Standard deviation of drift estimate
+            Useful for confidence intervals: true_drift ≈ estimate ± 2*std (95%)
+        """
+        return (float(np.sqrt(self.P[0, 0])), float(np.sqrt(self.P[1, 1])))
+    
+    def reset(self, initial_drift=(0.0, 0.0)):
+        """
+        Reset filter to initial state.
+        
+        Args:
+            initial_drift: Starting drift estimate
+        """
+        self.x = np.array([[initial_drift[0]], [initial_drift[1]]])
+        self.P = np.eye(self.n) * 1.0  # Reset uncertainty
+        
+    def set_noise_params(self, process_noise=None, measurement_noise=None):
+        """
+        Tune filter responsiveness.
+        
+        Args:
+            process_noise: Higher = more responsive to changes, noisier output
+            measurement_noise: Higher = smoother output, slower response
+            
+        Tuning guide:
+        - If drift estimate is too noisy: increase measurement_noise
+        - If drift estimate responds too slowly: increase process_noise
+        - If drift estimate overshoots: decrease process_noise
+        """
+        if process_noise is not None:
+            self.Q = np.eye(self.n) * process_noise
+        if measurement_noise is not None:
+            self.R = np.eye(self.n) * measurement_noise
+
+
 class Vostok1(Node):
     def __init__(self):
         super().__init__('vostok1_node')
@@ -42,6 +304,11 @@ class Vostok1(Node):
         self.declare_parameter('drift_compensation_gain', 0.3)  # How aggressively to compensate for drift
         self.declare_parameter('probe_angle', 45.0)  # Degrees to probe left/right during escape
         self.declare_parameter('detour_distance', 12.0)  # Distance for detour waypoints
+        
+        # Kalman filter parameters for drift estimation
+        # See KalmanDriftEstimator class for detailed explanation
+        self.declare_parameter('kalman_process_noise', 0.01)  # How fast drift can change
+        self.declare_parameter('kalman_measurement_noise', 0.5)  # GPS/position sensor noise
 
         # Get parameters
         self.scan_length = self.get_parameter('scan_length').value
@@ -106,7 +373,21 @@ class Vostok1(Node):
         # Smart anti-stuck state
         self.no_go_zones = []  # List of (x, y, radius) zones to avoid
         self.escape_history = []  # List of {position, direction, success} for learning
-        self.drift_vector = (0.0, 0.0)  # Estimated current/wind drift
+        
+        # --- KALMAN FILTER FOR DRIFT ESTIMATION ---
+        # Initialize Kalman filter with tunable noise parameters
+        # Process noise: how quickly we expect drift to change (currents, wind shifts)
+        # Measurement noise: how noisy our position/velocity measurements are
+        kalman_process = self.get_parameter('kalman_process_noise').value
+        kalman_measurement = self.get_parameter('kalman_measurement_noise').value
+        self.drift_kalman = KalmanDriftEstimator(
+            process_noise=kalman_process,
+            measurement_noise=kalman_measurement
+        )
+        # Legacy tuple interface for backward compatibility
+        # Now computed from Kalman filter state
+        self.drift_vector = (0.0, 0.0)  # Updated by Kalman filter
+        
         self.position_history = []  # Recent positions for drift estimation
         self.expected_positions = []  # Expected positions based on commands
         self.escape_phase = 0  # Current phase of escape maneuver
@@ -572,7 +853,9 @@ class Vostok1(Node):
                 
             elif command == 'start_mission':
                 # Start the mission (user gives permission)
-                if self.waypoints and self.state in ["READY", "PAUSED", "WAYPOINTS_PREVIEW"]:
+                # Also allow starting from FINISHED state (restart with existing waypoints)
+                if self.waypoints and self.state in ["READY", "PAUSED", "WAYPOINTS_PREVIEW", "FINISHED"]:
+                    self.current_wp_index = 0 if self.state == "FINISHED" else self.current_wp_index
                     self.state = "RUNNING"
                     self.mission_armed = True
                     self.joystick_override = False
@@ -581,6 +864,17 @@ class Vostok1(Node):
                     self.get_logger().info("🚀 МИССИЯ ЗАПУЩЕНА | MISSION STARTED!")
                 else:
                     self.get_logger().warn(f"Cannot start - state={self.state}, waypoints={len(self.waypoints)}")
+                    
+            elif command == 'reset_mission':
+                # Reset mission to IDLE state, clear waypoints
+                self.waypoints = []
+                self.current_wp_index = 0
+                self.state = "IDLE"
+                self.mission_armed = False
+                self.integral_error = 0.0
+                self.previous_error = 0.0
+                self.stop_thrusters()
+                self.get_logger().info("🔄 МИССИЯ СБРОШЕНА | MISSION RESET!")
                     
             elif command == 'stop_mission':
                 # Emergency stop - stop motors and pause
@@ -1150,12 +1444,32 @@ class Vostok1(Node):
             return learned_bias if learned_bias else 'LEFT'
     
     def estimate_drift(self):
-        """Estimate current/wind drift from position history"""
+        """
+        Estimate current/wind drift using Kalman filter.
+        
+        The Kalman filter optimally combines:
+        1. Our prediction (drift stays constant - random walk model)
+        2. Our measurement (observed position change vs expected)
+        
+        This is superior to simple EMA because:
+        - It properly handles measurement uncertainty
+        - It tracks estimation confidence (covariance)
+        - It provides optimal weighting via Kalman gain
+        - It naturally handles variable update rates
+        """
         if len(self.position_history) < 20:  # Need enough samples
+            # Still run predict step to advance time (uncertainty grows)
+            self.drift_kalman.predict()
+            self.drift_vector = self.drift_kalman.get_drift()
             return
         
-        # Compare recent movement to expected movement
-        # Simple approach: look at movement when thrust was minimal
+        # --- PREDICTION STEP ---
+        # Advance our belief: drift stays same but uncertainty grows
+        self.drift_kalman.predict()
+        
+        # --- MEASUREMENT STEP ---
+        # Calculate observed drift from recent position changes
+        # Compare actual movement to what we expected (based on thrust commands)
         recent = self.position_history[-20:]
         
         # Calculate average velocity over recent history
@@ -1164,15 +1478,22 @@ class Vostok1(Node):
         time_diff = (recent[-1][2] - recent[0][2]).nanoseconds / 1e9
         
         if time_diff > 0.5:  # At least 0.5 seconds of data
-            # Smooth drift estimate with exponential moving average
-            alpha = 0.1  # Smoothing factor
-            new_drift_x = total_dx / time_diff
-            new_drift_y = total_dy / time_diff
+            # Measured drift = observed velocity
+            # (In a full implementation, we'd subtract commanded velocity)
+            measured_drift_x = total_dx / time_diff
+            measured_drift_y = total_dy / time_diff
             
-            self.drift_vector = (
-                alpha * new_drift_x + (1 - alpha) * self.drift_vector[0],
-                alpha * new_drift_y + (1 - alpha) * self.drift_vector[1]
-            )
+            # --- UPDATE STEP ---
+            # Correct prediction with measurement
+            # Kalman gain automatically weights based on uncertainties
+            self.drift_kalman.update([measured_drift_x, measured_drift_y])
+        
+        # Update legacy tuple for backward compatibility
+        self.drift_vector = self.drift_kalman.get_drift()
+        
+        # Optional: Log Kalman filter diagnostics
+        # uncertainty = self.drift_kalman.get_uncertainty()
+        # self.get_logger().debug(f'Drift: {self.drift_vector}, Uncertainty: {uncertainty}')
     
     def calculate_drift_compensation(self):
         """Calculate thrust compensation for estimated drift"""
@@ -1281,6 +1602,9 @@ class Vostok1(Node):
     
     def publish_anti_stuck_status(self):
         """Publish anti-stuck system status for web dashboard"""
+        # Get Kalman filter uncertainty for diagnostics
+        drift_uncertainty = self.drift_kalman.get_uncertainty()
+        
         msg = String()
         msg.data = json.dumps({
             'is_stuck': self.is_stuck,
@@ -1290,6 +1614,12 @@ class Vostok1(Node):
             'adaptive_duration': round(self.adaptive_escape_duration, 1),
             'no_go_zones': len(self.no_go_zones),
             'drift_vector': [round(self.drift_vector[0], 3), round(self.drift_vector[1], 3)],
+            # New: Kalman filter diagnostics
+            'drift_uncertainty': [round(drift_uncertainty[0], 3), round(drift_uncertainty[1], 3)],
+            'drift_kalman_gain': [
+                round(float(self.drift_kalman.last_kalman_gain[0, 0]), 3),
+                round(float(self.drift_kalman.last_kalman_gain[1, 1]), 3)
+            ],
             'escape_history_count': len(self.escape_history),
             'best_direction': self.best_escape_direction,
             'probe_results': {
