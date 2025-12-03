@@ -13,6 +13,7 @@ class AtlantisController(Node):
         super().__init__('atlantis_controller')
 
         # --- PARAMETERS ---
+        self.declare_parameter('auto_start_mission', True)  # Auto-enable when GPS + path ready
         self.declare_parameter('base_speed', 500.0)
         self.declare_parameter('max_speed', 800.0)
         self.declare_parameter('waypoint_tolerance', 2.0)
@@ -146,6 +147,10 @@ class AtlantisController(Node):
             self.waypoints = new_waypoints
             self.current_wp_index = 0
             self.get_logger().info(f"Received new plan with {len(self.waypoints)} waypoints")
+            # Auto-enable mission if GPS is ready and we have waypoints
+            if self.start_gps is not None:
+                self.mission_enabled = True
+                self.get_logger().info("✅ Mission AUTO-ENABLED (GPS ready + path received)")
             if self.start_gps is not None and self.mission_enabled:
                 self.state = "DRIVING"
                 self.start_time = self.get_clock().now()
@@ -155,6 +160,10 @@ class AtlantisController(Node):
         if self.start_gps is None:
             self.start_gps = (msg.latitude, msg.longitude)
             self.get_logger().info(f"Home Position Set: {self.start_gps}")
+            # Auto-enable mission if we already have waypoints
+            if len(self.waypoints) > 0:
+                self.mission_enabled = True
+                self.get_logger().info("✅ Mission AUTO-ENABLED (path ready + GPS acquired)")
             if len(self.waypoints) > 0 and self.mission_enabled:
                 self.state = "DRIVING"
                 self.start_time = self.get_clock().now()
