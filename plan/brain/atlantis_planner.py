@@ -12,7 +12,7 @@ import time
 import math
 import struct
 
-# NEW: Relative import (Works if you added __init__.py)
+# Related import (Works when there is __init__.py)
 from .lidar_obstacle_avoidance import (
     LidarObstacleDetector,
     ObstacleClustering,
