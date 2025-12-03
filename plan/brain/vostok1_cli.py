@@ -6,10 +6,10 @@ Mission CLI - Contrôle de mission via terminal
 Use this when the web dashboard is unavailable.
 
 MODES:
-    --mode vostok1   (default) Use integrated Vostok1 navigation
-    --mode modular   Use modular Sputnik planner + separate controller
+    --mode modular   (default) Use modular Sputnik planner + Buran controller
+    --mode vostok1   Use integrated Vostok1 navigation
 
-Usage (Integrated - Vostok1):
+Usage (Modular - Sputnik Planner - Default):
     # Generate waypoints with default parameters
     ros2 run plan vostok1_cli generate
     
@@ -28,6 +28,12 @@ Usage (Integrated - Vostok1):
     # Reset mission (clear waypoints)
     ros2 run plan vostok1_cli reset
     
+    # Go home (return to spawn)
+    ros2 run plan vostok1_cli home
+    
+    # Confirm waypoints
+    ros2 run plan vostok1_cli confirm
+    
     # Set PID parameters
     ros2 run plan vostok1_cli pid --kp 400 --ki 20 --kd 100
     
@@ -40,20 +46,20 @@ Usage (Integrated - Vostok1):
     # Interactive mode
     ros2 run plan vostok1_cli interactive
 
-Usage (Modular - Sputnik Planner):
+Usage (Integrated - Vostok1):
     # Generate waypoints
-    ros2 run plan vostok1_cli --mode modular generate --lanes 8 --length 15 --width 5
+    ros2 run plan vostok1_cli --mode vostok1 generate --lanes 8 --length 15 --width 5
     
     # Start mission
-    ros2 run plan vostok1_cli --mode modular start
+    ros2 run plan vostok1_cli --mode vostok1 start
     
     # Stop / Resume / Reset
-    ros2 run plan vostok1_cli --mode modular stop
-    ros2 run plan vostok1_cli --mode modular resume
-    ros2 run plan vostok1_cli --mode modular reset
+    ros2 run plan vostok1_cli --mode vostok1 stop
+    ros2 run plan vostok1_cli --mode vostok1 resume
+    ros2 run plan vostok1_cli --mode vostok1 reset
     
     # Interactive mode
-    ros2 run plan vostok1_cli --mode modular interactive
+    ros2 run plan vostok1_cli --mode vostok1 interactive
 """
 
 import rclpy
