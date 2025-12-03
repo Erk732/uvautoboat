@@ -303,15 +303,15 @@ Understanding the coordinate system is essential for working with VRX simulation
 
 AutoBoat provides multiple navigation systems:
 
-| Aspect | Vostok1 (Integrated) | Modular (TNO) | Apollo11 (Legacy) |
-|:-------|:---------------------|:--------------|:------------------|
-| **Approach** | Self-contained node | Distributed nodes | Modular subsystems |
+| Aspect | Vostok1 (Integrated) | Modular (TNO) | Atlantis (Control Group) |
+|:-------|:---------------------|:--------------|:-------------------------|
+| **Approach** | Self-contained node | Distributed nodes | Integrated controller |
 | **LIDAR** | 3D PointCloud2 | 3D PointCloud2 | 2D LaserScan |
 | **Detection** | Full 3D volume | Full 3D volume | Horizontal plane |
-| **Control** | PID heading | PID (configurable) | Direct thrust |
-| **Monitoring** | Terminal + Web | Terminal (bilingual) | Terminal only |
+| **Control** | PID heading | PID (configurable) | PID heading |
+| **Monitoring** | Terminal + Web | Terminal (bilingual) | Web Dashboard |
 | **Anti-Stuck** | SASS v2.0 | SASS v2.0 | Basic reverse |
-| **Best For** | Production use | Custom tuning | Simple testing |
+| **Best For** | Production use | Custom tuning | Control group testing |
 
 ### Modular Architecture (TNO Style)
 
@@ -322,6 +322,55 @@ The modular system uses Soviet/Russian space program naming:
 | **ОКО** (Oko) | `oko_perception` | 3D LIDAR obstacle detection |
 | **СПУТНИК** (Sputnik) | `sputnik_planner` | GPS waypoint planning |
 | **БУРАН** (Buran) | `buran_controller` | PID heading control + SASS |
+
+### Modular Topic Flow Diagram
+
+Detailed ROS 2 topic connections between the modular nodes:
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          VOSTOK1 MODULAR SYSTEM                                 │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌──────────┐                                                                   │
+│  │   OKO    │ /perception/obstacle_info ────────────► BURAN (obstacle_callback) │
+│  │ (LiDAR)  │                           ────────────► SPUTNIK (obstacle_callback)│
+│  └──────────┘                                                                   │
+│       ▲                                                                         │
+│       │ /wamv/sensors/lidars/lidar_wamv/points                                  │
+│                                                                                 │
+│  ┌──────────┐  /planning/current_target ────────────► BURAN (target_callback)   │
+│  │ SPUTNIK  │  /planning/mission_status ────────────► BURAN (mission_status_cb) │
+│  │(Planner) │  /sputnik/config          ────────────► BURAN (sputnik_config_cb) │
+│  └──────────┘                                                                   │
+│       ▲  ▲                                                                      │
+│       │  │ /planning/detour_request ◄────────────────── BURAN (pub_detour)      │
+│       │  │                                                                      │
+│       │  └─ /wamv/sensors/gps/gps/fix                                           │
+│       └──── /sputnik/mission_command ◄───────────────── CLI / Dashboard         │
+│                                                                                 │
+│  ┌──────────┐  /wamv/thrusters/left/thrust  ────────► Gazebo Simulator          │
+│  │  BURAN   │  /wamv/thrusters/right/thrust ────────► Gazebo Simulator          │
+│  │(Control) │  /buran/status                ────────► Web Dashboard             │
+│  └──────────┘                                                                   │
+│       ▲  ▲                                                                      │
+│       │  └─ /wamv/sensors/imu/imu/data                                          │
+│       └──── /vostok1/set_config ◄────────────────────── Dashboard (runtime PID) │
+│                                                                                 │
+│  External Control:                                                              │
+│  ├─ /sputnik/set_config         ◄─────────── Dashboard (waypoint radius, etc.) │
+│  └─ /sputnik/mission_command    ◄─────────── CLI: start, pause, stop, go_home  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**JSON Message Formats:**
+
+| Topic | Format |
+|:------|:-------|
+| `/perception/obstacle_info` | `{obstacle_detected, min_distance, front_clear, left_clear, right_clear, is_critical}` |
+| `/planning/current_target` | `{current_position, target_waypoint, distance_to_target, waypoint_index, target_heading}` |
+| `/planning/mission_status` | `{state, current_waypoint, total_waypoints, progress_percent, elapsed_time}` |
+| `/planning/detour_request` | `{type, x, y}` |
 
 ### Data Flow Diagram
 
@@ -634,13 +683,15 @@ The **vostok1_cli** provides terminal-based mission control when the web dashboa
 
 | Mode | Flag | Description |
 |:-----|:-----|:------------|
-| **Vostok1** | `--mode vostok1` (default) | Integrated navigation |
-| **Modular** | `--mode modular` | Sputnik + Buran |
+| **Modular** | `--mode modular` (default) | Sputnik + Buran |
+| **Vostok1** | `--mode vostok1` | Integrated navigation |
+
+> **Note:** Default mode is now `modular` since the Sputnik + Buran architecture is the primary system.
 
 ### Waypoint Generation
 
 ```bash
-# Default: 4 lanes, 150m length, 20m width - this is the best route for now!
+# Default: 8 lanes, 50m length, 20m width
 ros2 run plan vostok1_cli generate
 
 # Custom parameters
@@ -649,19 +700,20 @@ ros2 run plan vostok1_cli generate --lanes 10 --length 50 --width 20
 
 | Parameter | Default | Description |
 |:----------|:--------|:------------|
-| `--lanes` | 8 | Number of parallel scan lines |
-| `--length` | 50.0 | Length of each lane (meters) |
-| `--width` | 20.0 | Spacing between lanes (meters) |
+| `--lanes`, `-l` | 8 | Number of parallel scan lines |
+| `--length`, `-L` | 50.0 | Length of each lane (meters) |
+| `--width`, `-w` | 20.0 | Spacing between lanes (meters) |
 
 ### Mission Control
 
 ```bash
-ros2 run plan vostok1_cli start    # 🚀 Start mission
-ros2 run plan vostok1_cli stop     # 🛑 Pause mission
-ros2 run plan vostok1_cli resume   # ▶️ Resume mission
-ros2 run plan vostok1_cli home     # 🏠 Return to spawn
-ros2 run plan vostok1_cli reset    # 🔄 Clear waypoints and reset
-ros2 run plan vostok1_cli status   # 📊 Show current status
+ros2 run plan vostok1_cli start     # 🚀 Start mission
+ros2 run plan vostok1_cli stop      # 🛑 Pause mission
+ros2 run plan vostok1_cli resume    # ▶️ Resume mission
+ros2 run plan vostok1_cli home      # 🏠 Return to spawn
+ros2 run plan vostok1_cli reset     # 🔄 Clear waypoints and reset
+ros2 run plan vostok1_cli confirm   # ✅ Confirm waypoints
+ros2 run plan vostok1_cli status    # 📊 Show current status
 ```
 
 ### Parameter Tuning
@@ -689,45 +741,51 @@ ros2 run plan vostok1_cli interactive
 | `s` | Start mission |
 | `x` | Stop/pause |
 | `r` | Resume |
-| `home` | Go to spawn |
+| `home` | 🏠 Go to spawn |
 | `reset` | Reset mission |
 | `status` | Show status |
 | `pid <kp> <ki> <kd>` | Set PID parameters |
 | `speed <base> <max>` | Set speed limits |
 | `q` | Quit interactive mode |
 
-### Modular Mode Examples
+### Vostok1 Mode Examples
 
-For the modular architecture (Sputnik planner + Buran controller):
+For the integrated Vostok1 architecture (single node):
 
 ```bash
 # Generate waypoints
-ros2 run plan vostok1_cli --mode modular generate --lanes 8 --length 15 --width 5
+ros2 run plan vostok1_cli --mode vostok1 generate --lanes 8 --length 15 --width 5
 
 # Start mission
-ros2 run plan vostok1_cli --mode modular start
+ros2 run plan vostok1_cli --mode vostok1 start
 
 # Interactive mode
-ros2 run plan vostok1_cli --mode modular interactive
+ros2 run plan vostok1_cli --mode vostok1 interactive
 ```
 
 ### Typical Workflow
 
 ```bash
-# 1. Generate waypoints
+# 1. Generate waypoints (uses modular mode by default)
 ros2 run plan vostok1_cli generate --lanes 10 --length 60 --width 25
 
-# 2. Start mission
+# 2. Confirm waypoints
+ros2 run plan vostok1_cli confirm
+
+# 3. Start mission
 ros2 run plan vostok1_cli start
 
-# 3. Monitor (optional)
+# 4. Monitor (optional)
 ros2 run plan vostok1_cli status
 
-# 4. Pause if needed
+# 5. Pause if needed
 ros2 run plan vostok1_cli stop
 
-# 5. Resume
+# 6. Resume
 ros2 run plan vostok1_cli resume
+
+# 7. Return home when done
+ros2 run plan vostok1_cli home
 ```
 
 ---

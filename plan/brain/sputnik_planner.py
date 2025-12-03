@@ -250,8 +250,9 @@ class SputnikPlanner(Node):
         import json
         try:
             data = json.loads(msg.data)
-            detour_x = data.get('detour_x')
-            detour_y = data.get('detour_y')
+            # Support both 'x'/'y' and 'detour_x'/'detour_y' keys
+            detour_x = data.get('detour_x') or data.get('x')
+            detour_y = data.get('detour_y') or data.get('y')
             
             if detour_x is not None and detour_y is not None and self.state == "DRIVING":
                 # Insert detour waypoint before current target
