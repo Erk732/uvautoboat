@@ -683,13 +683,15 @@ The **vostok1_cli** provides terminal-based mission control when the web dashboa
 
 | Mode | Flag | Description |
 |:-----|:-----|:------------|
-| **Vostok1** | `--mode vostok1` (default) | Integrated navigation |
-| **Modular** | `--mode modular` | Sputnik + Buran |
+| **Modular** | `--mode modular` (default) | Sputnik + Buran |
+| **Vostok1** | `--mode vostok1` | Integrated navigation |
+
+> **Note:** Default mode is now `modular` since the Sputnik + Buran architecture is the primary system.
 
 ### Waypoint Generation
 
 ```bash
-# Default: 4 lanes, 150m length, 20m width - this is the best route for now!
+# Default: 8 lanes, 50m length, 20m width
 ros2 run plan vostok1_cli generate
 
 # Custom parameters
@@ -698,19 +700,20 @@ ros2 run plan vostok1_cli generate --lanes 10 --length 50 --width 20
 
 | Parameter | Default | Description |
 |:----------|:--------|:------------|
-| `--lanes` | 8 | Number of parallel scan lines |
-| `--length` | 50.0 | Length of each lane (meters) |
-| `--width` | 20.0 | Spacing between lanes (meters) |
+| `--lanes`, `-l` | 8 | Number of parallel scan lines |
+| `--length`, `-L` | 50.0 | Length of each lane (meters) |
+| `--width`, `-w` | 20.0 | Spacing between lanes (meters) |
 
 ### Mission Control
 
 ```bash
-ros2 run plan vostok1_cli start    # 🚀 Start mission
-ros2 run plan vostok1_cli stop     # 🛑 Pause mission
-ros2 run plan vostok1_cli resume   # ▶️ Resume mission
-ros2 run plan vostok1_cli home     # 🏠 Return to spawn
-ros2 run plan vostok1_cli reset    # 🔄 Clear waypoints and reset
-ros2 run plan vostok1_cli status   # 📊 Show current status
+ros2 run plan vostok1_cli start     # 🚀 Start mission
+ros2 run plan vostok1_cli stop      # 🛑 Pause mission
+ros2 run plan vostok1_cli resume    # ▶️ Resume mission
+ros2 run plan vostok1_cli home      # 🏠 Return to spawn
+ros2 run plan vostok1_cli reset     # 🔄 Clear waypoints and reset
+ros2 run plan vostok1_cli confirm   # ✅ Confirm waypoints
+ros2 run plan vostok1_cli status    # 📊 Show current status
 ```
 
 ### Parameter Tuning
@@ -738,45 +741,51 @@ ros2 run plan vostok1_cli interactive
 | `s` | Start mission |
 | `x` | Stop/pause |
 | `r` | Resume |
-| `home` | Go to spawn |
+| `home` | 🏠 Go to spawn |
 | `reset` | Reset mission |
 | `status` | Show status |
 | `pid <kp> <ki> <kd>` | Set PID parameters |
 | `speed <base> <max>` | Set speed limits |
 | `q` | Quit interactive mode |
 
-### Modular Mode Examples
+### Vostok1 Mode Examples
 
-For the modular architecture (Sputnik planner + Buran controller):
+For the integrated Vostok1 architecture (single node):
 
 ```bash
 # Generate waypoints
-ros2 run plan vostok1_cli --mode modular generate --lanes 8 --length 15 --width 5
+ros2 run plan vostok1_cli --mode vostok1 generate --lanes 8 --length 15 --width 5
 
 # Start mission
-ros2 run plan vostok1_cli --mode modular start
+ros2 run plan vostok1_cli --mode vostok1 start
 
 # Interactive mode
-ros2 run plan vostok1_cli --mode modular interactive
+ros2 run plan vostok1_cli --mode vostok1 interactive
 ```
 
 ### Typical Workflow
 
 ```bash
-# 1. Generate waypoints
+# 1. Generate waypoints (uses modular mode by default)
 ros2 run plan vostok1_cli generate --lanes 10 --length 60 --width 25
 
-# 2. Start mission
+# 2. Confirm waypoints
+ros2 run plan vostok1_cli confirm
+
+# 3. Start mission
 ros2 run plan vostok1_cli start
 
-# 3. Monitor (optional)
+# 4. Monitor (optional)
 ros2 run plan vostok1_cli status
 
-# 4. Pause if needed
+# 5. Pause if needed
 ros2 run plan vostok1_cli stop
 
-# 5. Resume
+# 6. Resume
 ros2 run plan vostok1_cli resume
+
+# 7. Return home when done
+ros2 run plan vostok1_cli home
 ```
 
 ---
