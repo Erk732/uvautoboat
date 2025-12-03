@@ -22,10 +22,10 @@ class AtlantisController(Node):
         self.declare_parameter('kd', 100.0)
         
         # Obstacle parameters
-        self.declare_parameter('min_safe_distance', 15.0)  # Increased from 8m for earlier detection
-        self.declare_parameter('critical_distance', 3.0)   # Increased from 2m for earlier panic
-        self.declare_parameter('obstacle_slow_factor', 0.05)  # Increased slowdown from 0.1
-        self.declare_parameter('hysteresis_distance', 3.0)   # Increased from 1m to prevent oscillation
+        self.declare_parameter('min_safe_distance', 12.0)  # Balanced: early enough but not too aggressive
+        self.declare_parameter('critical_distance', 2.5)   # Panic mode threshold
+        self.declare_parameter('obstacle_slow_factor', 0.08)  # Moderate slowdown
+        self.declare_parameter('hysteresis_distance', 2.5)   # Moderate hysteresis
         self.declare_parameter('reverse_timeout', 10.0)    # Reverse longer
 
         # Stuck detection
@@ -281,12 +281,11 @@ class AtlantisController(Node):
                 # NEW: Detect obstacles starting from 0.3m instead of 1.0m
                 if dist < 0.3: continue  # Still filter very close points (noise)
                 
-                # IMPROVED: Balanced detection cone (150 degrees forward)
-                # Catches obstacles in front and to sides, but not extreme rear/sides
-                # This prevents detecting distant land masses on periphery
-                is_forward = x > 0.0  # Only forward and side (no backward)
-                is_not_too_far_left = y > -30.0   # Moderate left detection
-                is_not_too_far_right = y < 30.0   # Moderate right detection
+                # IMPROVED: Forward-focused detection cone (130 degrees)
+                # Catches obstacles in front and moderate sides, ignores extreme periphery
+                is_forward = x > -2.0  # Slightly behind is ok
+                is_not_too_far_left = y > -25.0   # Moderate left
+                is_not_too_far_right = y < 25.0   # Moderate right
                 
                 if not (is_forward and is_not_too_far_left and is_not_too_far_right):
                     continue
@@ -308,7 +307,7 @@ class AtlantisController(Node):
         
         # IMPROVED: Only consider front obstacles as critical
         # This prevents side land masses from triggering unnecessary avoidance
-        front_obstacles = [p for p in points if p[0] > 0 and abs(p[1]) < 15.0]
+        front_obstacles = [p for p in points if p[0] > -1.0 and abs(p[1]) < 12.0]
         if front_obstacles:
             front_distances = [p[3] for p in front_obstacles]
             front_min_distance = min(front_distances)
@@ -465,10 +464,10 @@ class AtlantisController(Node):
             # Execute Turn with adaptive angle based on obstacle proximity
             # Closer obstacles = sharper turns for more aggressive avoidance
             min_dist = self.min_obstacle_distance
-            if min_dist < 5.0:
-                turn_angle = 2.0  # Very sharp turn (115 degrees)
-            elif min_dist < 10.0:
-                turn_angle = 1.75  # Sharp turn (100 degrees)
+            if min_dist < 4.0:
+                turn_angle = 1.9  # Sharp turn (109 degrees)
+            elif min_dist < 8.0:
+                turn_angle = 1.65  # Moderate turn (95 degrees)
             else:
                 turn_angle = 1.57  # Standard 90-degree turn
             
