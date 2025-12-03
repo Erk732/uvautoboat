@@ -10,7 +10,8 @@ from rclpy.time import Time
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 from std_msgs.msg import Float64
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import LaserScan, PointCloud2
+from sensor_msgs_py import point_cloud2
 
 
 def yaw_from_quaternion(q):
@@ -85,6 +86,8 @@ class AllInOneStack(Node):
         self.declare_parameter('recover_reverse_time', 3.0)
         self.declare_parameter('recover_turn_time', 3.0)
         self.declare_parameter('recover_reverse_thrust', -200.0)
+        # Longer reverse duration when stuck for a while
+        self.declare_parameter('recover_reverse_time_long', 6.0)
         # Lidar debug log interval (seconds); 0 disables
         self.declare_parameter('lidar_log_interval', 2.0)
         # Data timeouts
@@ -98,6 +101,9 @@ class AllInOneStack(Node):
         # secondary uses /wamv/sensors/lidars/lidar_wamv/scan; subscribe to both and use latest
         self.declare_parameter('lidar_topic', '/wamv/sensors/lidars/lidar_wamv_sensor/scan')
         self.declare_parameter('lidar_topic_alt', '/wamv/sensors/lidars/lidar_wamv/scan')
+        self.declare_parameter('lidar_cloud_topic', '/wamv/sensors/lidars/lidar_wamv_sensor/points')
+        self.declare_parameter('cloud_z_min', -0.5)
+        self.declare_parameter('cloud_z_max', 2.0)
         self.declare_parameter('front_angle_deg', 30.0)    # Front sector angle
         self.declare_parameter('side_angle_deg', 60.0)     # Side sector angle
         self.declare_parameter('obstacle_slow_dist', 15.0) # Slow-down distance
@@ -108,6 +114,17 @@ class AllInOneStack(Node):
         self.declare_parameter('avoid_max_turn_time', 5.0) # Max time to stay in hard avoid
         # Hull radius (m) used to inflate obstacles for clearance
         self.declare_parameter('hull_radius', 1.5)
+        # Ignore returns closer than this (likely self hits)
+        self.declare_parameter('min_range_filter', 1.5)
+        # Safe zone where avoidance is disabled (axis-aligned bounding box)
+        self.declare_parameter('safe_zone_enabled', False)
+        self.declare_parameter('safe_zone_min_x', -float('inf'))
+        self.declare_parameter('safe_zone_max_x', float('inf'))
+        self.declare_parameter('safe_zone_min_y', -float('inf'))
+        self.declare_parameter('safe_zone_max_y', float('inf'))
+        # Hazard zones (no-go rectangles); format: "xmin,ymin,xmax,ymax;..."
+        self.declare_parameter('hazard_enabled', False)
+        self.declare_parameter('hazard_boxes', '')
         # Planning avoidance params
         self.declare_parameter('plan_avoid_margin', 5.0)
 
@@ -125,10 +142,12 @@ class AllInOneStack(Node):
         self.recover_reverse_time = float(self.get_parameter('recover_reverse_time').value)
         self.recover_turn_time = float(self.get_parameter('recover_turn_time').value)
         self.recover_reverse_thrust = float(self.get_parameter('recover_reverse_thrust').value)
+        self.recover_reverse_time_long = float(self.get_parameter('recover_reverse_time_long').value)
         self.lidar_log_interval = float(self.get_parameter('lidar_log_interval').value)
 
         lidar_topic = str(self.get_parameter('lidar_topic').value)
         lidar_topic_alt = str(self.get_parameter('lidar_topic_alt').value)
+        lidar_cloud_topic = str(self.get_parameter('lidar_cloud_topic').value)
         self.front_angle = math.radians(float(self.get_parameter('front_angle_deg').value))
         self.side_angle = math.radians(float(self.get_parameter('side_angle_deg').value))
         self.obstacle_slow_dist = float(self.get_parameter('obstacle_slow_dist').value)
@@ -138,9 +157,19 @@ class AllInOneStack(Node):
         self.avoid_clear_margin = float(self.get_parameter('avoid_clear_margin').value)
         self.avoid_max_turn_time = float(self.get_parameter('avoid_max_turn_time').value)
         self.hull_radius = float(self.get_parameter('hull_radius').value)
+        self.min_range_filter = float(self.get_parameter('min_range_filter').value)
+        self.safe_zone_enabled = bool(self.get_parameter('safe_zone_enabled').value)
+        self.safe_zone_min_x = float(self.get_parameter('safe_zone_min_x').value)
+        self.safe_zone_max_x = float(self.get_parameter('safe_zone_max_x').value)
+        self.safe_zone_min_y = float(self.get_parameter('safe_zone_min_y').value)
+        self.safe_zone_max_y = float(self.get_parameter('safe_zone_max_y').value)
+        self.hazard_enabled = bool(self.get_parameter('hazard_enabled').value)
+        self.hazard_boxes = self._parse_hazard_boxes(str(self.get_parameter('hazard_boxes').value))
         self.plan_avoid_margin = float(self.get_parameter('plan_avoid_margin').value)
         self.pose_timeout = float(self.get_parameter('pose_timeout').value)
         self.scan_timeout = float(self.get_parameter('scan_timeout').value)
+        self.cloud_z_min = float(self.get_parameter('cloud_z_min').value)
+        self.cloud_z_max = float(self.get_parameter('cloud_z_max').value)
         pose_topic = str(self.get_parameter('pose_topic').value)
 
         # Thruster saturation
@@ -153,6 +182,7 @@ class AllInOneStack(Node):
         self.current_waypoint_idx: int = 0
         self.active: bool = False      # Whether tracking a path
         self.latest_scan: LaserScan | None = None
+        self.latest_cloud: PointCloud2 | None = None
         self.min_goal_dist: float = float('inf')
         self.last_progress_time: float = 0.0
         self.last_goal_dist: float = float('inf')
@@ -161,6 +191,7 @@ class AllInOneStack(Node):
         self.recover_phase: str = ''
         self.recover_start_time: float = 0.0
         self.recover_turn_dir: float = 1.0
+        self.recover_reverse_time_active: float = 0.0
         self.avoid_mode: str = ''
         self.avoid_start_time: float = 0.0
         self.avoid_turn_dir: float = 1.0
@@ -210,6 +241,15 @@ class AllInOneStack(Node):
             )
         else:
             self.scan_sub_alt = None
+        if lidar_cloud_topic:
+            self.cloud_sub = self.create_subscription(
+                PointCloud2,
+                lidar_cloud_topic,
+                self.cloud_callback,
+                10
+            )
+        else:
+            self.cloud_sub = None
 
         # ---------------- Timer control loop ----------------
         dt = 1.0 / self.control_rate
@@ -328,6 +368,7 @@ class AllInOneStack(Node):
         self.recovering = False
         self.recover_phase = ''
         self.recover_turn_dir = 1.0
+        self.recover_reverse_time_active = self.recover_reverse_time
         self.avoid_mode = ''
 
         # Publish /planning/path to keep external interface
@@ -341,6 +382,9 @@ class AllInOneStack(Node):
     def scan_callback(self, msg: LaserScan):
         self.latest_scan = msg
 
+    def cloud_callback(self, msg: PointCloud2):
+        self.latest_cloud = msg
+
     # =====================================================
     # Lidar analysis
     # =====================================================
@@ -352,6 +396,11 @@ class AllInOneStack(Node):
         left:  [0, +side_angle]
         right: [-side_angle, 0]
         """
+        # Try point cloud first for low obstacles
+        front_min_cloud, left_min_cloud, right_min_cloud = self._analyze_pointcloud()
+        if front_min_cloud is not None or left_min_cloud is not None or right_min_cloud is not None:
+            return front_min_cloud, left_min_cloud, right_min_cloud
+
         if self.latest_scan is None:
             return None, None, None
 
@@ -364,6 +413,9 @@ class AllInOneStack(Node):
 
         for r in scan.ranges:
             if math.isinf(r) or math.isnan(r) or r <= 0.0:
+                angle += scan.angle_increment
+                continue
+            if r < self.min_range_filter:
                 angle += scan.angle_increment
                 continue
 
@@ -388,6 +440,77 @@ class AllInOneStack(Node):
             right_min = fallback
 
         return front_min, left_min, right_min
+
+    def _analyze_pointcloud(self):
+        """
+        Project PointCloud2 to XY plane and compute min distances in front/left/right sectors.
+        Returns (front_min, left_min, right_min) or (None, None, None) if no data.
+        """
+        if self.latest_cloud is None:
+            return None, None, None
+
+        front_min = None
+        left_min = None
+        right_min = None
+
+        for p in point_cloud2.read_points(self.latest_cloud, field_names=('x', 'y', 'z'), skip_nans=True):
+            x, y, z = p
+            if z < self.cloud_z_min or z > self.cloud_z_max:
+                continue
+            dist = math.hypot(x, y)
+            if dist <= 0.0 or dist < self.min_range_filter:
+                continue
+            angle = math.atan2(y, x)
+
+            if -self.front_angle <= angle <= self.front_angle:
+                front_min = dist if front_min is None else min(front_min, dist)
+
+            if 0.0 <= angle <= self.side_angle:
+                left_min = dist if left_min is None else min(left_min, dist)
+
+            if -self.side_angle <= angle <= 0.0:
+                right_min = dist if right_min is None else min(right_min, dist)
+
+        return front_min, left_min, right_min
+
+    def in_safe_zone(self, x: float, y: float) -> bool:
+        if not self.safe_zone_enabled:
+            return False
+        return (
+            self.safe_zone_min_x <= x <= self.safe_zone_max_x and
+            self.safe_zone_min_y <= y <= self.safe_zone_max_y
+        )
+
+    def in_hazard_zone(self, x: float, y: float) -> bool:
+        if not self.hazard_enabled or not self.hazard_boxes:
+            return False
+        for xmin, ymin, xmax, ymax in self.hazard_boxes:
+            if xmin <= x <= xmax and ymin <= y <= ymax:
+                return True
+        return False
+
+    def _parse_hazard_boxes(self, spec: str):
+        boxes = []
+        if not spec:
+            return boxes
+        parts = spec.split(';')
+        for p in parts:
+            p = p.strip()
+            if not p:
+                continue
+            vals = p.split(',')
+            if len(vals) != 4:
+                continue
+            try:
+                xmin, ymin, xmax, ymax = map(float, vals)
+                if xmin > xmax:
+                    xmin, xmax = xmax, xmin
+                if ymin > ymax:
+                    ymin, ymax = ymax, ymin
+                boxes.append((xmin, ymin, xmax, ymax))
+            except ValueError:
+                continue
+        return boxes
 
     # =====================================================
     # Main control loop
@@ -495,7 +618,7 @@ class AllInOneStack(Node):
         if self.recovering:
             now_s = self.get_clock().now().nanoseconds / 1e9
             if self.recover_phase == 'reverse':
-                if (now_s - self.recover_start_time) < self.recover_reverse_time:
+                if (now_s - self.recover_start_time) < self.recover_reverse_time_active:
                     self.publish_thrust(self.recover_reverse_thrust, self.recover_reverse_thrust)
                     return
                 # switch to turn phase
@@ -513,8 +636,16 @@ class AllInOneStack(Node):
                 self.last_progress_time = now_s
                 # let normal control resume after recovery
 
-        # Stuck detection: if no progress toward goal within timeout, stop
+        # Stuck detection or hazard zone handling
         now_s = self.get_clock().now().nanoseconds / 1e9
+        if self.in_hazard_zone(x, y):
+            self.get_logger().warning(
+                f'Inside hazard zone, stopping at ({x:.2f}, {y:.2f}).'
+            )
+            self.publish_thrust(0.0, 0.0)
+            self.active = False
+            return
+
         if dist < self.last_goal_dist - self.stuck_progress_epsilon:
             self.last_goal_dist = dist
             self.last_progress_time = now_s
@@ -525,6 +656,7 @@ class AllInOneStack(Node):
             self.recovering = True
             self.recover_phase = 'reverse'
             self.recover_start_time = now_s
+            self.recover_reverse_time_active = self.recover_reverse_time_long
             # Choose turn direction based on lidar
             front_min, left_min, right_min = self.analyze_lidar()
             if left_min is not None and right_min is not None:
@@ -542,9 +674,6 @@ class AllInOneStack(Node):
         T_forward = self.forward_thrust
         if self.approach_slow_dist > 0.0:
             T_forward *= max(0.1, min(1.0, dist / self.approach_slow_dist))
-        if self.heading_align_thresh > 0.0 and abs(e_yaw) > self.heading_align_thresh:
-            # Reduce forward thrust when heading error is large to prioritize turning toward goal
-            T_forward *= 0.2
         T_diff = self.kp_yaw * e_yaw
 
         left_cmd = T_forward - T_diff
@@ -583,11 +712,16 @@ class AllInOneStack(Node):
                     self.publish_thrust(-turn_cmd, turn_cmd)
                     return
 
-        if front_min is not None:
+        if front_min is not None and not self.in_safe_zone(x, y):
             # Inflate obstacles by hull radius for clearance
             front_min_eff = max(0.0, front_min - self.hull_radius)
             left_min_eff = max(0.0, left_min - self.hull_radius) if left_min is not None else None
             right_min_eff = max(0.0, right_min - self.hull_radius) if right_min is not None else None
+
+            # When obstacle ahead and heading error large, prioritize turning by reducing forward thrust
+            if self.heading_align_thresh > 0.0 and abs(e_yaw) > self.heading_align_thresh:
+                left_cmd *= 0.2
+                right_cmd *= 0.2
 
             # Hard avoidance: too close, turn in place
             if front_min_eff < self.obstacle_stop_dist:
