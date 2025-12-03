@@ -125,14 +125,52 @@ Local Y = (longitude - start_lon) × Earth_radius × cos(start_lat)
 
 **LIDAR** (Light Detection and Ranging) uses laser pulses to create a 3D map of the environment. The WAM-V's 3D LIDAR returns thousands of points per scan.
 
-**Processing Pipeline:**
+**Processing Pipeline (OKO v2.0):**
 
 | Step | Filter | Purpose |
 |:-----|:-------|:--------|
 | 1 | Height: -15m to +10m | Exclude water/sky, catch lake banks |
 | 2 | Range: 5m to 50m | Ignore dock at spawn, focus on obstacles |
-| 3 | Sector Analysis | Front/Left/Right clearance |
-| 4 | Hysteresis | Prevent detection flickering |
+| 3 | Water Plane Removal | Filter water surface reflections (5th percentile Z) |
+| 4 | Sector Analysis | Front/Left/Right clearance (adaptive width) |
+| 5 | Temporal Filtering | Require 3/5 scans to confirm detection |
+| 6 | Obstacle Clustering | Group points into distinct obstacles |
+| 7 | Gap Detection | Find passable gaps between obstacles |
+| 8 | Velocity Estimation | Track moving obstacles over time |
+
+**Enhanced Features (OKO v2.0):**
+
+| Feature | Description |
+|:--------|:------------|
+| **Temporal Filtering** | 5-scan history, requires 3/5 detections to confirm (reduces flickering) |
+| **Distance-Weighted Urgency** | Score 0.0 (safe) to 1.0 (critical) for smoother control |
+| **Obstacle Clustering** | Groups nearby points (2m eps) to identify individual obstacles |
+| **Gap Detection** | Finds passable gaps (>3m width) between obstacles |
+| **Adaptive Sectors** | Front sector width adjusts based on target heading |
+| **Water Plane Removal** | Estimates water surface Z, filters reflections |
+| **Velocity Estimation** | Tracks obstacles across frames to detect movement |
+
+**Enhanced `/perception/obstacle_info` JSON:**
+
+```json
+{
+  "obstacle_detected": true,
+  "min_distance": 8.5,
+  "front_clear": 10.2,
+  "left_clear": 45.0,
+  "right_clear": 12.3,
+  "is_critical": false,
+  "front_urgency": 0.45,
+  "left_urgency": 0.0,
+  "right_urgency": 0.35,
+  "overall_urgency": 0.45,
+  "clusters": [{"x": 8.2, "y": 1.5, "size": 25, "distance": 8.5, "angle_deg": 10.3}],
+  "gaps": [{"angle_deg": -25.0, "width": 5.2, "distance": 15.0}],
+  "moving_obstacles": [{"id": "obs_0", "vx": 0.5, "vy": 0.1, "speed": 0.51}],
+  "water_plane_z": -2.8,
+  "temporal_confidence": 1.0
+}
+```
 
 ### IMU Heading
 
@@ -400,6 +438,58 @@ Detailed ROS 2 topic connections between the modular nodes:
     (-1000 to +1000)           (-1000 to +1000)
 ```
 
+### Continuous Obstacle Avoidance Loop
+
+The obstacle avoidance runs **continuously** - not as a one-time decision. The boat constantly scans, evaluates, and adjusts:
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                      PERCEPTION (OKO)                           │
+│           LiDAR scans 360° continuously (~10-20 Hz)             │
+│                            ↓                                    │
+│      ┌─────────────────────────────────────────────┐            │
+│      │  For each scan:                             │            │
+│      │  1. Filter points (height, range)           │            │
+│      │  2. Check FRONT sector → min distance       │            │
+│      │  3. Check LEFT sector  → min distance       │            │
+│      │  4. Check RIGHT sector → min distance       │            │
+│      │  5. Publish obstacle_info                   │            │
+│      └─────────────────────────────────────────────┘            │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                      CONTROL (BURAN)                            │
+│           Receives obstacle_info every ~100ms                   │
+│                            ↓                                    │
+│      ┌─────────────────────────────────────────────┐            │
+│      │  Decision Logic (runs every control loop):  │            │
+│      │                                             │            │
+│      │  IF front_clear AND distance > safe:        │            │
+│      │     → Continue toward waypoint              │            │
+│      │                                             │            │
+│      │  IF obstacle detected:                      │            │
+│      │     → Slow down (obstacle_slow_factor)      │            │
+│      │     → Check which side is clearer           │            │
+│      │     → Turn toward clearer side              │            │
+│      │                                             │            │
+│      │  IF critical distance:                      │            │
+│      │     → STOP immediately                      │            │
+│      │     → Initiate SASS (anti-stuck) if stuck   │            │
+│      └─────────────────────────────────────────────┘            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Real-Time Decision Example:**
+
+| Time | Front | Left | Right | Action |
+|:-----|:------|:-----|:------|:-------|
+| 0.0s | 15m | 50m | 8m | ⚠️ Obstacle ahead → Turn LEFT (clearer) |
+| 0.1s | 20m | 45m | 10m | 🔄 Continue LEFT turn |
+| 0.2s | 35m | 40m | 15m | 📐 Front clearing, reduce turn |
+| 0.3s | 50m | 50m | 25m | ✅ CLEAR! Resume to waypoint |
+
+> **Key Point:** The boat is **always** scanning, calculating distances, and adjusting - even while dodging an obstacle. This enables navigation through complex obstacle fields.
+
 ### ROS 2 Topics
 
 #### Sensor Inputs
@@ -475,6 +565,12 @@ ros2 launch plan vostok1_modular_navigation.launch.py kp:=500.0 ki:=30.0 kd:=150
 | | `max_height` | 10.0 | Max Z to detect |
 | | `min_range` | 5.0 | Ignore obstacles closer (boat structure) |
 | | `max_range` | 50.0 | Max detection range (m) |
+| | `temporal_history_size` | 5 | Scans to keep in history |
+| | `temporal_threshold` | 3 | Min detections to confirm obstacle |
+| | `cluster_distance` | 2.0 | Max distance between cluster points (m) |
+| | `min_cluster_size` | 5 | Min points per cluster |
+| | `water_plane_threshold` | 0.5 | Tolerance for water plane removal (m) |
+| | `velocity_history_size` | 10 | Frames for velocity estimation |
 | **SPUTNIK** | `scan_length` | 15.0 | Lawnmower lane length (m) |
 | | `scan_width` | 30.0 | Lane spacing (m) |
 | | `lanes` | 10 | Number of lawnmower lanes |

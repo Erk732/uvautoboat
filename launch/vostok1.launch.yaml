@@ -58,6 +58,19 @@ launch:
       value: 50.0
     - name: sample_rate
       value: 1          # Process ALL points for maximum detection
+    # Enhanced OKO v2.0 parameters
+    - name: temporal_history_size
+      value: 5          # Scans to keep in history
+    - name: temporal_threshold
+      value: 3          # Min detections to confirm obstacle
+    - name: cluster_distance
+      value: 2.0        # Max distance between cluster points (m)
+    - name: min_cluster_size
+      value: 5          # Min points per cluster
+    - name: water_plane_threshold
+      value: 0.5        # Tolerance for water plane removal (m)
+    - name: velocity_history_size
+      value: 10         # Frames for velocity estimation
 
 # ============================================================================
 # SPOUTNIK - Planner Node (GPS Waypoint Navigation)
