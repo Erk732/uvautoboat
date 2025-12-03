@@ -66,7 +66,7 @@ launch:
     - name: cluster_distance
       value: 2.0        # Max distance between cluster points (m)
     - name: min_cluster_size
-      value: 5          # Min points per cluster
+      value: 3          # Reduced: detect smaller obstacles like buoys
     - name: water_plane_threshold
       value: 0.5        # Tolerance for water plane removal (m)
     - name: velocity_history_size

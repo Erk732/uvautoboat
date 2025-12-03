@@ -354,9 +354,10 @@ class BuranController(Node):
             data = json.loads(msg.data)
             self.obstacle_detected = data.get('obstacle_detected', False)
             self.min_obstacle_distance = data.get('min_distance', float('inf'))
-            self.front_clear = data.get('front_clear', True)
-            self.left_clear = data.get('left_clear', True)
-            self.right_clear = data.get('right_clear', True)
+            # OKO v2.0: front_clear, left_clear, right_clear are distances in meters
+            self.front_clear = data.get('front_clear', float('inf'))
+            self.left_clear = data.get('left_clear', float('inf'))
+            self.right_clear = data.get('right_clear', float('inf'))
             self.is_critical = data.get('is_critical', False)
             # OKO v2.0 enhanced fields (backward compatible)
             self.urgency = data.get('urgency', 0.0)
