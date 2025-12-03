@@ -6,6 +6,7 @@ A real-time web-based monitoring dashboard for the Vostok1 autonomous boat syste
 
 - **Real-time GPS tracking** with trajectory visualization on interactive map
 - **Obstacle detection monitoring** showing minimum distances and clearance zones
+- **Enhanced OKO v2.0 perception data** with urgency scores, clusters, and gaps
 - **Thruster output visualization** with live thrust bars
 - **Mission status display** including state, waypoint, and distance
 - **SASS v2.0 Anti-Stuck Status** with visual escalation indicators
@@ -13,6 +14,7 @@ A real-time web-based monitoring dashboard for the Vostok1 autonomous boat syste
 - **Dual-mode support**: Works with both integrated Vostok1 and modular navigation
 - **4 Style modes**: Normal, Bureau (TNO), Terminal (CRT), **MilSpec (Warsaw Pact)**
 - **Configuration panel**: Adjust mission parameters in real-time
+- **Mission control buttons**: Generate, Confirm, Start, Stop, Resume, Go Home
 - **Responsive design** works on desktop and mobile devices
 
 ## 🎨 Visual Themes
@@ -139,9 +141,25 @@ ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messag
 
 This starts a WebSocket server on `ws://localhost:9090`.
 
-### 4. Launch Vostok1
+### 4. Launch Navigation System
 
-**Terminal 3:**
+**Terminal 3 — Choose ONE option:**
+
+#### Option A: Modular Navigation (Recommended)
+
+Uses OKO + SPUTNIK + BURAN distributed architecture with full configurability:
+
+```bash
+cd ~/seal_ws
+source install/setup.bash
+ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml
+```
+
+> **Note:** The YAML launch file includes all OKO v2.0 enhanced perception parameters (temporal filtering, clustering, gap detection, velocity estimation).
+
+#### Option B: Integrated Vostok1
+
+Single-node implementation with all features built-in:
 
 ```bash
 cd ~/seal_ws
@@ -149,20 +167,26 @@ source install/setup.bash
 ros2 run plan vostok1
 ```
 
-Or use your launch file if available.
+#### Option C: Python Launch File (Command-line args)
+
+For custom PID tuning via command-line:
+
+```bash
+ros2 launch plan vostok1_modular_navigation.launch.py kp:=500.0 ki:=30.0 kd:=150.0
+```
 
 ### 5. Open Dashboard
 
 **Terminal 4:**
 
 ```bash
-cd ~/seal_ws/src/uvautoboat/web_dashboard
+cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1
 python3 -m http.server 8000
 ```
 
 Then open your web browser and navigate to:
 
-```bash
+```text
 http://localhost:8000
 ```
 
@@ -194,6 +218,12 @@ The dashboard will automatically connect to rosbridge on port 9090 and display r
 - Minimum obstacle distance from LIDAR
 - Front/Left/Right clearance indicators
 - Color-coded status: Clear (>15m), Warning (5-15m), Critical (<5m)
+- **OKO v2.0 Enhanced Data** (via `/perception/obstacle_info`):
+  - Urgency scores (0.0-1.0) for smoother control
+  - Obstacle clusters with centroids and sizes
+  - Passable gaps between obstacles
+  - Moving obstacle velocity tracking
+  - Temporal confidence indicator
 
 ### Thruster Output
 
@@ -240,9 +270,45 @@ The dashboard will automatically connect to rosbridge on port 9090 and display r
 | Topic | Message Type | Data |
 |-------|-------------|------|
 | `/planning/mission_status` | `std_msgs/String` | Sputnik planner status |
-| `/perception/obstacle_info` | `std_msgs/String` | Oko perception data |
+| `/perception/obstacle_info` | `std_msgs/String` | OKO v2.0 enhanced perception (see below) |
 | `/control/status` | `std_msgs/String` | Buran controller status |
 | `/control/anti_stuck_status` | `std_msgs/String` | Buran anti-stuck status |
+| `/sputnik/config` | `std_msgs/String` | Sputnik configuration |
+| `/sputnik/set_config` | `std_msgs/String` | Configuration updates (publish) |
+| `/sputnik/mission_command` | `std_msgs/String` | Mission commands (publish) |
+
+### OKO v2.0 Enhanced Perception Data
+
+The `/perception/obstacle_info` topic now includes enhanced fields:
+
+```json
+{
+  "obstacle_detected": true,
+  "min_distance": 8.5,
+  "front_clear": 10.2,
+  "left_clear": 45.0,
+  "right_clear": 12.3,
+  "is_critical": false,
+  "front_urgency": 0.45,
+  "left_urgency": 0.0,
+  "right_urgency": 0.35,
+  "overall_urgency": 0.45,
+  "clusters": [{"x": 8.2, "y": 1.5, "size": 25, "distance": 8.5, "angle_deg": 10.3}],
+  "gaps": [{"angle_deg": -25.0, "width": 5.2, "distance": 15.0}],
+  "moving_obstacles": [{"id": "obs_0", "vx": 0.5, "vy": 0.1, "speed": 0.51}],
+  "water_plane_z": -2.8,
+  "temporal_confidence": 1.0
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `*_urgency` | Distance-weighted score (0.0=safe, 1.0=critical) |
+| `clusters` | Grouped obstacles with centroids and sizes |
+| `gaps` | Passable gaps between obstacles (>3m width) |
+| `moving_obstacles` | Tracked obstacles with velocity estimates |
+| `water_plane_z` | Estimated water surface height |
+| `temporal_confidence` | Detection confidence (scans received / history size) |
 
 ## Customization
 
@@ -322,17 +388,17 @@ setInterval(() => {
 ## Architecture
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│                     Navigation Nodes                            │
-├─────────────────────────────┬───────────────────────────────────┤
-│   Integrated Mode           │   Modular Mode                    │
-│   ┌─────────────────┐       │   ┌─────────┐ ┌─────┐ ┌───────┐   │
-│   │   Vostok1 Node  │       │   │ Sputnik │ │ Oko │ │ Buran │   │
-│   │   (All-in-one)  │       │   │ Planner │ │Perc.│ │ Ctrl  │   │
-│   └────────┬────────┘       │   └────┬────┘ └──┬──┘ └───┬───┘   │
-│            │                │        │         │        │       │
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Navigation Nodes                                │
+├─────────────────────────────┬───────────────────────────────────────┤
+│   Integrated Mode           │   Modular Mode (Recommended)          │
+│   ┌─────────────────┐       │   ┌─────────┐ ┌───────┐ ┌───────┐     │
+│   │   Vostok1 Node  │       │   │ Sputnik │ │  OKO  │ │ Buran │     │
+│   │   (All-in-one)  │       │   │ Planner │ │ v2.0  │ │ Ctrl  │     │
+│   └────────┬────────┘       │   └────┬────┘ └───┬───┘ └───┬───┘     │
+│            │                │        │          │         │         │
 │   /vostok1/* topics         │   /planning/*  /perception/* /control/*
-└────────────┴────────────────┴────────┴─────────┴────────┴───────┘
+└────────────┴────────────────┴────────┴──────────┴─────────┴─────────┘
                               │
                       ┌───────▼───────┐
                       │   Rosbridge   │
@@ -347,6 +413,24 @@ setInterval(() => {
                       └───────────────┘
 ```
 
+## Quick Start (4 Terminals)
+
+```bash
+# T1: Gazebo simulation
+ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+
+# T2: Rosbridge WebSocket server
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
+
+# T3: Modular navigation (recommended)
+ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml
+
+# T4: Web dashboard
+cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1 && python3 -m http.server 8000
+```
+
+Then open: **<http://localhost:8000>**
+
 ## Files
 
 - `index.html` - Main dashboard structure
@@ -356,20 +440,22 @@ setInterval(() => {
 
 ### Style Modes
 
-The dashboard supports 3 visual styles (click the toggle button to cycle):
+The dashboard supports 4 visual styles (click the toggle button to cycle):
 
 | Mode | Description |
 |------|-------------|
 | **Normal** | Clean purple gradient, modern look |
 | **Bureau** | TNO Soviet industrial aesthetic with CRT effects |
 | **Terminal** | Green phosphor CRT retro computer style |
+| **MilSpec** | Warsaw Pact military specification (ВМФ СССР) |
 
 ## Future Enhancements
 
+- [x] ~~Add parameter configuration panel~~ ✅ Implemented
+- [x] ~~Implement emergency stop button~~ ✅ Mission control buttons added
 - [ ] Add waypoint editing/planning interface
-- [ ] Implement emergency stop button
-- [ ] Add parameter configuration panel
 - [ ] Display LIDAR point cloud visualization
+- [ ] Display OKO v2.0 cluster/gap visualization on map
 - [ ] Mission recording and playback
 - [ ] Multi-boat support
 - [ ] Historical data charts

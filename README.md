@@ -565,12 +565,12 @@ ros2 launch plan vostok1_modular_navigation.launch.py kp:=500.0 ki:=30.0 kd:=150
 | | `max_height` | 10.0 | Max Z to detect |
 | | `min_range` | 5.0 | Ignore obstacles closer (boat structure) |
 | | `max_range` | 50.0 | Max detection range (m) |
-| | `temporal_history_size` | 5 | Scans to keep in history |
-| | `temporal_threshold` | 3 | Min detections to confirm obstacle |
+| | `temporal_history_size` | 3 | Scans to keep in history (faster response) |
+| | `temporal_threshold` | 2 | Min detections to confirm obstacle (2/3) |
 | | `cluster_distance` | 2.0 | Max distance between cluster points (m) |
-| | `min_cluster_size` | 5 | Min points per cluster |
+| | `min_cluster_size` | 3 | Min points per cluster (detect small obstacles) |
 | | `water_plane_threshold` | 0.5 | Tolerance for water plane removal (m) |
-| | `velocity_history_size` | 10 | Frames for velocity estimation |
+| | `velocity_history_size` | 5 | Frames for velocity estimation |
 | **SPUTNIK** | `scan_length` | 15.0 | Lawnmower lane length (m) |
 | | `scan_width` | 30.0 | Lane spacing (m) |
 | | `lanes` | 10 | Number of lawnmower lanes |

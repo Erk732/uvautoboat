@@ -95,13 +95,13 @@ def generate_launch_description():
             'min_range': 5.0,        # Ignore spawn dock and boat structure
             'max_range': 50.0,
             'sample_rate': 1,        # Process ALL points for maximum detection
-            # Enhanced OKO v2.0 parameters
-            'temporal_history_size': 5,      # Scans to keep in history
-            'temporal_threshold': 3,         # Min detections to confirm obstacle
+            # Enhanced OKO v2.0 parameters (tuned for faster response)
+            'temporal_history_size': 3,      # Reduced: faster response
+            'temporal_threshold': 2,         # Reduced: 2/3 detections to confirm
             'cluster_distance': 2.0,         # Max distance between cluster points (m)
-            'min_cluster_size': 5,           # Min points per cluster
+            'min_cluster_size': 3,           # Reduced: detect smaller obstacles
             'water_plane_threshold': 0.5,    # Tolerance for water plane removal (m)
-            'velocity_history_size': 10,     # Frames for velocity estimation
+            'velocity_history_size': 5,      # Reduced: faster velocity estimate
         }]
     )
 
