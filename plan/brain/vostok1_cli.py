@@ -98,6 +98,7 @@ class MissionCLI(Node):
         # Subscribers for status
         self.mission_status = None
         self.config_status = None
+        self.buran_status = None
         
         self.create_subscription(
             String,
@@ -113,6 +114,15 @@ class MissionCLI(Node):
             10
         )
         
+        # Also subscribe to BURAN/control status (modular mode)
+        if mode == 'modular' or mode == 'sputnik':
+            self.create_subscription(
+                String,
+                '/control/status',
+                self.buran_status_callback,
+                10
+            )
+        
         # Wait for connection
         time.sleep(0.5)
         
@@ -125,6 +135,12 @@ class MissionCLI(Node):
     def config_callback(self, msg):
         try:
             self.config_status = json.loads(msg.data)
+        except:
+            pass
+    
+    def buran_status_callback(self, msg):
+        try:
+            self.buran_status = json.loads(msg.data)
         except:
             pass
     
@@ -271,13 +287,14 @@ class MissionCLI(Node):
         print("\n⏳ Waiting for status...")
         for _ in range(30):
             rclpy.spin_once(self, timeout_sec=0.1)
-            if self.mission_status:
+            if self.mission_status or self.config_status:
                 break
             
         print("\n" + "=" * 50)
         print("VOSTOK1 STATUS | STATUT VOSTOK1")
         print("=" * 50)
         
+        # Mission status (only available during RUNNING state)
         if self.mission_status:
             state = self.mission_status.get('state', 'Unknown')
             # Support both key names (modular uses 'current_waypoint', integrated uses 'waypoint')
@@ -293,20 +310,49 @@ class MissionCLI(Node):
             print(f"Elapsed Time: {elapsed}s")
             print(f"Position: ({position[0]}, {position[1]})")
         else:
-            print("⚠️ No mission status received")
-            print("   Check if the navigation system is running:")
-            if self.mode == 'modular' or self.mode == 'sputnik':
-                print("   ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml")
+            # Check if we at least have config (system is running but mission not active)
+            if self.config_status:
+                state = self.config_status.get('state', 'IDLE')
+                waypoint_count = self.config_status.get('waypoint_count', 0)
+                gps_ready = self.config_status.get('gps_ready', False)
+                mission_armed = self.config_status.get('mission_armed', False)
+                
+                print(f"State: {state}")
+                print(f"Waypoints: {waypoint_count} defined")
+                print(f"GPS: {'✅ Ready' if gps_ready else '⏳ Waiting...'}")
+                print(f"Armed: {'✅ Yes' if mission_armed else '❌ No (use confirm command)'}")
+                print("\n💡 Mission status updates during RUNNING state only")
             else:
-                print("   ros2 run plan vostok1")
-            
+                print("⚠️ No status received")
+                print("   Check if the navigation system is running:")
+                if self.mode == 'modular' or self.mode == 'sputnik':
+                    print("   ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml")
+                else:
+                    print("   ros2 run plan vostok1")
+        
+        # Sputnik config (waypoint generation settings)
         if self.config_status:
-            print(f"\nConfig:")
+            print(f"\nSputnik Config (Waypoints):")
             print(f"  Lanes: {self.config_status.get('lanes', '?')}")
             print(f"  Scan Length: {self.config_status.get('scan_length', '?')}m")
             print(f"  Scan Width: {self.config_status.get('scan_width', '?')}m")
-            print(f"  PID: kp={self.config_status.get('kp', '?')}, ki={self.config_status.get('ki', '?')}, kd={self.config_status.get('kd', '?')}")
-            print(f"  Speed: base={self.config_status.get('base_speed', '?')}, max={self.config_status.get('max_speed', '?')}")
+            print(f"  Tolerance: {self.config_status.get('waypoint_tolerance', '?')}m")
+        
+        # Buran/control status (obstacle avoidance)
+        if self.buran_status:
+            print(f"\nBuran Status (Controller):")
+            print(f"  Mode: {self.buran_status.get('mode', '?')}")
+            avoidance = self.buran_status.get('avoidance_active', False)
+            obstacle = self.buran_status.get('obstacle_detected', False)
+            distance = self.buran_status.get('obstacle_distance', '?')
+            print(f"  Obstacle: {'🚨 DETECTED' if obstacle else '✅ Clear'} ({distance}m)")
+            print(f"  Avoidance: {'🔄 Active' if avoidance else 'Inactive'}")
+            print(f"  Heading: {self.buran_status.get('current_yaw', '?')}°")
+        
+        # Note about PID/Speed
+        if self.mode == 'modular' or self.mode == 'sputnik':
+            print(f"\n💡 PID/Speed are set via CLI but not broadcast by BURAN")
+            print(f"   Use 'ros2 param get /buran_node kp' to check current values")
         
         print("=" * 50)
         
