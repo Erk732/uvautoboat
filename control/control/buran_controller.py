@@ -207,6 +207,10 @@ class BuranController(Node):
         self.left_clear = float('inf')
         self.right_clear = float('inf')
         self.is_critical = False
+        # OKO v2.0 enhanced state
+        self.urgency = 0.0  # Distance-weighted urgency (0.0-1.0)
+        self.best_gap = None  # Best navigation gap direction
+        self.obstacle_count = 0  # Number of detected clusters
 
         # Avoidance state
         self.avoidance_mode = False
@@ -345,15 +349,19 @@ class BuranController(Node):
             self.get_logger().warn(f"Invalid target message: {e}")
 
     def obstacle_callback(self, msg):
-        """Receive obstacle information from perception"""
+        """Receive obstacle information from perception (OKO v2.0 compatible)"""
         try:
             data = json.loads(msg.data)
-            self.obstacle_detected = data['obstacle_detected']
-            self.min_obstacle_distance = data['min_distance']
-            self.front_clear = data['front_clear']
-            self.left_clear = data['left_clear']
-            self.right_clear = data['right_clear']
-            self.is_critical = data['is_critical']
+            self.obstacle_detected = data.get('obstacle_detected', False)
+            self.min_obstacle_distance = data.get('min_distance', float('inf'))
+            self.front_clear = data.get('front_clear', True)
+            self.left_clear = data.get('left_clear', True)
+            self.right_clear = data.get('right_clear', True)
+            self.is_critical = data.get('is_critical', False)
+            # OKO v2.0 enhanced fields (backward compatible)
+            self.urgency = data.get('urgency', 0.0)
+            self.best_gap = data.get('best_gap', None)
+            self.obstacle_count = data.get('obstacle_count', 0)
         except (json.JSONDecodeError, KeyError) as e:
             self.get_logger().warn(f"Invalid obstacle message: {e}")
 
@@ -370,8 +378,18 @@ class BuranController(Node):
             if was_active and not self.mission_active:
                 self.target_x = None
                 self.target_y = None
+                # IMPORTANT: Reset all escape/stuck/avoidance state when mission stops
+                self.escape_mode = False
+                self.is_stuck = False
+                self.avoidance_mode = False
+                self.reverse_start_time = None
+                self.integral_error = 0.0
+                self.escape_phase = 0
+                self.best_escape_direction = None
+                self.probe_results = {'left': 0.0, 'right': 0.0, 'back': 0.0}
+                self.consecutive_stuck_count = 0
                 self.stop()
-                self.get_logger().info(f"🛑 Mission inactive (state={state}) - stopping")
+                self.get_logger().info(f"🛑 Mission inactive (state={state}) - stopping & resetting all states")
         except (json.JSONDecodeError, KeyError) as e:
             self.get_logger().warn(f"Invalid mission status: {e}")
 
@@ -472,19 +490,29 @@ class BuranController(Node):
                 self.avoidance_mode = True
                 self.get_logger().info("⚠️ Mode évitement - PID réinitialisé | Avoidance mode - PID reset")
 
-            # Turn towards clearer direction
-            if self.left_clear > self.right_clear:
-                avoidance_heading = self.current_yaw + math.pi / 2
+            # OKO v2.0: Use best_gap for smarter navigation if available
+            if self.best_gap and self.best_gap.get('width', 0) > 20:
+                # Navigate towards the best gap direction
+                gap_direction_deg = self.best_gap.get('direction', 0)
+                gap_width = self.best_gap.get('width', 0)
+                avoidance_heading = self.current_yaw + math.radians(gap_direction_deg)
+                direction = f"GAP {gap_direction_deg:.0f}° ({gap_width:.0f}° wide)"
+            elif self.left_clear > self.right_clear:
+                # Fallback: Turn towards clearer side
+                # Use urgency to scale turn angle: higher urgency = sharper turn
+                turn_angle = math.pi / 4 + (self.urgency * math.pi / 4)  # 45° to 90°
+                avoidance_heading = self.current_yaw + turn_angle
                 direction = "GAUCHE/LEFT"
             else:
-                avoidance_heading = self.current_yaw - math.pi / 2
+                turn_angle = math.pi / 4 + (self.urgency * math.pi / 4)  # 45° to 90°
+                avoidance_heading = self.current_yaw - turn_angle
                 direction = "DROITE/RIGHT"
 
             angle_error = self.normalize_angle(avoidance_heading - self.current_yaw)
 
             self.get_logger().warn(
-                f"🚨 OBSTACLE {self.min_obstacle_distance:.1f}m - Virage {direction} "
-                f"(G:{self.left_clear:.1f}m D:{self.right_clear:.1f}m)",
+                f"🚨 OBSTACLE {self.min_obstacle_distance:.1f}m (urgency:{self.urgency*100:.0f}%) - "
+                f"Virage {direction} (G:{self.left_clear:.1f}m D:{self.right_clear:.1f}m)",
                 throttle_duration_sec=1.0
             )
         else:
@@ -531,9 +559,15 @@ class BuranController(Node):
         if self.distance_to_target < 5.0:
             speed *= 0.7
 
-        # Obstacle-based slowdown
+        # Obstacle-based slowdown using OKO v2.0 urgency for smoother control
         if self.obstacle_detected:
-            speed *= self.obstacle_slow_factor
+            # Urgency-based smooth slowdown: higher urgency = more slowdown
+            # urgency=0.0 -> full speed, urgency=1.0 -> obstacle_slow_factor
+            if self.urgency > 0.0:
+                speed_factor = 1.0 - (self.urgency * (1.0 - self.obstacle_slow_factor))
+                speed *= speed_factor
+            else:
+                speed *= self.obstacle_slow_factor
 
         # Differential thrust
         left_thrust = speed - turn_power
@@ -572,15 +606,19 @@ class BuranController(Node):
         self.send_thrust(0.0, 0.0)
 
     def publish_status(self, mode):
-        """Publish controller status"""
+        """Publish controller status with OKO v2.0 enhanced info"""
         msg = String()
         msg.data = json.dumps({
             'mode': mode,
             'avoidance_active': self.avoidance_mode,
-            'obstacle_detected': self.obstacle_detected,
-            'obstacle_distance': round(self.min_obstacle_distance, 2),
+            'obstacle_detected': bool(self.obstacle_detected),
+            'obstacle_distance': round(float(self.min_obstacle_distance), 2),
             'current_yaw': round(math.degrees(self.current_yaw), 1),
-            'integral_error': round(self.integral_error, 4)
+            'integral_error': round(float(self.integral_error), 4),
+            # OKO v2.0 enhanced fields
+            'urgency': round(float(self.urgency), 2),
+            'obstacle_count': int(self.obstacle_count),
+            'is_critical': bool(self.is_critical)
         })
         self.pub_status.publish(msg)
 

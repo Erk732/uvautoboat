@@ -395,18 +395,24 @@ function subscribeToTopics() {
     modularObstacleTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
         console.log('Modular obstacle status:', data);
-        // Convert modular format to vostok1 format
+        // Convert modular format to vostok1 format with OKO v2.0 enhancements
         updateObstacleStatus({
             min_distance: data.min_distance,
-            front_clear: data.front_clear > 15,
-            left_clear: data.left_clear > 15,
-            right_clear: data.right_clear > 15,
-            front_distance: data.front_clear,
-            left_distance: data.left_clear,
-            right_distance: data.right_clear,
+            front_clear: data.front_clear,
+            left_clear: data.left_clear,
+            right_clear: data.right_clear,
+            front_distance: data.front_distance || data.min_distance,
+            left_distance: data.left_distance || 999,
+            right_distance: data.right_distance || 999,
             status: data.is_critical ? '🚨 CRITIQUE' : 
                     data.obstacle_detected ? '⚠️ OBSTACLE' : 
-                    '✅ DÉGAGÉ'
+                    '✅ DÉGAGÉ',
+            // OKO v2.0 enhanced fields
+            urgency: data.urgency || 0.0,
+            obstacle_count: data.obstacle_count || 0,
+            best_gap: data.best_gap || null,
+            clusters: data.clusters || [],
+            velocity_estimate: data.velocity_estimate || {vx: 0, vy: 0}
         });
     });
     
@@ -603,6 +609,28 @@ function updateObstacleStatus(data) {
         data.left_clear ? `✓ ${data.left_distance}m` : `✗ ${data.left_distance}m`;
     document.getElementById('right-clear').textContent = 
         data.right_clear ? `✓ ${data.right_distance}m` : `✗ ${data.right_distance}m`;
+    
+    // OKO v2.0: Update urgency display if element exists
+    const urgencyEl = document.getElementById('urgency');
+    if (urgencyEl && data.urgency !== undefined) {
+        const urgencyPct = (data.urgency * 100).toFixed(0);
+        urgencyEl.textContent = `${urgencyPct}%`;
+        urgencyEl.className = data.urgency > 0.7 ? 'value critical' : 
+                              data.urgency > 0.3 ? 'value warning' : 'value';
+    }
+    
+    // OKO v2.0: Update obstacle count if element exists
+    const countEl = document.getElementById('obstacle-count');
+    if (countEl && data.obstacle_count !== undefined) {
+        countEl.textContent = data.obstacle_count;
+    }
+    
+    // OKO v2.0: Update best gap if element exists
+    const gapEl = document.getElementById('best-gap');
+    if (gapEl && data.best_gap) {
+        const gap = data.best_gap;
+        gapEl.textContent = `${gap.direction.toFixed(0)}° (${gap.width.toFixed(0)}°)`;
+    }
     
     // Update status badge with bilingual message from vostok1
     const statusBadge = document.getElementById('obstacle-status');

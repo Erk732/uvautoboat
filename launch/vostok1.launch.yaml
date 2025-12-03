@@ -58,11 +58,11 @@ launch:
       value: 50.0
     - name: sample_rate
       value: 1          # Process ALL points for maximum detection
-    # Enhanced OKO v2.0 parameters
+    # Enhanced OKO v2.0 parameters (tuned for faster response)
     - name: temporal_history_size
-      value: 5          # Scans to keep in history
+      value: 3          # Reduced: faster response
     - name: temporal_threshold
-      value: 3          # Min detections to confirm obstacle
+      value: 2          # Reduced: 2/3 detections to confirm obstacle
     - name: cluster_distance
       value: 2.0        # Max distance between cluster points (m)
     - name: min_cluster_size

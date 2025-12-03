@@ -345,7 +345,19 @@ class MissionCLI(Node):
             avoidance = self.buran_status.get('avoidance_active', False)
             obstacle = self.buran_status.get('obstacle_detected', False)
             distance = self.buran_status.get('obstacle_distance', '?')
-            print(f"  Obstacle: {'🚨 DETECTED' if obstacle else '✅ Clear'} ({distance}m)")
+            urgency = self.buran_status.get('urgency', 0.0)
+            obs_count = self.buran_status.get('obstacle_count', 0)
+            is_critical = self.buran_status.get('is_critical', False)
+            
+            # OKO v2.0 enhanced display
+            if is_critical:
+                print(f"  Obstacle: 🚨 CRITICAL ({distance}m) [{obs_count} clusters]")
+            elif obstacle:
+                print(f"  Obstacle: ⚠️ DETECTED ({distance}m) [{obs_count} clusters]")
+            else:
+                print(f"  Obstacle: ✅ Clear ({distance}m)")
+            
+            print(f"  Urgency: {urgency*100:.0f}%")
             print(f"  Avoidance: {'🔄 Active' if avoidance else 'Inactive'}")
             print(f"  Heading: {self.buran_status.get('current_yaw', '?')}°")
         

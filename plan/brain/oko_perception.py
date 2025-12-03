@@ -64,12 +64,12 @@ class OkoPerception(Node):
         self.declare_parameter('sample_rate', 1)     # Process ALL points
         
         # Enhanced parameters (v2.0)
-        self.declare_parameter('temporal_history_size', 5)    # Scans to keep in history
-        self.declare_parameter('temporal_threshold', 3)       # Min detections to confirm
+        self.declare_parameter('temporal_history_size', 3)    # Reduced: faster response
+        self.declare_parameter('temporal_threshold', 2)       # Reduced: 2/3 detections to confirm
         self.declare_parameter('cluster_distance', 2.0)       # Max distance between cluster points
-        self.declare_parameter('min_cluster_size', 5)         # Min points per cluster
+        self.declare_parameter('min_cluster_size', 3)         # Reduced: detect smaller obstacles
         self.declare_parameter('water_plane_threshold', 0.5)  # Tolerance for water plane removal
-        self.declare_parameter('velocity_history_size', 10)   # Frames for velocity estimation
+        self.declare_parameter('velocity_history_size', 5)    # Reduced: faster velocity estimate
 
         # Get parameters
         self.min_safe_distance = self.get_parameter('min_safe_distance').value
@@ -566,24 +566,39 @@ class OkoPerception(Node):
                     'speed': round(speed, 2)
                 })
         
+        # Calculate best_gap for BURAN compatibility (direction in degrees, width in degrees)
+        best_gap = None
+        if self.gaps:
+            best = max(self.gaps, key=lambda g: g['width'])
+            best_gap = {
+                'direction': float(round(math.degrees(best['angle']), 1)),
+                'width': float(round(math.degrees(best['width'] / best['distance']), 1)) if best['distance'] > 0 else 0.0,
+                'distance': float(round(best['distance'], 1))
+            }
+        
         # Publish detailed obstacle info as JSON (enhanced)
+        # Convert numpy types to Python native types for JSON serialization
         obstacle_info = {
-            'obstacle_detected': self.obstacle_detected,
-            'min_distance': round(self.min_obstacle_distance, 2),
-            'front_clear': round(self.front_clear, 2),
-            'left_clear': round(self.left_clear, 2),
-            'right_clear': round(self.right_clear, 2),
-            'is_critical': self.min_obstacle_distance < self.critical_distance,
+            'obstacle_detected': bool(self.obstacle_detected),
+            'min_distance': float(round(self.min_obstacle_distance, 2)),
+            'front_clear': float(round(self.front_clear, 2)),
+            'left_clear': float(round(self.left_clear, 2)),
+            'right_clear': float(round(self.right_clear, 2)),
+            'is_critical': bool(self.min_obstacle_distance < self.critical_distance),
+            # BURAN-compatible fields
+            'urgency': float(round(self.overall_urgency, 3)),
+            'obstacle_count': int(len(self.clusters)),
+            'best_gap': best_gap,
             # Enhanced fields (v2.0)
-            'front_urgency': round(self.front_urgency, 3),
-            'left_urgency': round(self.left_urgency, 3),
-            'right_urgency': round(self.right_urgency, 3),
-            'overall_urgency': round(self.overall_urgency, 3),
+            'front_urgency': float(round(self.front_urgency, 3)),
+            'left_urgency': float(round(self.left_urgency, 3)),
+            'right_urgency': float(round(self.right_urgency, 3)),
+            'overall_urgency': float(round(self.overall_urgency, 3)),
             'clusters': cluster_info,
             'gaps': gap_info,
             'moving_obstacles': moving_obstacles,
-            'water_plane_z': round(self.water_plane_z, 2) if self.water_plane_z else None,
-            'temporal_confidence': len(self.detection_history) / self.temporal_history_size
+            'water_plane_z': float(round(self.water_plane_z, 2)) if self.water_plane_z else None,
+            'temporal_confidence': float(len(self.detection_history) / self.temporal_history_size)
         }
         
         info_msg = String()
@@ -592,7 +607,7 @@ class OkoPerception(Node):
         
         # Publish simple detection flag
         detected_msg = Bool()
-        detected_msg.data = self.obstacle_detected
+        detected_msg.data = bool(self.obstacle_detected)
         self.pub_obstacle_detected.publish(detected_msg)
         
         # Bilingual logging (throttled)
