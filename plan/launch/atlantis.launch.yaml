@@ -1,0 +1,90 @@
+version: 2
+
+# ========================================
+# ATLANTIS LAUNCH FILE - YAML FORMAT
+# ========================================
+# Launches the Atlantis modular navigation stack:
+# - atlantis_planner (plan package) - Lawnmower path generation
+# - atlantis_controller (control package) - PID control with obstacle avoidance
+#
+# Usage:
+#   ros2 launch plan atlantis.launch.yaml
+#   ros2 launch plan atlantis.launch.yaml scan_length:=100.0 scan_width:=25.0 lanes:=6
+#   ros2 launch plan atlantis.launch.yaml base_speed:=600.0 min_safe_distance:=8.0
+
+# ========================================
+# SUBSTITUTIONS - Define variables and defaults
+# ========================================
+substitutions:
+  # Planner Parameters
+  scan_length: '150.0'
+  scan_width: '20.0'
+  lanes: '4'
+  frame_id: 'map'
+
+  # Controller - PID Parameters
+  kp: '400.0'
+  ki: '20.0'
+  kd: '100.0'
+  base_speed: '500.0'
+  max_speed: '800.0'
+  waypoint_tolerance: '2.0'
+
+  # Controller - Obstacle Avoidance Parameters
+  min_safe_distance: '8.0'
+  critical_distance: '2.0'
+  obstacle_slow_factor: '0.1'
+  hysteresis_distance: '1.0'
+  reverse_timeout: '10.0'
+
+  # Controller - Stuck Recovery (SASS) Parameters
+  stuck_timeout: '5.0'
+  stuck_threshold: '1.0'
+  no_go_zone_radius: '8.0'
+  drift_compensation_gain: '0.3'
+  probe_angle: '45.0'
+  detour_distance: '12.0'
+
+# ========================================
+# LAUNCH NODES
+# ========================================
+launch:
+  # Atlantis Planner Node
+  - node:
+      package: 'plan'
+      executable: 'atlantis_planner'
+      name: 'atlantis_planner'
+      output: 'screen'
+      parameters:
+        - scan_length: $(var scan_length)
+        - scan_width: $(var scan_width)
+        - lanes: $(var lanes)
+        - frame_id: $(var frame_id)
+
+  # Atlantis Controller Node
+  - node:
+      package: 'control'
+      executable: 'atlantis_controller'
+      name: 'atlantis_controller'
+      output: 'screen'
+      parameters:
+        # PID Control
+        - kp: $(var kp)
+        - ki: $(var ki)
+        - kd: $(var kd)
+        - base_speed: $(var base_speed)
+        - max_speed: $(var max_speed)
+        - waypoint_tolerance: $(var waypoint_tolerance)
+        # Obstacle Avoidance
+        - min_safe_distance: $(var min_safe_distance)
+        - critical_distance: $(var critical_distance)
+        - obstacle_slow_factor: $(var obstacle_slow_factor)
+        - hysteresis_distance: $(var hysteresis_distance)
+        - reverse_timeout: $(var reverse_timeout)
+        # Stuck Recovery (SASS)
+        - stuck_timeout: $(var stuck_timeout)
+        - stuck_threshold: $(var stuck_threshold)
+        - no_go_zone_radius: $(var no_go_zone_radius)
+        - drift_compensation_gain: $(var drift_compensation_gain)
+        - probe_angle: $(var probe_angle)
+        - detour_distance: $(var detour_distance)

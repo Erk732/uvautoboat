@@ -13,7 +13,8 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         # Install launch files
-        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+        #(os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')), old launch file config
+        (os.path.join('share', package_name, 'launch'), glob('launch/*')),
         # Install rviz config files
         (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
     ],
