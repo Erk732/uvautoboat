@@ -396,14 +396,17 @@ function subscribeToTopics() {
         const data = JSON.parse(message.data);
         console.log('Modular obstacle status:', data);
         // Convert modular format to vostok1 format with OKO v2.0 enhancements
+        // OKO v2.0: front_clear, left_clear, right_clear ARE the distances in meters
+        const CLEAR_THRESHOLD = 10.0;  // Distance threshold for "clear" status
         updateObstacleStatus({
             min_distance: data.min_distance,
-            front_clear: data.front_clear,
-            left_clear: data.left_clear,
-            right_clear: data.right_clear,
-            front_distance: data.front_distance || data.min_distance,
-            left_distance: data.left_distance || 999,
-            right_distance: data.right_distance || 999,
+            // OKO v2.0: Use distance values for both boolean and numeric display
+            front_clear: data.front_clear > CLEAR_THRESHOLD,
+            left_clear: data.left_clear > CLEAR_THRESHOLD,
+            right_clear: data.right_clear > CLEAR_THRESHOLD,
+            front_distance: data.front_clear,  // OKO v2.0: front_clear IS the distance
+            left_distance: data.left_clear,    // OKO v2.0: left_clear IS the distance
+            right_distance: data.right_clear,  // OKO v2.0: right_clear IS the distance
             status: data.is_critical ? '🚨 CRITIQUE' : 
                     data.obstacle_detected ? '⚠️ OBSTACLE' : 
                     '✅ DÉGAGÉ',
@@ -604,11 +607,11 @@ function updateObstacleStatus(data) {
         minDist >= 999 ? '∞' : minDist.toFixed(1) + 'm';
     
     document.getElementById('front-clear').textContent = 
-        data.front_clear ? `✓ ${data.front_distance}m` : '✗ Blocked';
+        data.front_clear ? `✓ ${data.front_distance.toFixed(1)}m` : `✗ ${data.front_distance.toFixed(1)}m`;
     document.getElementById('left-clear').textContent = 
-        data.left_clear ? `✓ ${data.left_distance}m` : `✗ ${data.left_distance}m`;
+        data.left_clear ? `✓ ${data.left_distance.toFixed(1)}m` : `✗ ${data.left_distance.toFixed(1)}m`;
     document.getElementById('right-clear').textContent = 
-        data.right_clear ? `✓ ${data.right_distance}m` : `✗ ${data.right_distance}m`;
+        data.right_clear ? `✓ ${data.right_distance.toFixed(1)}m` : `✗ ${data.right_distance.toFixed(1)}m`;
     
     // OKO v2.0: Update urgency display if element exists
     const urgencyEl = document.getElementById('urgency');
