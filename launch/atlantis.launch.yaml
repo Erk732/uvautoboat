@@ -1,90 +1,94 @@
-version: 2
-
-# ========================================
-# ATLANTIS LAUNCH FILE - YAML FORMAT
-# ========================================
-# Launches the Atlantis modular navigation stack:
-# - atlantis_planner (plan package) - Lawnmower path generation
-# - atlantis_controller (control package) - PID control with obstacle avoidance
+# ============================================================================
+# ATLANTIS - Modular Navigation System
+# Lawnmower Pattern Scanning for Environmental Monitoring
+# ============================================================================
 #
-# Usage:
-#   ros2 launch plan atlantis.launch.yaml
-#   ros2 launch plan atlantis.launch.yaml scan_length:=100.0 scan_width:=25.0 lanes:=6
-#   ros2 launch plan atlantis.launch.yaml base_speed:=600.0 min_safe_distance:=8.0
+# Launches the Atlantis modular navigation stack:
+#   - atlantis_planner (plan package) - Lawnmower path generation
+#   - atlantis_controller (control package) - PID control with obstacle avoidance
+#
+# Prerequisites:
+#   # Kill any old Gazebo processes (Optional but recommended)
+#   pkill -9 gz && pkill -9 ruby
+#
+#   # Build workspace (If the package is not yet built or after changes)
+#   cd ~/seal_ws && colcon build --merge-install && source install/setup.bash
+#
+# Usage (4 terminals):
+#   T1: ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+#   T2: ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
+#   T3: ros2 launch ~/seal_ws/src/uvautoboat/launch/atlantis.launch.yaml
+#   T4: cd ~/seal_ws/src/uvautoboat/web_dashboard/atlantis && python3 -m http.server 8080
+#
+# Then open: http://localhost:8080
+#
+# ============================================================================
 
-# ========================================
-# SUBSTITUTIONS - Define variables and defaults
-# ========================================
-substitutions:
-  # Planner Parameters
-  scan_length: '150.0'
-  scan_width: '20.0'
-  lanes: '4'
-  frame_id: 'map'
-
-  # Controller - PID Parameters
-  kp: '400.0'
-  ki: '20.0'
-  kd: '100.0'
-  base_speed: '500.0'
-  max_speed: '800.0'
-  waypoint_tolerance: '2.0'
-
-  # Controller - Obstacle Avoidance Parameters
-  min_safe_distance: '8.0'
-  critical_distance: '2.0'
-  obstacle_slow_factor: '0.1'
-  hysteresis_distance: '1.0'
-  reverse_timeout: '10.0'
-
-  # Controller - Stuck Recovery (SASS) Parameters
-  stuck_timeout: '5.0'
-  stuck_threshold: '1.0'
-  no_go_zone_radius: '8.0'
-  drift_compensation_gain: '0.3'
-  probe_angle: '45.0'
-  detour_distance: '12.0'
-
-# ========================================
-# LAUNCH NODES
-# ========================================
 launch:
-  # Atlantis Planner Node
-  - node:
-      package: 'plan'
-      executable: 'atlantis_planner'
-      name: 'atlantis_planner'
-      output: 'screen'
-      parameters:
-        - scan_length: $(var scan_length)
-        - scan_width: $(var scan_width)
-        - lanes: $(var lanes)
-        - frame_id: $(var frame_id)
 
-  # Atlantis Controller Node
-  - node:
-      package: 'control'
-      executable: 'atlantis_controller'
-      name: 'atlantis_controller'
-      output: 'screen'
-      parameters:
-        # PID Control
-        - kp: $(var kp)
-        - ki: $(var ki)
-        - kd: $(var kd)
-        - base_speed: $(var base_speed)
-        - max_speed: $(var max_speed)
-        - waypoint_tolerance: $(var waypoint_tolerance)
-        # Obstacle Avoidance
-        - min_safe_distance: $(var min_safe_distance)
-        - critical_distance: $(var critical_distance)
-        - obstacle_slow_factor: $(var obstacle_slow_factor)
-        - hysteresis_distance: $(var hysteresis_distance)
-        - reverse_timeout: $(var reverse_timeout)
-        # Stuck Recovery (SASS)
-        - stuck_timeout: $(var stuck_timeout)
-        - stuck_threshold: $(var stuck_threshold)
-        - no_go_zone_radius: $(var no_go_zone_radius)
-        - drift_compensation_gain: $(var drift_compensation_gain)
-        - probe_angle: $(var probe_angle)
-        - detour_distance: $(var detour_distance)
+# ============================================================================
+# ATLANTIS PLANNER - Lawnmower Path Generation
+# ============================================================================
+- node:
+    pkg: plan
+    exec: atlantis_planner
+    name: atlantis_planner
+    output: screen
+    param:
+    # Scan Pattern Parameters
+    - name: scan_length
+      value: 150.0      # Length of each scanning lane (m)
+    - name: scan_width
+      value: 20.0       # Spacing between lanes (m)
+    - name: lanes
+      value: 4          # Number of scanning lanes
+    - name: frame_id
+      value: "map"      # Coordinate frame for path
+
+# ============================================================================
+# ATLANTIS CONTROLLER - PID Control with Obstacle Avoidance
+# ============================================================================
+- node:
+    pkg: control
+    exec: atlantis_controller
+    name: atlantis_controller
+    output: screen
+    param:
+    # PID Gains
+    - name: kp
+      value: 400.0
+    - name: ki
+      value: 20.0
+    - name: kd
+      value: 100.0
+    # Speed Settings
+    - name: base_speed
+      value: 500.0      # Normal cruising thrust (N)
+    - name: max_speed
+      value: 800.0      # Maximum thrust limit (N)
+    - name: waypoint_tolerance
+      value: 2.0        # Distance to consider waypoint reached (m)
+    # Obstacle Avoidance
+    - name: min_safe_distance
+      value: 8.0        # Start slowing down distance (m)
+    - name: critical_distance
+      value: 2.0        # Emergency stop distance (m)
+    - name: obstacle_slow_factor
+      value: 0.1        # Speed reduction factor near obstacles
+    - name: hysteresis_distance
+      value: 1.0        # Hysteresis to prevent mode oscillation (m)
+    - name: reverse_timeout
+      value: 10.0       # Max time to reverse when stuck (s)
+    # Smart Anti-Stuck System (SASS)
+    - name: stuck_timeout
+      value: 5.0        # Time before declaring stuck (s)
+    - name: stuck_threshold
+      value: 1.0        # Movement threshold for stuck detection (m)
+    - name: no_go_zone_radius
+      value: 8.0        # Radius of no-go zones around failed positions (m)
+    - name: drift_compensation_gain
+      value: 0.3        # Gain for drift compensation
+    - name: probe_angle
+      value: 45.0       # Angle for directional probing (degrees)
+    - name: detour_distance
+      value: 12.0       # Distance for detour maneuvers (m)

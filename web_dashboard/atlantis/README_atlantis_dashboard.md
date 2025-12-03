@@ -110,13 +110,27 @@ ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messag
 
 This starts a WebSocket server on `ws://localhost:9090`.
 
-### 2. Start Atlantis Nodes (Option A: Launch File)
+### 2. Start Atlantis Nodes
+
+**Option A: YAML Launch File (Recommended)**
 
 ```bash
-ros2 launch atlantis.launch.py
+# From the workspace
+ros2 launch ~/seal_ws/src/uvautoboat/launch/atlantis.launch.yaml
+
+# Or from the launch directory
+ros2 launch launch/atlantis.launch.yaml
 ```
 
-### 2. Start Atlantis Nodes (Option B: Separate Terminals)
+> **Note:** To change parameters, edit the `atlantis.launch.yaml` file directly or use the web dashboard controls.
+
+**Option B: Python Launch File**
+
+```bash
+ros2 launch launch/atlantis.launch.py
+```
+
+**Option C: Separate Terminals (Manual)**
 
 ```bash
 # Terminal 1 - Planner
@@ -143,31 +157,54 @@ Open browser to: **<http://localhost:8080>**
 2. Click **"Start"** to enable mission and generate path
 3. Use **"Replan"** to regenerate waypoints with new parameters
 
-## Parameters
+## YAML Launch File Parameters
+
+The `atlantis.launch.yaml` file supports all parameters via command-line overrides.
 
 ### Planner Parameters
 
-| Parameter | Description | Range |
-|-----------|-------------|-------|
-| Lanes | Number of scanning lanes | 1-20 |
-| Scan Length | Length of each lane (m) | 10-500 |
-| Lane Width | Spacing between lanes (m) | 5-100 |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `scan_length` | 150.0 | Length of each scanning lane (m) |
+| `scan_width` | 20.0 | Spacing between lanes (m) |
+| `lanes` | 4 | Number of scanning lanes |
+| `frame_id` | map | Coordinate frame for path |
 
-### PID Control
+### PID Control Parameters
 
-| Parameter | Description | Range |
-|-----------|-------------|-------|
-| Kp | Proportional gain | 0-1000 |
-| Ki | Integral gain | 0-100 |
-| Kd | Derivative gain | 0-500 |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `kp` | 400.0 | Proportional gain |
+| `ki` | 20.0 | Integral gain |
+| `kd` | 100.0 | Derivative gain |
+| `base_speed` | 500.0 | Normal cruising thrust (N) |
+| `max_speed` | 800.0 | Maximum thrust limit (N) |
+| `waypoint_tolerance` | 2.0 | Distance to consider waypoint reached (m) |
 
-### Speed Settings
+### Obstacle Avoidance Parameters
 
-| Parameter | Description | Range |
-|-----------|-------------|-------|
-| Base Speed | Normal cruising thrust (N) | 100-1000 |
-| Max Speed | Maximum thrust limit (N) | 100-1000 |
-| Safe Distance | Obstacle avoidance threshold (m) | 5-30 |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `min_safe_distance` | 8.0 | Start slowing down distance (m) |
+| `critical_distance` | 2.0 | Emergency stop distance (m) |
+| `obstacle_slow_factor` | 0.1 | Speed reduction factor near obstacles |
+| `hysteresis_distance` | 1.0 | Hysteresis to prevent mode oscillation (m) |
+| `reverse_timeout` | 10.0 | Max time to reverse when stuck (s) |
+
+### Stuck Recovery (SASS) Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `stuck_timeout` | 5.0 | Time before declaring stuck (s) |
+| `stuck_threshold` | 1.0 | Movement threshold for stuck detection (m) |
+| `no_go_zone_radius` | 8.0 | Radius of no-go zones around failed positions (m) |
+| `drift_compensation_gain` | 0.3 | Gain for drift compensation |
+| `probe_angle` | 45.0 | Angle for directional probing (degrees) |
+| `detour_distance` | 12.0 | Distance for detour maneuvers (m) |
+
+## Dashboard Parameters
+
+Parameters can also be adjusted via the web dashboard inputs:
 
 ## ROS 2 Topics
 
