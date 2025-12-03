@@ -350,7 +350,7 @@ The **Mission CLI** provides terminal-based mission control when the web dashboa
 #### Waypoint Generation
 
 ```bash
-# Default: 8 lanes, 50m length, 20m width
+# Default: 4 lanes, 150m length, 20m width this is the best route for now!
 ros2 run plan mission_cli generate
 
 # Custom parameters
