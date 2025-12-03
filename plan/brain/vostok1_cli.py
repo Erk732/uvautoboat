@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Mission CLI - Terminal-based mission control for Vostok1 / Sputnik
-Миссия CLI - Управление миссией через терминал
+Mission CLI - Contrôle de mission via terminal
 
 Use this when the web dashboard is unavailable.
 
@@ -11,49 +11,49 @@ MODES:
 
 Usage (Integrated - Vostok1):
     # Generate waypoints with default parameters
-    ros2 run plan mission_cli generate
+    ros2 run plan vostok1_cli generate
     
     # Generate waypoints with custom parameters
-    ros2 run plan mission_cli generate --lanes 8 --length 50 --width 20
+    ros2 run plan vostok1_cli generate --lanes 8 --length 50 --width 20
     
     # Start mission
-    ros2 run plan mission_cli start
+    ros2 run plan vostok1_cli start
     
     # Stop mission
-    ros2 run plan mission_cli stop
+    ros2 run plan vostok1_cli stop
     
     # Resume mission
-    ros2 run plan mission_cli resume
+    ros2 run plan vostok1_cli resume
     
     # Reset mission (clear waypoints)
-    ros2 run plan mission_cli reset
+    ros2 run plan vostok1_cli reset
     
     # Set PID parameters
-    ros2 run plan mission_cli pid --kp 400 --ki 20 --kd 100
+    ros2 run plan vostok1_cli pid --kp 400 --ki 20 --kd 100
     
     # Set speed
-    ros2 run plan mission_cli speed --base 500 --max 800
+    ros2 run plan vostok1_cli speed --base 500 --max 800
     
     # Show current status
-    ros2 run plan mission_cli status
+    ros2 run plan vostok1_cli status
     
     # Interactive mode
-    ros2 run plan mission_cli interactive
+    ros2 run plan vostok1_cli interactive
 
 Usage (Modular - Sputnik Planner):
     # Generate waypoints
-    ros2 run plan mission_cli --mode modular generate --lanes 8 --length 15 --width 5
+    ros2 run plan vostok1_cli --mode modular generate --lanes 8 --length 15 --width 5
     
     # Start mission
-    ros2 run plan mission_cli --mode modular start
+    ros2 run plan vostok1_cli --mode modular start
     
     # Stop / Resume / Reset
-    ros2 run plan mission_cli --mode modular stop
-    ros2 run plan mission_cli --mode modular resume
-    ros2 run plan mission_cli --mode modular reset
+    ros2 run plan vostok1_cli --mode modular stop
+    ros2 run plan vostok1_cli --mode modular resume
+    ros2 run plan vostok1_cli --mode modular reset
     
     # Interactive mode
-    ros2 run plan mission_cli --mode modular interactive
+    ros2 run plan vostok1_cli --mode modular interactive
 """
 
 import rclpy
@@ -67,7 +67,7 @@ import time
 
 class MissionCLI(Node):
     def __init__(self, mode='vostok1'):
-        super().__init__('mission_cli')
+        super().__init__('vostok1_cli')
         
         self.mode = mode
         
@@ -169,6 +169,11 @@ class MissionCLI(Node):
         """Reset the mission"""
         self.send_command('reset_mission')
         print("\n🔄 Mission RESET command sent!")
+    
+    def go_home(self):
+        """Navigate back to spawn point"""
+        self.send_command('go_home')
+        print("\n🏠 GO HOME command sent - Returning to spawn point!")
         
     def confirm_waypoints(self):
         """Confirm waypoints"""
@@ -206,7 +211,7 @@ class MissionCLI(Node):
             rclpy.spin_once(self, timeout_sec=0.1)
             
         print("\n" + "=" * 50)
-        print("VOSTOK1 STATUS | СТАТУС ВОСТОКА-1")
+        print("VOSTOK1 STATUS | STATUT VOSTOK1")
         print("=" * 50)
         
         if self.mission_status:
@@ -229,7 +234,7 @@ class MissionCLI(Node):
     def interactive_mode(self):
         """Interactive command mode"""
         print("\n" + "=" * 60)
-        print("VOSTOK1 INTERACTIVE MODE | ИНТЕРАКТИВНЫЙ РЕЖИМ")
+        print("VOSTOK1 INTERACTIVE MODE | MODE INTERACTIF")
         print("=" * 60)
         print("Commands:")
         print("  g [lanes] [length] [width] - Generate waypoints")
@@ -238,6 +243,7 @@ class MissionCLI(Node):
         print("  x                          - Stop mission")
         print("  r                          - Resume mission")
         print("  reset                      - Reset mission")
+        print("  home                       - 🏠 Go home (return to spawn)")
         print("  status                     - Show status")
         print("  pid <kp> <ki> <kd>         - Set PID")
         print("  speed <base> <max>         - Set speed")
@@ -268,6 +274,8 @@ class MissionCLI(Node):
                     self.resume_mission()
                 elif cmd[0] == 'reset':
                     self.reset_mission()
+                elif cmd[0] == 'home':
+                    self.go_home()
                 elif cmd[0] == 'status':
                     self.show_status()
                 elif cmd[0] == 'pid' and len(cmd) >= 4:
@@ -295,11 +303,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  ros2 run plan mission_cli generate --lanes 8 --length 50 --width 20
-  ros2 run plan mission_cli start
-  ros2 run plan mission_cli stop
-  ros2 run plan mission_cli status
-  ros2 run plan mission_cli interactive
+  ros2 run plan vostok1_cli generate --lanes 8 --length 50 --width 20
+  ros2 run plan vostok1_cli start
+  ros2 run plan vostok1_cli stop
+  ros2 run plan vostok1_cli status
+  ros2 run plan vostok1_cli interactive
         """
     )
     
@@ -316,6 +324,7 @@ Examples:
     subparsers.add_parser('stop', help='Stop mission')
     subparsers.add_parser('resume', help='Resume mission')
     subparsers.add_parser('reset', help='Reset mission')
+    subparsers.add_parser('home', help='🏠 Go home - Return to spawn point')
     subparsers.add_parser('confirm', help='Confirm waypoints')
     subparsers.add_parser('status', help='Show status')
     subparsers.add_parser('interactive', help='Interactive mode')
@@ -351,6 +360,8 @@ Examples:
             cli.resume_mission()
         elif args.command == 'reset':
             cli.reset_mission()
+        elif args.command == 'home':
+            cli.go_home()
         elif args.command == 'confirm':
             cli.confirm_waypoints()
         elif args.command == 'status':

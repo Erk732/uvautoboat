@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
 Modular Navigation Launch File
-Модульная Система Навигации - TNO/Post-Soviet Edition
+Système de Navigation Modulaire - French Academic Edition
 
 Launches the modular Vostok1-based navigation system:
-- oko_perception (plan package) - ОКО - 3D LIDAR processing
-- sputnik_planner (plan package) - СПУТНИК - GPS waypoint planning
-- buran_controller (control package) - БУРАН - PID control with obstacle avoidance
+- oko_perception (plan package) - ŒIL - 3D LIDAR processing
+- sputnik_planner (plan package) - SPOUTNIK - GPS waypoint planning
+- buran_controller (control package) - BOURANE - PID control with obstacle avoidance
 
 Usage:
     ros2 launch plan vostok1_modular_navigation.launch.py
@@ -79,7 +79,7 @@ def generate_launch_description():
         description='Maximum thrust speed limit'
     )
 
-    # ОКО Perception Node - 3D LIDAR Processing
+    # ŒIL Perception Node - 3D LIDAR Processing
     oko_perception = Node(
         package='plan',
         executable='oko_perception',
@@ -97,7 +97,7 @@ def generate_launch_description():
         }]
     )
 
-    # СПУТНИК Planner Node - GPS Waypoint Navigation
+    # SPOUTNIK Planner Node - GPS Waypoint Navigation
     sputnik_planner = Node(
         package='plan',
         executable='sputnik_planner',
@@ -111,7 +111,7 @@ def generate_launch_description():
         }]
     )
 
-    # БУРАН Navigation Controller - PID Control
+    # BOURANE Navigation Controller - PID Control
     buran_controller = Node(
         package='control',
         executable='buran_controller',

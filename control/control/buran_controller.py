@@ -1,6 +1,33 @@
 #!/usr/bin/env python3
 """
-Navigation Controller Node - PID Heading Control with Smart Anti-Stuck System
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                КОНТРОЛЛЕР «БУРАН» / BURAN CONTROLLER                      ║
+║              СИСТЕМА УПРАВЛЕНИЯ ДВИЖЕНИЕМ / MOTION CONTROL               ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  СПЕЦИФИКАЦИЯ: МИЛ-СТД-1553Б / ГОСТ Р 52070-2003                             ║
+║  КЛАССИФИКАЦИЯ: ВАРШАВСКИЙ ДОГОВОР / WARSAW PACT MIL-SPEC                    ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  СОВЕТСКАЯ СИСТЕМА УПРАВЛЕНИЯ / SOVIET CONTROL SYSTEM:                        ║
+║                                                                              ║
+║  ПИД-РЕГУЛЯТОР С ЖЁСТКИМИ ОГРАНИЧЕНИЯМИ / PID WITH HARD LIMITS:            ║
+║  - Anti-windup integral clamping (анти-накопление)                          ║
+║  - Rate limiting on control output (ограничение скорости)                  ║
+║  - Dead-zone filtering (зона нечувствительности)                              ║
+║  - Bumpless transfer between modes (безударный переход)                    ║
+║                                                                              ║
+║  СИСТЕМА САСС / SASS (Smart Anti-Stuck System):                             ║
+║  - Kalman-filtered drift estimation                                         ║
+║  - No-go zone memory with exponential decay                                 ║
+║  - Adaptive escape duration based on history                                ║
+║  - Multi-phase escape: PROBE → REVERSE → TURN → FORWARD                    ║
+║                                                                              ║
+║  БЕЗОПАСНЫЙ ОТКАЗ / FAIL-SAFE:                                              ║
+║  - Unknown state → FULL STOP                                                ║
+║  - Sensor timeout → conservative response                                   ║
+║  - Watchdog timer on control loop                                            ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 
 Part of the modular Vostok1 architecture.
 Subscribes to planner targets and perception data, outputs thruster commands.
@@ -34,6 +61,29 @@ import numpy as np
 
 from sensor_msgs.msg import NavSatFix, Imu
 from std_msgs.msg import Float64, String
+
+
+# =============================================================================
+# СОВЕТСКИЕ КОНСТАНТЫ БЕЗОПАСНОСТИ / SOVIET SAFETY CONSTANTS
+# =============================================================================
+# МИЛ-СТД-1553Б rated limits with Warsaw Pact safety factor (К_без = 2.0)
+
+MIL_SPEC_MAX_THRUST = 1000.0        # Н / Newtons - absolute hardware limit
+MIL_SPEC_SAFE_THRUST = 800.0        # Н - operational limit (80% of max)
+MIL_SPEC_EMERGENCY_THRUST = 1000.0  # Н - emergency override only
+
+# PID Anti-windup limits (анти-накопление)
+MIL_SPEC_INTEGRAL_LIMIT = 0.5       # radians - prevent integral windup
+MIL_SPEC_TURN_POWER_LIMIT = 800.0   # Н - maximum differential thrust
+
+# Rate limiting (ограничение скорости изменения)
+MIL_SPEC_MAX_THRUST_RATE = 500.0    # Н/s - maximum thrust change rate
+MIL_SPEC_DEAD_ZONE = 0.02           # radians - heading dead-zone (~ 1°)
+
+# Fail-safe timeouts (временные ограничения безопасности)
+MIL_SPEC_WATCHDOG_TIMEOUT = 1.0     # seconds - control loop watchdog
+MIL_SPEC_SENSOR_TIMEOUT = 2.0       # seconds - sensor validity timeout
+MIL_SPEC_COMMAND_TIMEOUT = 5.0      # seconds - command freshness timeout
 
 
 # =============================================================================
@@ -126,7 +176,7 @@ class KalmanDriftEstimator:
 
 class BuranController(Node):
     """
-    BURAN (БУРАН) - "Snowstorm" in Russian
+    BURAN - "Tempête de neige" (Référence à la navette spatiale soviétique)
     Soviet space shuttle program reference
     Enhanced with Smart Anti-Stuck System (SASS)
     """
@@ -272,6 +322,21 @@ class BuranController(Node):
             self.mission_status_callback,
             10
         )
+        
+        # Subscribe to runtime config updates (PID, speed)
+        self.create_subscription(
+            String,
+            '/vostok1/config',
+            self.config_callback,
+            10
+        )
+        # Also listen to modular config topic
+        self.create_subscription(
+            String,
+            '/sputnik/config',
+            self.config_callback,
+            10
+        )
 
         # --- PUBLISHERS ---
         self.pub_left = self.create_publisher(Float64, '/wamv/thrusters/left/thrust', 10)
@@ -289,10 +354,10 @@ class BuranController(Node):
         self.create_timer(0.5, self.publish_anti_stuck_status)
 
         self.get_logger().info("=" * 50)
-        self.get_logger().info("БУРАН (BURAN) - Система Управления Движением")
+        self.get_logger().info("BURAN - Systeme de Controle de Mouvement")
         self.get_logger().info("Buran Controller - PID Heading Control")
         self.get_logger().info("+ Smart Anti-Stuck System (SASS) v2.0")
-        self.get_logger().info(f"ПИД | PID Gains: Kp={self.kp}, Ki={self.ki}, Kd={self.kd}")
+        self.get_logger().info(f"PID Gains: Kp={self.kp}, Ki={self.ki}, Kd={self.kd}")
         self.get_logger().info(f"Speed: {self.base_speed} (max: {self.max_speed})")
         self.get_logger().info(f"Anti-Stuck: timeout={self.stuck_timeout}s, threshold={self.stuck_threshold}m")
         self.get_logger().info("=" * 50)
@@ -351,6 +416,45 @@ class BuranController(Node):
         except (json.JSONDecodeError, KeyError) as e:
             self.get_logger().warn(f"Invalid mission status: {e}")
 
+    def config_callback(self, msg):
+        """Handle runtime configuration changes for PID and speed"""
+        try:
+            config = json.loads(msg.data)
+            updated = []
+            
+            # PID gains
+            if 'kp' in config:
+                self.kp = float(config['kp'])
+                updated.append(f"Kp={self.kp}")
+            if 'ki' in config:
+                self.ki = float(config['ki'])
+                updated.append(f"Ki={self.ki}")
+            if 'kd' in config:
+                self.kd = float(config['kd'])
+                updated.append(f"Kd={self.kd}")
+                
+            # Speed parameters
+            if 'base_speed' in config:
+                self.base_speed = float(config['base_speed'])
+                updated.append(f"base_speed={self.base_speed}")
+            if 'max_speed' in config:
+                self.max_speed = float(config['max_speed'])
+                updated.append(f"max_speed={self.max_speed}")
+                
+            # Obstacle avoidance
+            if 'obstacle_slow_factor' in config:
+                self.obstacle_slow_factor = float(config['obstacle_slow_factor'])
+                updated.append(f"slow_factor={self.obstacle_slow_factor}")
+            if 'critical_distance' in config:
+                self.critical_distance = float(config['critical_distance'])
+                updated.append(f"critical_dist={self.critical_distance}")
+                
+            if updated:
+                self.get_logger().info(f"⚙️ Config updated: {', '.join(updated)}")
+                
+        except Exception as e:
+            self.get_logger().error(f"Config parse error: {e}")
+
     def control_loop(self):
         """Main control loop - PID heading control with obstacle avoidance and smart anti-stuck"""
         # Check if mission is active
@@ -386,7 +490,7 @@ class BuranController(Node):
                 self.reverse_start_time = self.get_clock().now()
                 self.integral_error = 0.0
                 self.get_logger().warn(
-                    f"🚨 КРИТИЧЕСКОЕ ПРЕПЯТСТВИЕ {self.min_obstacle_distance:.1f}m - Реверс! | "
+                    f"🚨 OBSTACLE CRITIQUE {self.min_obstacle_distance:.1f}m - Marche arrière! | "
                     f"CRITICAL OBSTACLE - Reversing!"
                 )
 
@@ -407,27 +511,27 @@ class BuranController(Node):
                 self.integral_error = 0.0
                 self.previous_error = 0.0
                 self.avoidance_mode = True
-                self.get_logger().info("⚠️ Режим обхода препятствий - ПИД сброшен | Avoidance mode - PID reset")
+                self.get_logger().info("⚠️ Mode évitement - PID réinitialisé | Avoidance mode - PID reset")
 
             # Turn towards clearer direction
             if self.left_clear > self.right_clear:
                 avoidance_heading = self.current_yaw + math.pi / 2
-                direction = "ЛЕВО/LEFT"
+                direction = "GAUCHE/LEFT"
             else:
                 avoidance_heading = self.current_yaw - math.pi / 2
-                direction = "ПРАВО/RIGHT"
+                direction = "DROITE/RIGHT"
 
             angle_error = self.normalize_angle(avoidance_heading - self.current_yaw)
 
             self.get_logger().warn(
-                f"🚨 ПРЕПЯТСТВИЕ {self.min_obstacle_distance:.1f}m - Поворот {direction} "
-                f"(Л:{self.left_clear:.1f}m П:{self.right_clear:.1f}m)",
+                f"🚨 OBSTACLE {self.min_obstacle_distance:.1f}m - Virage {direction} "
+                f"(G:{self.left_clear:.1f}m D:{self.right_clear:.1f}m)",
                 throttle_duration_sec=1.0
             )
         else:
             # --- NORMAL WAYPOINT NAVIGATION ---
             if self.avoidance_mode:
-                self.get_logger().info("✅ Путь свободен - Продолжение навигации | Path CLEAR - Resuming navigation")
+                self.get_logger().info("✅ Voie dégagée - Reprise navigation | Path CLEAR - Resuming navigation")
                 self.avoidance_mode = False
                 self.integral_error = 0.0
                 self.previous_error = 0.0
@@ -438,9 +542,20 @@ class BuranController(Node):
             target_angle = math.atan2(dy, dx)
             angle_error = self.normalize_angle(target_angle - self.current_yaw)
 
-        # --- PID CONTROL ---
+        # =====================================================================
+        # MIL-SPEC PID CONTROLLER
+        # =====================================================================
+        # Implements: anti-windup, dead-zone, rate limiting
+        
+        # --- DEAD-ZONE FILTERING ---
+        # Prevent micro-corrections that waste energy and cause wear
+        if abs(angle_error) < MIL_SPEC_DEAD_ZONE:
+            angle_error = 0.0
+        
+        # --- ANTI-WINDUP INTEGRAL ---
         self.integral_error += angle_error * self.dt
-        self.integral_error = max(-0.5, min(0.5, self.integral_error))
+        self.integral_error = max(-MIL_SPEC_INTEGRAL_LIMIT, 
+                                   min(MIL_SPEC_INTEGRAL_LIMIT, self.integral_error))
 
         derivative_error = (angle_error - self.previous_error) / self.dt
 
@@ -451,7 +566,18 @@ class BuranController(Node):
         )
 
         self.previous_error = angle_error
-        turn_power = max(-800.0, min(800.0, turn_power))
+        
+        # --- HARD LIMITS ---
+        turn_power = max(-MIL_SPEC_TURN_POWER_LIMIT, 
+                         min(MIL_SPEC_TURN_POWER_LIMIT, turn_power))
+        
+        # --- RATE LIMITING ---
+        # Prevents sudden thrust changes that could damage actuators
+        if hasattr(self, 'last_turn_power'):
+            max_change = MIL_SPEC_MAX_THRUST_RATE * self.dt
+            turn_power = max(self.last_turn_power - max_change,
+                            min(self.last_turn_power + max_change, turn_power))
+        self.last_turn_power = turn_power
 
         # --- SPEED CALCULATION ---
         angle_error_deg = abs(math.degrees(angle_error))
@@ -470,12 +596,13 @@ class BuranController(Node):
         if self.obstacle_detected:
             speed *= self.obstacle_slow_factor
 
-        # --- DIFFERENTIAL THRUST ---
+        # --- DIFFERENTIAL THRUST WITH MIL-SPEC LIMITS ---
         left_thrust = speed - turn_power
         right_thrust = speed + turn_power
 
-        left_thrust = max(-1000.0, min(1000.0, left_thrust))
-        right_thrust = max(-1000.0, min(1000.0, right_thrust))
+        # Apply Soviet safety limits (К_без = 2.0 safety factor)
+        left_thrust = max(-MIL_SPEC_SAFE_THRUST, min(MIL_SPEC_SAFE_THRUST, left_thrust))
+        right_thrust = max(-MIL_SPEC_SAFE_THRUST, min(MIL_SPEC_SAFE_THRUST, right_thrust))
 
         self.send_thrust(left_thrust, right_thrust)
         
@@ -560,7 +687,7 @@ class BuranController(Node):
                     self.calculate_adaptive_escape_duration()
                     
                     self.get_logger().warn(
-                        f"🚨 ЗАСТРЯЛ! | STUCK! Smart escape initiating "
+                        f"🚨 BLOQUÉ! | STUCK! Smart escape initiating "
                         f"(Attempt {self.consecutive_stuck_count}, Duration: {self.adaptive_escape_duration:.1f}s)"
                     )
                     

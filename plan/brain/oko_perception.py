@@ -1,5 +1,32 @@
 #!/usr/bin/env python3
 """
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                  СИСТЕМА «ОКО» / OKO PERCEPTION SYSTEM                       ║
+║             РАННЕЕ ПРЕДУПРЕЖДЕНИЕ / EARLY WARNING DETECTION                  ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  СПЕЦИФИКАЦИЯ: МИЛ-СТД-1553Б / ГОСТ Р 52070-2003                             ║
+║  КЛАССИФИКАЦИЯ: ВАРШАВСКИЙ ДОГОВОР / WARSAW PACT MIL-SPEC                    ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  СОВЕТСКАЯ СИСТЕМА ВОСПРИЯТИЯ / SOVIET PERCEPTION SYSTEM:                    ║
+║                                                                              ║
+║  ТРОЙНОЕ РЕЗЕРВИРОВАНИЕ СЕКТОРОВ / TRIPLE-SECTOR REDUNDANCY:                 ║
+║  - Front sector: -45° to +45° (forward threat detection)                     ║
+║  - Left sector: +45° to +135° (port-side awareness)                          ║
+║  - Right sector: -135° to -45° (starboard-side awareness)                    ║
+║                                                                              ║
+║  ПОМЕХОЗАЩИЩЁННОСТЬ / NOISE REJECTION:                                       ║
+║  - 10th percentile filtering (robust to outliers)                            ║
+║  - Height-based filtering (reject sky/water reflections)                     ║
+║  - Minimum range filtering (reject self-reflections)                         ║
+║                                                                              ║
+║  ГИСТЕРЕЗИС / HYSTERESIS:                                                    ║
+║  - Entry threshold: min_safe_distance                                        ║
+║  - Exit threshold: min_safe_distance + hysteresis_distance                   ║
+║  - Prevents oscillation at boundary (предотвращение колебаний)               ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
 Perception Node - 3D LIDAR Point Cloud Processing
 
 Part of the modular Vostok1 architecture.
@@ -26,22 +53,23 @@ from std_msgs.msg import String, Bool
 
 class OkoPerception(Node):
     """
-    OKO (ОКО) - "Eye" in Russian
-    Soviet-era satellite early warning system reference
+    OKO - "Œil" (Référence au système d'alerte précoce par satellite)
+    Système de perception et détection d'obstacles
     """
     def __init__(self):
         super().__init__('oko_perception_node')
 
         # --- PARAMETERS ---
-        # Increased sensitivity for small obstacles like buoys
-        self.declare_parameter('min_safe_distance', 12.0)  # Reduced from 15 for earlier detection
-        self.declare_parameter('critical_distance', 4.0)   # Reduced from 5
-        self.declare_parameter('hysteresis_distance', 1.5) # Reduced from 2
-        self.declare_parameter('min_height', -10.0)  # Relaxed - LiDAR frame varies
-        self.declare_parameter('max_height', 20.0)   # Relaxed - catch all obstacles
-        self.declare_parameter('min_range', 0.5)    # Reduced from 1.0 to catch closer objects
-        self.declare_parameter('max_range', 100.0)  # Ignore points farther than this
-        self.declare_parameter('sample_rate', 2)    # Process every 2nd point for better detection
+        # Tuned for lake bank detection (LiDAR mounted high on WAM-V frame)
+        # Lake banks appear BELOW the LiDAR (negative Z values)
+        self.declare_parameter('min_safe_distance', 12.0)  # Detection threshold
+        self.declare_parameter('critical_distance', 4.0)   # Emergency stop threshold
+        self.declare_parameter('hysteresis_distance', 1.5) # Prevent oscillation
+        self.declare_parameter('min_height', -15.0)  # Lake bank is ~2-3m below LiDAR
+        self.declare_parameter('max_height', 10.0)   # Include terrain above water
+        self.declare_parameter('min_range', 5.0)     # Ignore spawn dock and boat structure
+        self.declare_parameter('max_range', 50.0)    # Focus on nearby obstacles
+        self.declare_parameter('sample_rate', 1)     # Process ALL points
 
         # Get parameters
         self.min_safe_distance = self.get_parameter('min_safe_distance').value
@@ -80,9 +108,9 @@ class OkoPerception(Node):
         self.create_timer(0.05, self.publish_status)
 
         self.get_logger().info("=" * 50)
-        self.get_logger().info("ОКО (OKO) - Система Обнаружения Препятствий")
+        self.get_logger().info("OKO - Systeme de Detection d'Obstacles")
         self.get_logger().info("OKO Perception - 3D LIDAR Processing")
-        self.get_logger().info(f"Безопасная дистанция | Safe Distance: {self.min_safe_distance}m")
+        self.get_logger().info(f"Distance de securite | Safe Distance: {self.min_safe_distance}m")
         self.get_logger().info(f"Critical Distance: {self.critical_distance}m")
         self.get_logger().info(f"Height Filter: {self.min_height}m to {self.max_height}m")
         self.get_logger().info("=" * 50)
@@ -223,19 +251,19 @@ class OkoPerception(Node):
         if self.obstacle_detected:
             if self.min_obstacle_distance < self.critical_distance:
                 self.get_logger().warn(
-                    f"🚨 КРИТИЧЕСКОЕ! {self.min_obstacle_distance:.1f}m | CRITICAL! "
-                    f"(Ф:{self.front_clear:.1f} Л:{self.left_clear:.1f} П:{self.right_clear:.1f})",
+                    f"🚨 CRITIQUE! {self.min_obstacle_distance:.1f}m | CRITICAL! "
+                    f"(Av:{self.front_clear:.1f} G:{self.left_clear:.1f} D:{self.right_clear:.1f})",
                     throttle_duration_sec=1.0
                 )
             else:
                 self.get_logger().info(
-                    f"⚠️ ПРЕПЯТСТВИЕ: {self.min_obstacle_distance:.1f}m | OBSTACLE "
+                    f"⚠️ OBSTACLE: {self.min_obstacle_distance:.1f}m | OBSTACLE "
                     f"(F:{self.front_clear:.1f} L:{self.left_clear:.1f} R:{self.right_clear:.1f})",
                     throttle_duration_sec=2.0
                 )
         else:
             self.get_logger().info(
-                f"✅ СВОБОДНО | CLEAR (F:{self.front_clear:.1f} L:{self.left_clear:.1f} R:{self.right_clear:.1f})",
+                f"✅ DÉGAGÉ | CLEAR (F:{self.front_clear:.1f} L:{self.left_clear:.1f} R:{self.right_clear:.1f})",
                 throttle_duration_sec=5.0
             )
 

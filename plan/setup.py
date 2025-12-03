@@ -31,16 +31,15 @@ setup(
             'tf_broadcaster = brain.tf_broadcaster:main',
             'tf_broadcaster_gps = brain.tf_broadcaster_gps:main',
             'tf_broadcaster_gazebo = brain.tf_broadcaster_gazebo:main',
-            'apollo11 = brain.apollo11:main',
+            # Vostok1 - integrated navigation node
             'vostok1 = brain.vostok1:main',
             'waypoint_visualizer = brain.waypoint_visualizer:main',
-            # Mission CLI - terminal control for Vostok1
-            'mission_cli = brain.mission_cli:main',
+            # Vostok1 CLI - terminal control for Vostok1/Sputnik
+            'vostok1_cli = brain.vostok1_cli:main',
             # Modular nodes (TNO style names)
             'oko_perception = brain.oko_perception:main',
             'sputnik_planner = brain.sputnik_planner:main',
             # Atlantis - separated control and planning
-            'atlantis = brain.atlantis:main',
             'atlantis_planner = brain.atlantis_planner:main',
             'pollutant_planner = brain.pollutant_planner:main',
         ],

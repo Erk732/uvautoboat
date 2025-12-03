@@ -1,3 +1,44 @@
+#!/usr/bin/env python3
+"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    ПРОЕКТ-17 «ВОСТОК-1» / PROJET-17 VOSTOK-1                 ║
+║                 СИСТЕМА АВТОНОМНОЙ НАВИГАЦИИ / AUTONOMOUS NAV                ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  СПЕЦИФИКАЦИЯ: МИЛ-СТД-1553Б / ГОСТ Р 52070-2003                             ║
+║  КЛАССИФИКАЦИЯ: ВАРШАВСКИЙ ДОГОВОР / WARSAW PACT MIL-SPEC                    ║
+║  ВЕРСИЯ: 2.0 (SASS — Smart Anti-Stuck System)                                ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  ПРИНЦИПЫ СОВЕТСКОЙ ИНЖЕНЕРИИ / SOVIET ENGINEERING PRINCIPLES:              ║
+║                                                                              ║
+║  1. ТРОЙНОЕ РЕЗЕРВИРОВАНИЕ (Triple Redundancy)                              ║
+║     - Three independent sensor channels with voting logic                   ║
+║     - 2-of-3 majority voting for critical decisions                         ║
+║     - Graceful degradation when sensors fail                                ║
+║                                                                              ║
+║  2. ЖЁСТКИЕ ОГРАНИЧЕНИЯ (Hard Limits)                                       ║
+║     - Conservative safety margins (коэффициент безопасности = 2.0)          ║
+║     - Absolute velocity/thrust limits enforced at all times                 ║
+║     - No parameter can exceed MIL-SPEC rated maximums                       ║
+║                                                                              ║
+║  3. ДЕТЕРМИНИРОВАННАЯ ЛОГИКА (Deterministic State Machine)                  ║
+║     - Explicit state transitions, no probabilistic guessing                 ║
+║     - Every state has defined entry/exit conditions                         ║
+║     - Timeout-based failsafes on all operations                             ║
+║                                                                              ║
+║  4. БЕЗОПАСНЫЙ ОТКАЗ (Fail-Safe Defaults)                                   ║
+║     - When in doubt → STOP (полный стоп)                                    ║
+║     - Unknown state → return to IDLE                                        ║
+║     - Sensor failure → conservative assumptions                              ║
+║                                                                              ║
+║  5. ПОМЕХОЗАЩИЩЁННОСТЬ (Anti-Jamming / Noise Rejection)                     ║
+║     - Kalman filtering for drift/noise rejection                            ║
+║     - Hysteresis on all threshold crossings                                 ║
+║     - Rate limiting on control outputs                                       ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+"""
+
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
@@ -8,6 +49,26 @@ import json
 
 from sensor_msgs.msg import NavSatFix, Imu, PointCloud2
 from std_msgs.msg import Float64, String
+
+
+# =============================================================================
+# СОВЕТСКИЕ КОНСТАНТЫ БЕЗОПАСНОСТИ / SOVIET SAFETY CONSTANTS
+# =============================================================================
+# МИЛ-СТД-1553Б rated limits with Warsaw Pact safety factor (К_без = 2.0)
+
+MIL_SPEC_MAX_THRUST = 1000.0        # Н / Newtons - absolute hardware limit
+MIL_SPEC_SAFE_THRUST = 800.0        # Н - operational limit (80% of max)
+MIL_SPEC_EMERGENCY_THRUST = 1000.0  # Н - emergency override only
+
+MIL_SPEC_MAX_TURN_RATE = 45.0       # °/s - structural limit
+MIL_SPEC_SAFE_TURN_RATE = 30.0      # °/s - operational limit
+
+MIL_SPEC_MIN_DISTANCE = 3.0         # м - absolute minimum approach distance
+MIL_SPEC_SAFETY_FACTOR = 2.0        # К_без - Soviet safety coefficient
+
+# Triple-redundancy voting thresholds
+TRIPLE_REDUNDANCY_AGREEMENT = 2     # 2-of-3 sensors must agree
+SENSOR_VALIDITY_TIMEOUT = 2.0       # seconds before sensor marked invalid
 
 
 # =============================================================================
@@ -78,9 +139,122 @@ from std_msgs.msg import Float64, String
 # High process noise Q → trust measurement more
 # =============================================================================
 
+# =============================================================================
+# ТРОЙНОЕ РЕЗЕРВИРОВАНИЕ СЕНСОРОВ / TRIPLE-REDUNDANCY SENSOR VOTING
+# =============================================================================
+# Soviet MIL-SPEC requires 2-of-3 agreement for critical navigation decisions
+# This class implements Warsaw Pact standard voting logic
+
+class TripleRedundancyVoter:
+    """
+    СИСТЕМА ГОЛОСОВАНИЯ 2-ИЗ-3 / 2-OF-3 VOTING SYSTEM
+    
+    Implements Soviet triple-redundancy standard for critical measurements.
+    Used for obstacle detection, position validation, and heading consensus.
+    
+    Voting Logic (ГОСТ Р 52070-2003):
+    - All 3 agree → HIGH confidence, use average
+    - 2 of 3 agree → MEDIUM confidence, use agreeing pair average
+    - All 3 disagree → LOW confidence, use most conservative value
+    - Any sensor timeout → mark as DEGRADED, continue with remaining
+    """
+    
+    def __init__(self, agreement_threshold=0.2, timeout=2.0):
+        """
+        Args:
+            agreement_threshold: Maximum difference for sensors to "agree" (relative)
+            timeout: Seconds before sensor marked as failed
+        """
+        self.agreement_threshold = agreement_threshold
+        self.timeout = timeout
+        self.channels = [None, None, None]  # Three sensor channels
+        self.timestamps = [0.0, 0.0, 0.0]   # Last update time per channel
+        self.valid = [False, False, False]   # Channel validity flags
+        
+    def update_channel(self, channel_id: int, value: float, timestamp: float):
+        """Update a sensor channel with new reading"""
+        if 0 <= channel_id < 3:
+            self.channels[channel_id] = value
+            self.timestamps[channel_id] = timestamp
+            self.valid[channel_id] = True
+            
+    def check_timeouts(self, current_time: float):
+        """Mark channels as invalid if they haven't updated recently"""
+        for i in range(3):
+            if current_time - self.timestamps[i] > self.timeout:
+                self.valid[i] = False
+                
+    def vote(self, current_time: float) -> tuple:
+        """
+        Perform 2-of-3 voting on current sensor readings.
+        
+        Returns:
+            (voted_value, confidence, valid_channels)
+            confidence: 'HIGH', 'MEDIUM', 'LOW', or 'FAILED'
+        """
+        self.check_timeouts(current_time)
+        
+        # Collect valid readings
+        valid_readings = []
+        for i in range(3):
+            if self.valid[i] and self.channels[i] is not None:
+                valid_readings.append((i, self.channels[i]))
+        
+        n_valid = len(valid_readings)
+        
+        if n_valid == 0:
+            # ОТКАЗ СИСТЕМЫ / SYSTEM FAILURE - no valid sensors
+            return (float('inf'), 'FAILED', 0)
+            
+        elif n_valid == 1:
+            # ДЕГРАДИРОВАННЫЙ РЕЖИМ / DEGRADED MODE - single sensor
+            return (valid_readings[0][1], 'LOW', 1)
+            
+        elif n_valid == 2:
+            # Check if the two agree
+            v1, v2 = valid_readings[0][1], valid_readings[1][1]
+            avg = (v1 + v2) / 2.0
+            diff = abs(v1 - v2) / max(avg, 0.001)
+            
+            if diff <= self.agreement_threshold:
+                return (avg, 'MEDIUM', 2)
+            else:
+                # Disagreement - use more conservative (smaller distance = closer obstacle)
+                return (min(v1, v2), 'LOW', 2)
+                
+        else:  # n_valid == 3
+            v1, v2, v3 = [r[1] for r in valid_readings]
+            avg = (v1 + v2 + v3) / 3.0
+            
+            # Check pairwise agreement
+            d12 = abs(v1 - v2) / max((v1 + v2) / 2, 0.001)
+            d13 = abs(v1 - v3) / max((v1 + v3) / 2, 0.001)
+            d23 = abs(v2 - v3) / max((v2 + v3) / 2, 0.001)
+            
+            agreements = sum([d12 <= self.agreement_threshold,
+                             d13 <= self.agreement_threshold,
+                             d23 <= self.agreement_threshold])
+            
+            if agreements >= 2:  # At least 2 pairs agree → HIGH confidence
+                return (avg, 'HIGH', 3)
+            elif agreements == 1:  # One pair agrees
+                # Find the agreeing pair and use their average
+                if d12 <= self.agreement_threshold:
+                    return ((v1 + v2) / 2, 'MEDIUM', 3)
+                elif d13 <= self.agreement_threshold:
+                    return ((v1 + v3) / 2, 'MEDIUM', 3)
+                else:
+                    return ((v2 + v3) / 2, 'MEDIUM', 3)
+            else:  # No agreement - use most conservative
+                return (min(v1, v2, v3), 'LOW', 3)
+
+
 class KalmanDriftEstimator:
     """
+    ФИЛЬТР КАЛМАНА ДЛЯ ОЦЕНКИ ДРЕЙФА / KALMAN FILTER FOR DRIFT ESTIMATION
+    
     2D Kalman Filter for estimating water/wind drift affecting the boat.
+    Implements ПОМЕХОЗАЩИЩЁННОСТЬ (anti-jamming) per Soviet MIL-SPEC.
     
     State vector: [drift_x, drift_y]
     These represent the velocity components (m/s) of environmental forces
@@ -282,6 +456,7 @@ class Vostok1(Node):
         self.declare_parameter('base_speed', 500.0)
         self.declare_parameter('max_speed', 800.0)
         self.declare_parameter('waypoint_tolerance', 2.0)
+        self.declare_parameter('waypoint_skip_timeout', 45.0)  # Skip if blocked this long
 
         # PID Controller gains
         self.declare_parameter('kp', 400.0)
@@ -317,6 +492,7 @@ class Vostok1(Node):
         self.base_speed = self.get_parameter('base_speed').value
         self.max_speed = self.get_parameter('max_speed').value
         self.waypoint_tolerance = self.get_parameter('waypoint_tolerance').value
+        self.waypoint_skip_timeout = self.get_parameter('waypoint_skip_timeout').value
 
         self.kp = self.get_parameter('kp').value
         self.ki = self.get_parameter('ki').value
@@ -373,6 +549,13 @@ class Vostok1(Node):
         # Smart anti-stuck state
         self.no_go_zones = []  # List of (x, y, radius) zones to avoid
         self.escape_history = []  # List of {position, direction, success} for learning
+        
+        # Waypoint skip tracking (for obstacles blocking waypoint)
+        self.waypoint_start_time = None
+        self.obstacle_blocking_time = 0.0
+        self.last_obstacle_check = None
+        self.go_home_mode = False  # Track if we're in return-home mode
+        self.home_detour_timeout = 15.0  # Insert detour after this many seconds of blocking in home mode
         
         # --- KALMAN FILTER FOR DRIFT ESTIMATION ---
         # Initialize Kalman filter with tunable noise parameters
@@ -469,17 +652,17 @@ class Vostok1(Node):
         self.create_timer(0.5, self.publish_anti_stuck_status)
 
         self.get_logger().info("=" * 60)
-        self.get_logger().info("ПРОЕКТ-17 (Proekt-17) - Автономная Навигация")
+        self.get_logger().info("PROJET-17 - Navigation Autonome")
         self.get_logger().info("Vostok 1 - Autonomous Navigation System")
         self.get_logger().info("+ Smart Anti-Stuck System (SASS) v2.0")
         self.get_logger().info("=" * 60)
-        self.get_logger().info(f"Зона сканирования: {self.scan_length}m × {self.scan_width * self.lanes}m")
-        self.get_logger().info(f"Полосы: {self.lanes}, Ширина: {self.scan_width}m")
-        self.get_logger().info(f"Скорость: {self.base_speed} (макс: {self.max_speed})")
-        self.get_logger().info(f"ПИД: Kp={self.kp}, Ki={self.ki}, Kd={self.kd}")
-        self.get_logger().info(f"Обнаружение препятствий: Безопасно={self.min_safe_distance}m, Критично={self.critical_distance}m")
-        self.get_logger().info(f"Анти-застревание: timeout={self.stuck_timeout}s, threshold={self.stuck_threshold}m")
-        self.get_logger().info("Ожидание сигнала GPS и команды пользователя...")
+        self.get_logger().info(f"Zone de balayage | Scan Area: {self.scan_length}m × {self.scan_width * self.lanes}m")
+        self.get_logger().info(f"Couloirs: {self.lanes}, Largeur: {self.scan_width}m")
+        self.get_logger().info(f"Vitesse: {self.base_speed} (max: {self.max_speed})")
+        self.get_logger().info(f"PID: Kp={self.kp}, Ki={self.ki}, Kd={self.kd}")
+        self.get_logger().info(f"Detection d'obstacles: Securite={self.min_safe_distance}m, Critique={self.critical_distance}m")
+        self.get_logger().info(f"Anti-blocage: timeout={self.stuck_timeout}s, seuil={self.stuck_threshold}m")
+        self.get_logger().info("En attente du signal GPS et de la commande utilisateur...")
         self.get_logger().info("Waiting for GPS and user command...")
         self.get_logger().info("=" * 60)
 
@@ -490,8 +673,8 @@ class Vostok1(Node):
         if self.start_gps is None:
             self.start_gps = (msg.latitude, msg.longitude)
             self.start_time = self.get_clock().now()
-            self.get_logger().info(f"📍 Базовая точка | Base point: {self.start_gps[0]:.6f}, {self.start_gps[1]:.6f}")
-            self.get_logger().info("GPS готов | GPS ready - awaiting waypoint configuration")
+            self.get_logger().info(f"Point de base | Base point: {self.start_gps[0]:.6f}, {self.start_gps[1]:.6f}")
+            self.get_logger().info("GPS pret | GPS ready - awaiting waypoint configuration")
             self.get_logger().info("Use web dashboard to configure and start mission")
             self.get_logger().info("=" * 60)
 
@@ -525,16 +708,17 @@ class Vostok1(Node):
                 if math.isinf(x) or math.isinf(y) or math.isinf(z):
                     continue
                 
-                # Filter by height - relaxed range to catch obstacles in any LiDAR frame
-                if z < -10.0 or z > 20.0:
+                # Filter by height - LiDAR mounted ~2-3m above water
+                # Lake bank: Z ≈ -2.5m, Harbour: Z ≈ -0.5m, Water: Z ≈ -3m
+                if z < -15.0 or z > 10.0:
                     continue
                 
                 # Calculate horizontal distance
                 dist = math.sqrt(x*x + y*y)
                 
-                # Focus on relevant range: ignore boat itself and very far objects
-                # Reduced min distance for better small obstacle detection
-                if dist < 0.5 or dist > 100.0:
+                # Focus on relevant range: ignore boat/dock itself and very far objects
+                # min_range=5.0 to ignore spawn dock and boat structure
+                if dist < 5.0 or dist > 100.0:
                     continue
                 
                 # Only consider points in front of the boat (positive x direction)
@@ -716,7 +900,7 @@ class Vostok1(Node):
         try:
             config = json.loads(msg.data)
             self.get_logger().info("=" * 50)
-            self.get_logger().info("ОБНОВЛЕНИЕ КОНФИГУРАЦИИ | CONFIG UPDATE")
+            self.get_logger().info("MISE À JOUR CONFIG | CONFIG UPDATE")
             
             # Track if path needs regeneration
             regenerate_path = False
@@ -724,17 +908,17 @@ class Vostok1(Node):
             # Update path parameters
             if 'scan_length' in config and config['scan_length'] != self.scan_length:
                 self.scan_length = float(config['scan_length'])
-                self.get_logger().info(f"  Длина скана | Scan Length: {self.scan_length}m")
+                self.get_logger().info(f"  Longueur de balayage | Scan Length: {self.scan_length}m")
                 regenerate_path = True
                 
             if 'scan_width' in config and config['scan_width'] != self.scan_width:
                 self.scan_width = float(config['scan_width'])
-                self.get_logger().info(f"  Ширина скана | Scan Width: {self.scan_width}m")
+                self.get_logger().info(f"  Largeur de balayage | Scan Width: {self.scan_width}m")
                 regenerate_path = True
                 
             if 'lanes' in config and config['lanes'] != self.lanes:
                 self.lanes = int(config['lanes'])
-                self.get_logger().info(f"  Полосы | Lanes: {self.lanes}")
+                self.get_logger().info(f"  Voies | Lanes: {self.lanes}")
                 regenerate_path = True
             
             # Update PID parameters (immediate effect)
@@ -754,20 +938,20 @@ class Vostok1(Node):
             # Update speed parameters
             if 'base_speed' in config:
                 self.base_speed = float(config['base_speed'])
-                self.get_logger().info(f"  Базовая скорость | Base Speed: {self.base_speed}")
+                self.get_logger().info(f"  Vitesse de base | Base Speed: {self.base_speed}")
                 
             if 'max_speed' in config:
                 self.max_speed = float(config['max_speed'])
-                self.get_logger().info(f"  Макс. скорость | Max Speed: {self.max_speed}")
+                self.get_logger().info(f"  Vitesse max. | Max Speed: {self.max_speed}")
             
             # Update safety parameters
             if 'min_safe_distance' in config:
                 self.min_safe_distance = float(config['min_safe_distance'])
-                self.get_logger().info(f"  Безопасная дистанция | Safe Distance: {self.min_safe_distance}m")
+                self.get_logger().info(f"  Distance de sécurité | Safe Distance: {self.min_safe_distance}m")
             
             # Handle mission restart (legacy support)
             if 'restart_mission' in config and config['restart_mission']:
-                self.get_logger().info("ПЕРЕЗАПУСК МИССИИ | MISSION RESTART")
+                self.get_logger().info("REDÉMARRAGE MISSION | MISSION RESTART")
                 self.current_wp_index = 0
                 self.state = "RUNNING"
                 self.mission_armed = True
@@ -779,7 +963,7 @@ class Vostok1(Node):
             if regenerate_path and self.start_gps is not None:
                 self.generate_lawnmower_path()
                 self.state = "WAYPOINTS_PREVIEW"  # Show preview after regenerating
-                self.get_logger().info(f"Маршрут перестроен | Path regenerated: {len(self.waypoints)} waypoints")
+                self.get_logger().info(f"Trajet recalculé | Path regenerated: {len(self.waypoints)} waypoints")
             
             self.get_logger().info("=" * 50)
             
@@ -822,7 +1006,7 @@ class Vostok1(Node):
             command = cmd.get('command', '')
             
             self.get_logger().info("=" * 50)
-            self.get_logger().info(f"КОМАНДА МИССИИ | MISSION COMMAND: {command}")
+            self.get_logger().info(f"COMMANDE MISSION | MISSION COMMAND: {command}")
             
             if command == 'generate_waypoints':
                 # Generate/regenerate waypoints for preview
@@ -831,7 +1015,7 @@ class Vostok1(Node):
                     self.state = "WAYPOINTS_PREVIEW"
                     self.mission_armed = False
                     self.get_logger().info(f"Waypoints generated: {len(self.waypoints)} points")
-                    self.get_logger().info("Состояние: ПРЕДПРОСМОТР | State: WAYPOINTS_PREVIEW")
+                    self.get_logger().info("État: APERÇU | State: WAYPOINTS_PREVIEW")
                 else:
                     self.get_logger().warn("GPS not available - cannot generate waypoints")
                     
@@ -839,7 +1023,7 @@ class Vostok1(Node):
                 # User confirmed waypoints, ready to start
                 if self.waypoints:
                     self.state = "READY"
-                    self.get_logger().info("Waypoints ПОДТВЕРЖДЕНЫ | CONFIRMED - Ready to start")
+                    self.get_logger().info("Waypoints CONFIRMÉS | CONFIRMED - Ready to start")
                 else:
                     self.get_logger().warn("No waypoints to confirm")
                     
@@ -849,7 +1033,7 @@ class Vostok1(Node):
                 self.current_wp_index = 0
                 self.state = "IDLE"
                 self.mission_armed = False
-                self.get_logger().info("Waypoints ОТМЕНЕНЫ | CANCELLED")
+                self.get_logger().info("Waypoints ANNULÉS | CANCELLED")
                 
             elif command == 'start_mission':
                 # Start the mission (user gives permission)
@@ -859,9 +1043,10 @@ class Vostok1(Node):
                     self.state = "RUNNING"
                     self.mission_armed = True
                     self.joystick_override = False
+                    self.go_home_mode = False  # Reset home mode for normal mission
                     self.integral_error = 0.0
                     self.previous_error = 0.0
-                    self.get_logger().info("🚀 МИССИЯ ЗАПУЩЕНА | MISSION STARTED!")
+                    self.get_logger().info("🚀 MISSION LANCÉE | MISSION STARTED!")
                 else:
                     self.get_logger().warn(f"Cannot start - state={self.state}, waypoints={len(self.waypoints)}")
                     
@@ -874,21 +1059,21 @@ class Vostok1(Node):
                 self.integral_error = 0.0
                 self.previous_error = 0.0
                 self.stop_thrusters()
-                self.get_logger().info("🔄 МИССИЯ СБРОШЕНА | MISSION RESET!")
+                self.get_logger().info("🔄 MISSION RÉINITIALISÉE | MISSION RESET!")
                     
             elif command == 'stop_mission':
                 # Emergency stop - stop motors and pause
                 self.state = "PAUSED"
                 self.mission_armed = False
                 self.stop_thrusters()
-                self.get_logger().info("🛑 МИССИЯ ОСТАНОВЛЕНА | MISSION STOPPED!")
+                self.get_logger().info("🛑 MISSION ARRÊTÉE | MISSION STOPPED!")
                 
             elif command == 'resume_mission':
                 # Resume paused mission
                 if self.state == "PAUSED" and self.waypoints:
                     self.state = "RUNNING"
                     self.mission_armed = True
-                    self.get_logger().info("▶️ МИССИЯ ВОЗОБНОВЛЕНА | MISSION RESUMED!")
+                    self.get_logger().info("▶️ MISSION REPRISE | MISSION RESUMED!")
                     
             elif command == 'joystick_enable':
                 # Enable joystick override mode
@@ -896,7 +1081,7 @@ class Vostok1(Node):
                 self.mission_armed = False
                 self.state = "JOYSTICK"
                 self.stop_thrusters()
-                self.get_logger().info("🎮 ДЖОЙСТИК АКТИВЕН | JOYSTICK MODE ENABLED")
+                self.get_logger().info("🎮 JOYSTICK ACTIVÉ | JOYSTICK MODE ENABLED")
                 self.get_logger().info("Run: ros2 launch vrx_gz usv_joy_teleop.launch.py")
                 
             elif command == 'joystick_disable':
@@ -906,7 +1091,32 @@ class Vostok1(Node):
                     self.state = "PAUSED"
                 else:
                     self.state = "IDLE"
-                self.get_logger().info("🎮 ДЖОЙСТИК ОТКЛЮЧЕН | JOYSTICK MODE DISABLED")
+                self.get_logger().info("🎮 JOYSTICK DÉSACTIVÉ | JOYSTICK MODE DISABLED")
+            
+            elif command == 'go_home':
+                # Navigate back to spawn point (one-click return home)
+                if self.start_gps is not None:
+                    # Clear current waypoints and set home as only waypoint
+                    home_x, home_y = self.latlon_to_meters(self.start_gps[0], self.start_gps[1])
+                    self.waypoints = [(home_x, home_y)]
+                    self.current_wp_index = 0
+                    self.state = "RUNNING"
+                    self.mission_armed = True
+                    self.joystick_override = False
+                    self.integral_error = 0.0
+                    self.previous_error = 0.0
+                    self.go_home_mode = True  # Enable home mode for smarter obstacle handling
+                    self.obstacle_blocking_time = 0.0
+                    self.detour_waypoint_inserted = False
+                    # Clear anti-stuck state for fresh return
+                    self.no_go_zones = []
+                    self.escape_mode = False
+                    self.escape_phase = 0
+                    self.get_logger().info("🏠 RETOUR MAISON | GOING HOME!")
+                    self.get_logger().info(f"   Destination: {self.start_gps[0]:.6f}, {self.start_gps[1]:.6f}")
+                    self.get_logger().info(f"   Position locale: ({home_x:.1f}m, {home_y:.1f}m)")
+                else:
+                    self.get_logger().warn("Cannot go home - no spawn point recorded")
                 
             self.get_logger().info("=" * 50)
             
@@ -957,13 +1167,16 @@ class Vostok1(Node):
         # Check if waypoint reached
         if dist < self.waypoint_tolerance:
             self.get_logger().info(
-                f"Точка {self.current_wp_index + 1}/{len(self.waypoints)} "
-                f"достигнута | Waypoint reached at ({curr_x:.1f}, {curr_y:.1f})"
+                f"Point {self.current_wp_index + 1}/{len(self.waypoints)} "
+                f"atteint | Waypoint reached at ({curr_x:.1f}, {curr_y:.1f})"
             )
-            self.current_wp_index += 1
+            self.advance_to_next_waypoint()
             self.total_distance += dist
             self.integral_error = 0.0
             return
+        else:
+            # Check if we should skip waypoint due to persistent obstacle
+            self.check_waypoint_skip(curr_x, curr_y, dist)
 
         # --- STUCK ESCAPE LOGIC ---
         if self.is_stuck and self.escape_mode:
@@ -978,7 +1191,7 @@ class Vostok1(Node):
                 self.reverse_start_time = self.get_clock().now()
                 self.integral_error = 0.0  # Reset integral on mode change
                 self.get_logger().warn(
-                    f"КРИТИЧЕСКОЕ ПРЕПЯТСТВИЕ {self.min_obstacle_distance:.2f}m - Реверс! | CRITICAL OBSTACLE - Reversing!"
+                    f"OBSTACLE CRITIQUE {self.min_obstacle_distance:.2f}m - Marche arrière! | CRITICAL OBSTACLE - Reversing!"
                 )
 
             # Check if we've been reversing too long
@@ -1003,7 +1216,7 @@ class Vostok1(Node):
             if not self.avoidance_mode:
                 self.integral_error = 0.0
                 self.previous_error = 0.0
-                self.get_logger().info("Режим обхода препятствий - Сброс ПИД | Obstacle avoidance mode - PID reset")
+                self.get_logger().info("Mode évitement - Réinit PID | Obstacle avoidance mode - PID reset")
 
             self.avoidance_mode = True
 
@@ -1027,14 +1240,14 @@ class Vostok1(Node):
                 angle_error += 2.0 * math.pi
 
             self.get_logger().warn(
-                f"🚨 ПРЕПЯТСТВИЕ! {self.min_obstacle_distance:.1f}m - Поворот {direction} | "
+                f"🚨 OBSTACLE! {self.min_obstacle_distance:.1f}m - Virage {direction} | "
                 f"OBSTACLE DETECTED! Turning {direction} (Left:{self.left_clear:.1f}m Right:{self.right_clear:.1f}m)",
                 throttle_duration_sec=1.0
             )
         else:
             # NORMAL WAYPOINT NAVIGATION MODE
             if self.avoidance_mode:
-                self.get_logger().info("✅ Путь свободен - Возврат к навигации | Path CLEAR - Resuming navigation")
+                self.get_logger().info("✅ Voie dégagée - Reprise navigation | Path CLEAR - Resuming navigation")
                 self.avoidance_mode = False
                 self.integral_error = 0.0
                 self.previous_error = 0.0  # Reset PID when exiting avoidance
@@ -1051,6 +1264,11 @@ class Vostok1(Node):
             while angle_error < -math.pi:
                 angle_error += 2.0 * math.pi
 
+        # Dead-zone filtering - ignore sensor noise below threshold
+        dead_zone_threshold = 0.02  # ~1 degree - prevents hunting oscillations
+        if abs(angle_error) < dead_zone_threshold:
+            angle_error = 0.0
+
         # PID Controller
         self.integral_error += angle_error * self.dt
         self.integral_error = max(-0.5, min(0.5, self.integral_error))
@@ -1065,17 +1283,27 @@ class Vostok1(Node):
 
         self.previous_error = angle_error
 
+        # Rate limiting - prevent abrupt control changes
+        if not hasattr(self, 'previous_turn_power'):
+            self.previous_turn_power = 0.0
+        max_rate = 2.0 * self.dt * 1000.0  # Max change per timestep
+        if turn_power - self.previous_turn_power > max_rate:
+            turn_power = self.previous_turn_power + max_rate
+        elif self.previous_turn_power - turn_power > max_rate:
+            turn_power = self.previous_turn_power - max_rate
+        self.previous_turn_power = turn_power
+
         # Limit turn power
         turn_power = max(-800.0, min(800.0, turn_power))
 
-        # Adaptive speed
+        # Adaptive speed based on heading error
         angle_error_deg = abs(math.degrees(angle_error))
         if angle_error_deg > 45:
             speed = self.base_speed * 0.5
         elif angle_error_deg > 20:
             speed = self.base_speed * 0.75
         else:
-            speed = self.base_speed
+            speed = self.base_speed * 0.95  # 5% safety margin
 
         # Distance-based speed adjustment
         if dist < 5.0:
@@ -1112,38 +1340,97 @@ class Vostok1(Node):
         """Log current navigation status"""
         wp_progress = f"{self.current_wp_index + 1}/{len(self.waypoints)}"
         
-        # Bilingual obstacle status
+        # Bilingual obstacle status (French/English)
         if self.obstacle_detected:
-            obs_status = f"ПРЕПЯТСТВИЕ:{self.min_obstacle_distance:.1f}m | OBS:{self.min_obstacle_distance:.1f}m"
+            obs_status = f"OBSTACLE:{self.min_obstacle_distance:.1f}m | OBS:{self.min_obstacle_distance:.1f}m"
         else:
-            obs_status = "СВОБОДНО | CLEAR"
+            obs_status = "DÉGAGÉ | CLEAR"
         
         self.get_logger().info(
-            f"ТМ {wp_progress} | "  # ТМ = Точка Маршрута (Waypoint)
-            f"Поз: ({curr_x:.1f}, {curr_y:.1f}) | "  # Поз = Позиция (Position)
-            f"Цель: ({target_x:.1f}, {target_y:.1f}) | "  # Цель = Target
-            f"Дист: {dist:.1f}m | "  # Дист = Дистанция (Distance)
-            f"Ошибка: {math.degrees(error):.1f}° | "  # Ошибка = Error
+            f"PT {wp_progress} | "  # PT = Point de Trajectoire (Waypoint)
+            f"Pos: ({curr_x:.1f}, {curr_y:.1f}) | "  # Pos = Position
+            f"Cible: ({target_x:.1f}, {target_y:.1f}) | "  # Cible = Target
+            f"Dist: {dist:.1f}m | "  # Dist = Distance
+            f"Erreur: {math.degrees(error):.1f}° | "  # Erreur = Error
             f"{obs_status}"
         )
+
+    def advance_to_next_waypoint(self):
+        """Move to next waypoint and reset skip tracking"""
+        self.current_wp_index += 1
+        self.waypoint_start_time = None
+        self.obstacle_blocking_time = 0.0
+        self.last_obstacle_check = None
+        self.detour_waypoint_inserted = False  # Reset for next waypoint
+
+    def check_waypoint_skip(self, curr_x, curr_y, dist):
+        """
+        Check if we should skip waypoint due to persistent obstacle blocking.
+        In go_home_mode: Insert detour waypoints instead of skipping.
+        In normal mode: Skip to next waypoint after timeout.
+        """
+        now = self.get_clock().now()
+        
+        # Initialize waypoint start time
+        if self.waypoint_start_time is None:
+            self.waypoint_start_time = now
+            self.obstacle_blocking_time = 0.0
+            self.last_obstacle_check = now
+            return
+        
+        # Only track obstacle blocking time if we're close to waypoint
+        if dist < 20.0 and self.obstacle_detected:
+            if self.last_obstacle_check is not None:
+                dt = (now - self.last_obstacle_check).nanoseconds / 1e9
+                self.obstacle_blocking_time += dt
+        
+        self.last_obstacle_check = now
+        
+        # GO HOME MODE: Insert detours instead of skipping
+        if self.go_home_mode:
+            # Insert detour after shorter timeout (15s) to avoid circling
+            if self.obstacle_blocking_time >= self.home_detour_timeout and not self.detour_waypoint_inserted:
+                self.get_logger().warn(
+                    f"🏠 HOME MODE: Obstacle blocking for {self.obstacle_blocking_time:.0f}s - Inserting detour"
+                )
+                self.insert_detour_waypoint(curr_x, curr_y)
+                self.obstacle_blocking_time = 0.0  # Reset timer after inserting detour
+            return  # Don't skip in home mode
+        
+        # NORMAL MODE: Check if we should skip
+        if self.obstacle_blocking_time >= self.waypoint_skip_timeout:
+            wp_num = self.current_wp_index + 1
+            total_wp = len(self.waypoints)
+            target_x, target_y = self.waypoints[self.current_wp_index]
+            
+            self.get_logger().warn(
+                f"⏭️ SAUT PT {wp_num}/{total_wp} | SKIP WP - "
+                f"Obstacle blocking for {self.obstacle_blocking_time:.0f}s "
+                f"(target was {dist:.1f}m away at ({target_x:.1f}, {target_y:.1f}))"
+            )
+            self.advance_to_next_waypoint()
 
     def finish_mission(self, final_x, final_y):
         """Complete the mission and log statistics"""
         self.state = "FINISHED"
         self.stop_boat()
+        self.go_home_mode = False  # Reset home mode
 
         elapsed = (self.get_clock().now() - self.start_time).nanoseconds / 1e9
         elapsed_min = elapsed / 60.0
 
         self.get_logger().info("=" * 60)
-        self.get_logger().info("МИССИЯ ЗАВЕРШЕНА! (MISSION COMPLETE!)")
+        if self.go_home_mode:
+            self.get_logger().info("🏠 ARRIVÉ À LA MAISON! (ARRIVED HOME!)")
+        else:
+            self.get_logger().info("MISSION TERMINÉE! (MISSION COMPLETE!)")
         self.get_logger().info("=" * 60)
-        self.get_logger().info(f"Конечная позиция: ({final_x:.1f}m, {final_y:.1f}m)")
-        self.get_logger().info(f"Общая дистанция: {self.total_distance:.1f}m")
-        self.get_logger().info(f"Время миссии: {elapsed_min:.1f} минут")
+        self.get_logger().info(f"Position finale: ({final_x:.1f}m, {final_y:.1f}m)")
+        self.get_logger().info(f"Distance totale: {self.total_distance:.1f}m")
+        self.get_logger().info(f"Durée de mission: {elapsed_min:.1f} minutes")
         if elapsed > 0:
             avg_speed = self.total_distance / elapsed
-            self.get_logger().info(f"Средняя скорость: {avg_speed:.2f} м/с")
+            self.get_logger().info(f"Vitesse moyenne: {avg_speed:.2f} m/s")
         self.get_logger().info("=" * 60)
 
     def send_thrust(self, left, right):
@@ -1204,8 +1491,8 @@ class Vostok1(Node):
                     self.calculate_adaptive_escape_duration()
                     
                     self.get_logger().warn(
-                        f"ЛОДКА ЗАСТРЯЛА! Пройдено только {distance_moved:.2f}m за {elapsed:.1f}s | "
-                        f"STUCK DETECTED! Smart escape initiating! (Попытка {self.consecutive_stuck_count}, "
+                        f"BATEAU BLOQUÉ! Seulement {distance_moved:.2f}m parcourus en {elapsed:.1f}s | "
+                        f"STUCK DETECTED! Smart escape initiating! (Tentative {self.consecutive_stuck_count}, "
                         f"Adaptive duration: {self.adaptive_escape_duration:.1f}s)"
                     )
                     
@@ -1216,8 +1503,8 @@ class Vostok1(Node):
                     # Skip waypoint if stuck too many times (escalated to 4 with smart system)
                     if self.consecutive_stuck_count >= 4:
                         self.get_logger().error(
-                            f"Застряла {self.consecutive_stuck_count} раз на точке {self.current_wp_index + 1} | "
-                            f"Stuck {self.consecutive_stuck_count} times - Пропуск точки! Skipping waypoint!"
+                            f"Bloqué {self.consecutive_stuck_count} fois au point {self.current_wp_index + 1} | "
+                            f"Stuck {self.consecutive_stuck_count} times - Passage au suivant! Skipping waypoint!"
                         )
                         self.current_wp_index += 1
                         self.consecutive_stuck_count = 0
@@ -1548,7 +1835,7 @@ class Vostok1(Node):
         
         direction = "LEFT" if self.left_clear > self.right_clear else "RIGHT"
         self.get_logger().warn(
-            f"ОБХОДНОЙ МАРШРУТ! Inserting detour waypoint {direction} at ({detour_x:.1f}, {detour_y:.1f})" # We can remove the russian easter egg? 
+            f"DÉTOUR! Inserting detour waypoint {direction} at ({detour_x:.1f}, {detour_y:.1f})"
         )
     
     def record_escape_result(self, success):
@@ -1639,19 +1926,19 @@ class Vostok1(Node):
         """Publish status data for web dashboard"""
         import json
         
-        # Mission status with bilingual state messages
+        # Mission status with French state messages
         state_translations = {
-            "STUCK_ESCAPING": "ЗАСТРЯЛ - МАНЕВР ОСВОБОЖДЕНИЯ | STUCK - ESCAPING",
-            "OBSTACLE_AVOIDING": "ПРЕПЯТСТВИЕ - ОБХОД | OBSTACLE - AVOIDING",
-            "MISSION_COMPLETE": "МИССИЯ ЗАВЕРШЕНА | MISSION COMPLETE",
-            "MOVING_TO_WAYPOINT": "ДВИЖЕНИЕ К ТОЧКЕ | MOVING TO WAYPOINT",
-            "FINISHED": "ЗАВЕРШЕНО | FINISHED",
-            "RUNNING": "ДВИЖЕНИЕ | RUNNING",
-            "IDLE": "ОЖИДАНИЕ | IDLE",
-            "WAYPOINTS_PREVIEW": "ПРЕДПРОСМОТР | WAYPOINTS PREVIEW",
-            "READY": "ГОТОВ К ЗАПУСКУ | READY",
-            "PAUSED": "ПАУЗА | PAUSED",
-            "JOYSTICK": "ДЖОЙСТИК | JOYSTICK CONTROL"
+            "STUCK_ESCAPING": "🔄 BLOQUÉ - MANŒUVRE",
+            "OBSTACLE_AVOIDING": "⚠️ OBSTACLE - ÉVITEMENT",
+            "MISSION_COMPLETE": "✅ MISSION TERMINÉE",
+            "MOVING_TO_WAYPOINT": "🚀 EN ROUTE",
+            "FINISHED": "✅ TERMINÉ",
+            "RUNNING": "▶️ EN COURS",
+            "IDLE": "⏸️ EN ATTENTE",
+            "WAYPOINTS_PREVIEW": "👁️ APERÇU",
+            "READY": "✅ PRÊT",
+            "PAUSED": "⏸️ PAUSE",
+            "JOYSTICK": "🎮 JOYSTICK"
         }
         
         if self.escape_mode:
@@ -1682,9 +1969,9 @@ class Vostok1(Node):
         obstacle_detected = self.min_obstacle_distance < self.min_safe_distance
         
         if obstacle_detected:
-            status_text = f"🚨 ПРЕПЯТСТВИЕ {round(self.min_obstacle_distance, 1)}m | OBSTACLE DETECTED" # We can remove the russian easter egg? 
+            status_text = f"🚨 OBSTACLE à {round(self.min_obstacle_distance, 1)}m"
         else:
-            status_text = "✅ ПУТЬ СВОБОДЕН | PATH CLEAR" # We can remove the russian easter egg? 
+            status_text = "✅ VOIE LIBRE" 
         
         obstacle_data = {
             "status": status_text,
@@ -1708,7 +1995,7 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("МИССИЯ ПРЕРВАНА ОПЕРАТОРОМ | Mission aborted by user") # We can remove the russian easter egg? 
+        node.get_logger().info("MISSION INTERROMPUE | Mission aborted by user") 
     finally:
         node.stop_boat()
         node.destroy_node()

@@ -11,9 +11,53 @@ A real-time web-based monitoring dashboard for the Vostok1 autonomous boat syste
 - **SASS v2.0 Anti-Stuck Status** with visual escalation indicators
 - **System logs** with color-coded severity levels
 - **Dual-mode support**: Works with both integrated Vostok1 and modular navigation
-- **3 Style modes**: Normal (modern), Bureau (TNO Soviet), Terminal (CRT retro)
+- **4 Style modes**: Normal, Bureau (TNO), Terminal (CRT), **MilSpec (Warsaw Pact)**
 - **Configuration panel**: Adjust mission parameters in real-time
 - **Responsive design** works on desktop and mobile devices
+
+## 🎨 Visual Themes
+
+The dashboard includes 4 distinct visual themes, cycled via the toggle button:
+
+### 1. Normal Mode (Default)
+
+Modern gradient design with purple/blue accents, clean white panels, Roboto font.
+
+### 2. Bureau Mode (TNO Soviet)
+
+The New Order-inspired Cold War aesthetic with CRT effects, scanlines, socialist longtermism emblem, industrial Soviet bureaucracy colors.
+
+### 3. Terminal Mode (CRT)
+
+Classic green-phosphor computer terminal aesthetic, heavy scanlines, monospace fonts, retro command-line feel.
+
+### 4. MilSpec Mode (ВМФ СССР / Warsaw Pact)
+
+**New!** Authentic 1980s Soviet Navy military specification styling:
+
+- **Phosphor green** primary display color
+- **Soviet Red & Navy Gold** accent colors
+- **☭ Hammer & Sickle** emblem in header
+- **ВМФ СССР** (Soviet Navy) designation badge
+- **Military grid overlay** for tactical feel
+- **MIL-STD-1553** inspired data presentation
+- **Russian labels** for mode switching (БЮРО, ТЕРМИНАЛ, ВМФ СССР, ОБЫЧНЫЙ)
+- **Alert animations** for critical status indicators
+- **Radar sweep** effect on Soviet emblem
+
+### Theme Cycling Order
+
+```bash
+Normal → БЮРО TNO → ТЕРМИНАЛ → ВМФ СССР → Normal (repeat)
+```
+
+Click the theme toggle button in the header to cycle through modes. Each mode has:
+
+- Unique color palette
+- Custom animations and effects
+- Styled panels, buttons, and inputs
+- Map filter adjustments
+- Custom scrollbar styling
 
 ## Prerequisites
 
@@ -21,10 +65,43 @@ A real-time web-based monitoring dashboard for the Vostok1 autonomous boat syste
 2. **Rosbridge Suite** for WebSocket communication:
 
    ```bash
+   # For ROS2 Jazzy (Ubuntu 24.04)
+   sudo apt update
    sudo apt install ros-jazzy-rosbridge-suite
+
+   # For ROS2 Humble (Ubuntu 22.04)
+   sudo apt install ros-humble-rosbridge-suite
    ```
 
 3. **Vostok1 node** running (`vostok1.py`)
+
+### Troubleshooting Port 9090
+
+If the dashboard shows "Déconnecté" or can't connect to rosbridge:
+
+1. **Check if rosbridge is running:**
+
+   ```bash
+   ros2 node list | grep rosbridge
+   ```
+
+2. **Check if port 9090 is listening:**
+
+   ```bash
+   ss -tuln | grep 9090
+   ```
+
+3. **Check for firewall issues:**
+
+   ```bash
+   sudo ufw allow 9090
+   ```
+
+4. **Restart rosbridge:**
+
+   ```bash
+   ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
+   ```
 
 ## Usage
 
@@ -275,7 +352,7 @@ setInterval(() => {
 - `index.html` - Main dashboard structure
 - `style_merged.css` - Unified stylesheet with 3 style modes
 - `app.js` - ROS connection and data handling logic
-- `Readme_webdashboard.md` - This file
+- `README_vostok1_dashboard.md` - This file
 
 ### Style Modes
 

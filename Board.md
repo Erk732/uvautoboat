@@ -1,15 +1,15 @@
 # 📋 AutoBoat Development Board
 
 [![Status](https://img.shields.io/badge/Status-Active-green)](https://github.com/Erk732/uvautoboat)
-[![Progress](https://img.shields.io/badge/Progress-75%25-blue)](https://github.com/Erk732/uvautoboat)
+[![Progress](https://img.shields.io/badge/Progress-90%25-blue)](https://github.com/Erk732/uvautoboat)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 | | |
 |---|---|
 | **Project** | AutoBoat Navigation System |
 | **Repository** | [Erk732/uvautoboat](https://github.com/Erk732/uvautoboat) |
-| **Last Updated** | 01/12/2025 |
-| **Status** | 🟢 Dual Systems Operational (Apollo11 & Vostok1) |
+| **Last Updated** | 03/12/2025 |
+| **Status** | 🟢 Vostok1 Production Ready |
 
 ---
 
@@ -20,14 +20,14 @@
 | 1 | Architecture & MVP | ✅ | 100% |
 | 2 | Autonomous Navigation | ✅ | 100% |
 | 3 | Coverage Planning | ⏸️ | 0% |
-| 4 | Integration & Testing | 🔄 | 75% |
+| 4 | Integration & Testing | 🔄 | 90% |
 
 ### Active Systems
 
 | System | Architecture | Sensors | Features |
 |--------|--------------|---------|----------|
-| **Apollo11** | Modular | 2D LaserScan | GPS waypoints, clean separation |
-| **Vostok1** | Integrated | 3D PointCloud | PID control, SASS, web dashboard |
+| **Vostok1** | Integrated | 3D PointCloud | PID control, SASS v2.0, waypoint skip, web dashboard |
+| **Modular** | Distributed | 3D PointCloud | ОКО + СПУТНИК + БУРАН, runtime config |
 
 ---
 
@@ -64,8 +64,12 @@
   - Kalman-filtered drift compensation
   - No-go zone memory
   - Multi-direction probing
+- **Waypoint Skip Strategy** (NEW)
+  - Stuck-based skip after 4 attempts
+  - Obstacle blocking skip after 45s timeout
+- Runtime PID/speed configuration
 - Real-time web dashboard
-- Terminal Mission CLI
+- Terminal Mission CLI (vostok1_cli)
 
 ---
 
@@ -87,15 +91,17 @@
 
 ### Completed ✅
 
-| Test | Apollo11 | Vostok1 |
-|------|:--------:|:-------:|
+| Test | Vostok1 | Modular |
+|------|:-------:|:-------:|
 | GPS waypoint following | ✅ | ✅ |
-| Obstacle detection | ✅ 2D | ✅ 3D |
+| Obstacle detection (3D) | ✅ | ✅ |
 | Multi-waypoint missions | ✅ | ✅ |
-| Stuck detection/recovery | — | ✅ |
-| Web dashboard | — | ✅ |
-| Terminal CLI | — | ✅ |
-| TF tree validation | ✅ | ✅ |
+| Stuck detection/recovery | ✅ | ✅ |
+| Waypoint skip strategy | ✅ | ✅ |
+| Runtime config updates | ✅ | ✅ |
+| Web dashboard | ✅ | ✅ |
+| Terminal CLI | ✅ | ✅ |
+| Min-range spawn fix (5m) | ✅ | ✅ |
 
 ### Pending ⬜
 
@@ -126,6 +132,11 @@
 | Invalid Windows file paths | Renamed to \`FREE.py\`, \`OUT.py\` |
 | Sparse checkout blocking | \`git sparse-checkout disable\` |
 | Markdown lint errors | Added \`.markdownlint.json\` |
+| Spawn dock obstacle detection | Increased min_range from 0.5m → 5.0m |
+| Runtime config not updating | Added config_callback to buran_controller |
+| Boat circling around buoys | Added waypoint skip strategy (45s timeout) |
+| Missing numpy dependency | Added python3-numpy to package.xml |
+| Invalid setup.py entries | Removed non-existent apollo11, atlantis |
 
 ### Active 🔄
 
@@ -146,16 +157,44 @@
 | 27/11/2025 | End-to-End Pipeline | ✅ |
 | 28/11/2025 | Apollo11 & Vostok1 Complete | ✅ |
 | 01/12/2025 | SASS v2.0 + Mission CLI | ✅ |
+| 03/12/2025 | Waypoint Skip + Runtime Config | ✅ |
+| 03/12/2025 | Go Home Optimization (detour insertion) | ✅ |
+| 03/12/2025 | README Consolidation + Cleanup | ✅ |
+| TBD | A* Path Planning | ⏸️ |
 | TBD | Coverage Planning | ⏸️ |
 
 ---
 
 ## 🎯 Next Priorities
 
-1. Performance benchmarking (Apollo11 vs Vostok1)
-2. PID parameter optimization
-3. Long-duration stress testing
-4. Coverage planning algorithms
+1. Long-duration stress testing (15+ min missions)
+2. Complex waypoint circuits with obstacles
+3. Performance benchmarking (RMS error analysis)
+4. Coverage planning algorithms (boustrophedon)
+
+---
+
+## 🚀 Future Ideas
+
+| Feature | Priority | Description |
+|---------|:--------:|-------------|
+| **A* Path Planning** | High | Pre-compute obstacle-free paths using occupancy grid |
+| **Dynamic Replanning** | High | Replan when new obstacles detected mid-route |
+| **Go-To-Point** | Medium | Navigate to arbitrary GPS coordinate with obstacle avoidance |
+| **Multi-Goal Navigation** | Medium | Sequence of random points (patrol mode) |
+| **Coverage Planning** | Low | Boustrophedon pattern for area scanning |
+
+### A* Path Planning (Proposed)
+
+```text
+/goal_point ──────┐
+                  ├──→ [pathfinder.py] ──→ /planned_waypoints ──→ [vostok1/sputnik]
+/oko/obstacles ───┘
+```
+
+- Occupancy grid (10m cells) from LIDAR
+- A* algorithm for optimal path
+- Dynamic replanning on obstacle detection
 
 ---
 
@@ -168,7 +207,7 @@
 | 3 | Start simple, add complexity incrementally |
 | 4 | Document early to reduce technical debt |
 
-### Technical Debt
+### Technical DebtTesting
 
 - Hardcoded parameters → migrate to ROS 2 parameter server
 - Limited unit test coverage → add automated testing
@@ -178,7 +217,7 @@
 
 ## 📜 Acknowledgments
 
-**Document Version**: 5.0 | **Last Updated**: 01/12/2025
+**Document Version**: 6.0 | **Last Updated**: 03/12/2025
 
 **Maintained By**: AutoBoat Development Team
 

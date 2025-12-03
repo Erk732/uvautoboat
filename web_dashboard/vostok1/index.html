@@ -15,20 +15,22 @@
         <header>
             <div class="header-left">
                 <img src="Longtermism.png" alt="Socialist Longtermism" class="ideology-icon">
-                <h1>ПРОЕКТ-17 | Vostok1 Autonomous Navigation System</h1>
+                <span class="milspec-emblem">☭</span>
+                <h1>PROJET-17 — Système de Navigation Autonome Vostok1</h1>
+                <span class="milspec-designation">ВМФ СССР</span>
             </div>
             <div class="header-right">
                 <button id="style-toggle" class="style-toggle-btn">
-                    <span id="toggle-text">ТЕРМИНАЛ | TERMINAL MODE</span>
+                    <span id="toggle-text">Mode Terminal</span>
                 </button>
-                <div id="connection-status" class="status disconnected">Отключено | Disconnected</div>
+                <div id="connection-status" class="status disconnected">Déconnecté</div>
             </div>
         </header>
 
         <div class="dashboard">
             <!-- Status Panel -->
             <div class="panel">
-                <h2>Статус Миссии | Mission Status</h2>
+                <h2>Statut Mission</h2>
                 <div class="info-grid">
                     <div class="info-item">
                         <span class="label">State:</span>
@@ -47,7 +49,7 @@
 
             <!-- GPS Panel -->
             <div class="panel">
-                <h2>GPS Позиция | GPS Position</h2>
+                <h2>Position GPS</h2>
                 <div class="info-grid">
                     <div class="info-item">
                         <span class="label">Latitude:</span>
@@ -70,7 +72,7 @@
 
             <!-- Obstacle Detection Panel -->
             <div class="panel">
-                <h2>Обнаружение Препятствий | Obstacle Detection</h2>
+                <h2>Détection d'obstacles</h2>
                 <div class="info-grid">
                     <div class="info-item">
                         <span class="label">Minimum Distance:</span>
@@ -97,7 +99,7 @@
 
             <!-- Thruster Control Panel -->
             <div class="panel">
-                <h2>Двигатели | Thruster Output</h2>
+                <h2>Propulseurs</h2>
                 <div class="info-grid">
                     <div class="info-item">
                         <span class="label">Left Thrust:</span>
@@ -126,127 +128,132 @@
 
             <!-- Smart Anti-Stuck System (SASS) Panel -->
             <div class="panel sass-panel">
-                <h2>🛡️ Анти-Застревание | Smart Anti-Stuck (SASS)</h2>
+                <h2>🛡️ Système Anti-blocage (SASS)</h2>
                 <div class="info-grid">
                     <div class="info-item full-width">
-                        <span class="label">Статус | Status:</span>
-                        <span id="stuck-status" class="value badge clear">Норма | Normal</span>
+                        <span class="label">Statut:</span>
+                        <span id="stuck-status" class="value badge clear">Normal</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">Фаза | Phase:</span>
-                        <span id="escape-phase" class="value">ОЖИДАНИЕ | IDLE</span>
+                        <span class="label">Phase:</span>
+                        <span id="escape-phase" class="value">En attente</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">Направление | Direction:</span>
+                        <span class="label">Direction:</span>
                         <span id="best-direction" class="value">-</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">No-Go Зоны | Zones:</span>
-                        <span id="no-go-zones" class="value">0 зон | zones</span>
+                        <span class="label">Zones interdites:</span>
+                        <span id="no-go-zones" class="value">0</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">Дрейф | Drift:</span>
-                        <span id="drift-vector" class="value">Минимально | Minimal</span>
+                        <span class="label">Dérive:</span>
+                        <span id="drift-vector" class="value">Minimal</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">Калман σ | Kalman σ:</span>
-                        <span id="drift-uncertainty" class="value" title="Kalman filter uncertainty">-</span>
+                        <span class="label">Kalman σ:</span>
+                        <span id="drift-uncertainty" class="value" title="Incertitude filtre Kalman">-</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">История | History:</span>
-                        <span id="escape-history" class="value">0 записей | records</span>
+                        <span class="label">Historique:</span>
+                        <span id="escape-history" class="value">0 entrées</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">Зонд | Probe:</span>
-                        <span id="probe-results" class="value">L:- R:-</span>
+                        <span class="label">Sonde:</span>
+                        <span id="probe-results" class="value">G:- D:-</span>
                     </div>
                 </div>
             </div>
 
             <!-- Mission Control Panel (NEW) -->
             <div class="panel mission-control-panel">
-                <h2>🎯 Управление Миссией | Mission Control</h2>
+                <h2>🎯 Contrôle de Mission</h2>
                 <div class="mission-status-bar">
                     <div class="mission-state-indicator">
-                        <span class="label">Состояние | State:</span>
-                        <span id="mission-state-badge" class="mission-badge idle">ОЖИДАНИЕ | IDLE</span>
+                        <span class="label">État:</span>
+                        <span id="mission-state-badge" class="mission-badge idle">En attente</span>
                     </div>
                     <div class="gps-indicator">
-                        <span id="gps-ready-badge" class="gps-badge not-ready">📡 GPS: Ожидание...</span>
+                        <span id="gps-ready-badge" class="gps-badge not-ready">📡 GPS: En attente...</span>
                     </div>
                 </div>
                 
                 <!-- Step 1: Configure Waypoints -->
                 <div class="mission-step">
-                    <h3>Шаг 1: Настройка Маршрута | Step 1: Configure Path</h3>
+                    <h3>Étape 1: Configuration du trajet</h3>
                     <div class="waypoint-config-inline">
                         <div class="config-item-inline">
-                            <label for="wp-lanes">Полосы | Lanes:</label>
+                            <label for="wp-lanes">Couloirs:</label>
                             <input type="number" id="wp-lanes" min="1" max="50" value="8">
                         </div>
                         <div class="config-item-inline">
-                            <label for="wp-length">Длина | Length (m):</label>
+                            <label for="wp-length">Longueur (m):</label>
                             <input type="number" id="wp-length" min="10" max="500" step="10" value="150">
                         </div>
                         <div class="config-item-inline">
-                            <label for="wp-width">Ширина полосы | Lane Width (m):</label>
+                            <label for="wp-width">Largeur couloir (m):</label>
                             <input type="number" id="wp-width" min="5" max="100" step="5" value="50">
                         </div>
                     </div>
                     <button id="btn-generate-waypoints" class="mission-btn generate">
-                        🗺️ Сгенерировать Waypoints | Generate Waypoints
+                        🗺️ Générer les waypoints
                     </button>
                     <div class="waypoint-preview-info">
                         <span id="waypoint-count">Waypoints: 0</span> | 
-                        <span id="estimated-distance">Расстояние | Distance: 0m</span>
+                        <span id="estimated-distance">Distance: 0m</span>
                     </div>
                 </div>
                 
                 <!-- Step 2: Confirm or Cancel -->
                 <div class="mission-step">
-                    <h3>Шаг 2: Подтверждение | Step 2: Confirmation</h3>
+                    <h3>Étape 2: Confirmation</h3>
                     <div class="mission-buttons-row">
                         <button id="btn-confirm-waypoints" class="mission-btn confirm" disabled>
-                            ✅ Подтвердить | Confirm Waypoints
+                            ✅ Confirmer
                         </button>
                         <button id="btn-cancel-waypoints" class="mission-btn cancel" disabled>
-                            ❌ Отмена | Cancel
+                            ❌ Annuler
                         </button>
                     </div>
                 </div>
                 
                 <!-- Step 3: Start/Stop Mission -->
                 <div class="mission-step">
-                    <h3>Шаг 3: Запуск Миссии | Step 3: Start Mission</h3>
+                    <h3>Étape 3: Lancement</h3>
                     <div class="mission-buttons-row">
                         <button id="btn-start-mission" class="mission-btn start" disabled>
-                            🚀 СТАРТ | START MISSION
+                            🚀 DÉMARRER
                         </button>
                         <button id="btn-stop-mission" class="mission-btn stop" disabled>
-                            🛑 СТОП | STOP
+                            🛑 ARRÊT
                         </button>
                         <button id="btn-resume-mission" class="mission-btn resume" disabled>
-                            ▶️ ПРОДОЛЖИТЬ | RESUME
+                            ▶️ REPRENDRE
                         </button>
                         <button id="btn-reset-mission" class="mission-btn reset">
-                            🔄 СБРОС | RESET
+                            🔄 RÉINITIALISER
+                        </button>
+                    </div>
+                    <div class="mission-buttons-row" style="margin-top: 10px;">
+                        <button id="btn-go-home" class="mission-btn home">
+                            🏠 RETOUR MAISON
                         </button>
                     </div>
                 </div>
                 
                 <!-- Joystick Override -->
                 <div class="mission-step joystick-section">
-                    <h3>🎮 Ручное Управление | Manual Override</h3>
+                    <h3>🎮 Contrôle manuel</h3>
                     <div class="joystick-info">
-                        <span>Отключает автономное управление для ручного контроля</span><br>
+                        <span>Désactive le contrôle autonome pour le pilotage manuel</span><br>
                         <span class="joystick-hint">Disables autonomous control for manual driving</span>
                     </div>
                     <div class="mission-buttons-row">
                         <button id="btn-joystick-enable" class="mission-btn joystick">
-                            🎮 Включить | Enable Override
+                            🎮 Activer joystick
                         </button>
                         <button id="btn-joystick-disable" class="mission-btn joystick-off" disabled>
-                            🔒 Отключить | Disable Override
+                            🔒 Désactiver
                         </button>
                     </div>
                     <div id="joystick-status" class="joystick-status hidden">
@@ -255,37 +262,37 @@
                     <div id="joystick-instructions" class="joystick-instructions hidden">
                         <div class="instructions-title">🎮 War Thunder / GTA5 Style Controls</div>
                         <div class="instructions-content">
-                            <p><strong>В новом терминале запустите | Run in a new terminal:</strong></p>
+                            <p><strong>Exécutez dans un nouveau terminal:</strong></p>
                             <code>ros2 run control keyboard_teleop</code>
                             
                             <div class="teleop-controls-grid">
                                 <div class="control-group">
-                                    <div class="control-header">⚡ Дроссель | Throttle</div>
+                                    <div class="control-header">⚡ Accélérateur</div>
                                     <div class="control-keys">
-                                        <kbd>W</kbd> / <kbd>↑</kbd> = Вперёд | Ahead<br>
-                                        <kbd>S</kbd> / <kbd>↓</kbd> = Назад | Reverse<br>
-                                        <kbd>Space</kbd> = Полный стоп | All Stop<br>
-                                        <kbd>X</kbd> = Экстренный реверс | Emergency
+                                        <kbd>W</kbd> / <kbd>↑</kbd> = Avant<br>
+                                        <kbd>S</kbd> / <kbd>↓</kbd> = Arrière<br>
+                                        <kbd>Space</kbd> = Arrêt complet<br>
+                                        <kbd>X</kbd> = Urgence
                                     </div>
                                 </div>
                                 <div class="control-group">
-                                    <div class="control-header">🧭 Руль | Rudder</div>
+                                    <div class="control-header">🧭 Gouvernail</div>
                                     <div class="control-keys">
-                                        <kbd>A</kbd> / <kbd>←</kbd> = Лево | Left<br>
-                                        <kbd>D</kbd> / <kbd>→</kbd> = Право | Right<br>
-                                        <kbd>Q</kbd> = Резко влево | Hard Left<br>
-                                        <kbd>E</kbd> = Резко вправо | Hard Right
+                                        <kbd>A</kbd> / <kbd>←</kbd> = Gauche<br>
+                                        <kbd>D</kbd> / <kbd>→</kbd> = Droite<br>
+                                        <kbd>Q</kbd> = Virage serré ←<br>
+                                        <kbd>E</kbd> = Virage serré →
                                     </div>
                                 </div>
                             </div>
                             
                             <div class="teleop-features">
-                                <span class="feature-tag">✅ Плавный дроссель | Smooth throttle ramp</span>
-                                <span class="feature-tag">✅ Авто-центровка руля | Auto-center rudder</span>
-                                <span class="feature-tag">✅ 30 Hz обновление | 30 Hz update rate</span>
+                                <span class="feature-tag">✅ Accélération progressive</span>
+                                <span class="feature-tag">✅ Centrage auto gouvernail</span>
+                                <span class="feature-tag">✅ 30 Hz</span>
                             </div>
                             
-                            <p class="instructions-note">или VRX джойстик | or VRX joystick</p>
+                            <p class="instructions-note">ou joystick VRX</p>
                             <code>ros2 launch vrx_gz usv_joy_teleop.py</code>
                         </div>
                     </div>
@@ -294,10 +301,10 @@
 
             <!-- Configuration Panel -->
             <div class="panel config-panel">
-                <h2>⚙️ Расширенная Конфигурация | Advanced Configuration</h2>
+                <h2>⚙️ Configuration avancée</h2>
                 <div class="config-grid">
                     <div class="config-section">
-                        <h3>ПИД | PID Control</h3>
+                        <h3>Contrôle PID</h3>
                         <div class="config-item">
                             <label for="cfg-kp">Kp (Proportional):</label>
                             <input type="number" id="cfg-kp" min="0" max="2000" step="50" value="400">
@@ -312,24 +319,24 @@
                         </div>
                     </div>
                     <div class="config-section">
-                        <h3>Скорость | Speed</h3>
+                        <h3>Vitesse</h3>
                         <div class="config-item">
-                            <label for="cfg-base-speed">Базовая | Base:</label>
+                            <label for="cfg-base-speed">Base:</label>
                             <input type="number" id="cfg-base-speed" min="100" max="1000" step="50" value="500">
                         </div>
                         <div class="config-item">
-                            <label for="cfg-max-speed">Макс | Max:</label>
+                            <label for="cfg-max-speed">Max:</label>
                             <input type="number" id="cfg-max-speed" min="100" max="1000" step="50" value="800">
                         </div>
                         <div class="config-item">
-                            <label for="cfg-safe-dist">Безоп. дист. | Safe (m):</label>
+                            <label for="cfg-safe-dist">Dist. sécurité (m):</label>
                             <input type="number" id="cfg-safe-dist" min="5" max="50" step="1" value="15">
                         </div>
                     </div>
                 </div>
                 <div class="config-buttons">
                     <button id="btn-apply-config" class="config-btn apply">
-                        Применить ПИД | Apply PID
+                        Appliquer PID
                     </button>
                 </div>
                 <!-- Hidden fields to maintain compatibility -->
@@ -340,24 +347,24 @@
 
             <!-- Map Panel -->
             <div class="panel map-panel">
-                <h2>🗺️ Карта и Waypoints | Map & Waypoints</h2>
+                <h2>🗺️ Carte et Waypoints</h2>
                 <div class="map-legend">
-                    <span class="legend-item"><span class="legend-color boat"></span> Судно | Boat</span>
+                    <span class="legend-item"><span class="legend-color boat"></span> Navire</span>
                     <span class="legend-item"><span class="legend-color waypoint"></span> Waypoint</span>
-                    <span class="legend-item"><span class="legend-color current-wp"></span> Текущий | Current</span>
-                    <span class="legend-item"><span class="legend-color path"></span> Маршрут | Path</span>
-                    <span class="legend-item"><span class="legend-color trajectory"></span> Траектория | Trajectory</span>
+                    <span class="legend-item"><span class="legend-color current-wp"></span> Cible actuelle</span>
+                    <span class="legend-item"><span class="legend-color path"></span> Trajet</span>
+                    <span class="legend-item"><span class="legend-color trajectory"></span> Trajectoire</span>
                 </div>
                 <div id="map"></div>
             </div>
 
             <!-- Raw Terminal Output Panel -->
             <div class="panel terminal-panel">
-                <h2>Терминал Vostok1 | Terminal Output</h2>
+                <h2>Terminal ROS2</h2>
                 <div class="terminal-header">
                     <span class="terminal-title">vostok1_node@ros2</span>
                     <div class="terminal-controls">
-                        <button id="btn-clear-terminal" class="terminal-btn">Очистить | Clear</button>
+                        <button id="btn-clear-terminal" class="terminal-btn">Effacer</button>
                         <label class="auto-scroll-label">
                             <input type="checkbox" id="auto-scroll" checked>
                             Auto-scroll
@@ -365,13 +372,13 @@
                     </div>
                 </div>
                 <div id="terminal-output" class="terminal-container">
-                    <div class="terminal-line system">[SYSTEM] Ожидание подключения к Vostok1... | Waiting for Vostok1 connection...</div>
+                    <div class="terminal-line system">[SYSTÈME] En attente de connexion à Vostok1...</div>
                 </div>
             </div>
 
             <!-- Logs Panel -->
             <div class="panel logs-panel">
-                <h2>Системные Логи | System Logs</h2>
+                <h2>Journaux Système</h2>
                 <div id="logs" class="logs-container"></div>
             </div>
         </div>

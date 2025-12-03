@@ -1,0 +1,109 @@
+# ============================================================================
+# PROJET-17 — Vostok1 Modular Navigation System
+# Système de Navigation Modulaire - French Academic Edition
+# ============================================================================
+#
+# Launches the modular Vostok1-based navigation system:
+#   - oko_perception (ŒIL) - 3D LIDAR obstacle detection
+#   - sputnik_planner (SPOUTNIK) - GPS waypoint planning
+#   - buran_controller (BOURANE) - PID control with obstacle avoidance
+#
+# Prerequisites:
+#   # Kill any old Gazebo processes (Optional but recommended)
+#   pkill -9 gz && pkill -9 ruby
+#
+#   # Build workspace (If the package is not yet built or after changes)
+#   cd ~/seal_ws && colcon build --merge-install && source install/setup.bash
+#
+# Usage (4 terminals):
+#   T1: ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+#   T2: ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
+#   T3: ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml
+#   T4: cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1 && python3 -m http.server 8000
+#
+# Then open: http://localhost:8000
+#
+# ============================================================================
+
+launch:
+
+# ============================================================================
+# ŒIL - Perception Node (3D LIDAR Processing)
+# Tuned for lake bank and harbour detection
+# Height reference: LiDAR mounted ~2-3m above water
+#   - Water surface:     Z ≈ -3m (below LiDAR)
+#   - Lake bank/terrain: Z ≈ -2.5m (below LiDAR)
+#   - Concrete harbour:  Z ≈ -1 to -0.5m (below LiDAR)
+#   - Obstacles on dock: Z ≈ 0 to +2m
+# ============================================================================
+- node:
+    pkg: plan
+    exec: oko_perception
+    name: oko_perception_node
+    output: screen
+    param:
+    - name: min_safe_distance
+      value: 12.0
+    - name: critical_distance
+      value: 4.0
+    - name: hysteresis_distance
+      value: 1.5
+    - name: min_height
+      value: -15.0      # Catch lake bank, harbour, water-level obstacles
+    - name: max_height
+      value: 10.0       # Catch tall structures
+    - name: min_range
+      value: 5.0        # Ignore spawn dock and boat structure
+    - name: max_range
+      value: 50.0
+    - name: sample_rate
+      value: 1          # Process ALL points for maximum detection
+
+# ============================================================================
+# SPOUTNIK - Planner Node (GPS Waypoint Navigation)
+# ============================================================================
+- node:
+    pkg: plan
+    exec: sputnik_planner
+    name: sputnik_planner_node
+    output: screen
+    param:
+    - name: scan_length
+      value: 15.0
+    - name: scan_width
+      value: 30.0
+    - name: lanes
+      value: 10
+    - name: waypoint_tolerance
+      value: 2.0
+    - name: waypoint_skip_timeout
+      value: 45.0       # Skip waypoint if obstacle blocks for this many seconds
+
+# ============================================================================
+# BOURANE - Controller Node (PID Control with Obstacle Avoidance)
+# ============================================================================
+- node:
+    pkg: control
+    exec: buran_controller
+    name: buran_controller_node
+    output: screen
+    param:
+    # PID Gains
+    - name: kp
+      value: 400.0
+    - name: ki
+      value: 20.0
+    - name: kd
+      value: 100.0
+    # Speed Settings
+    - name: base_speed
+      value: 500.0
+    - name: max_speed
+      value: 800.0
+    # Obstacle Avoidance
+    - name: obstacle_slow_factor
+      value: 0.3
+    - name: critical_distance
+      value: 5.0
+    - name: reverse_timeout
+      value: 5.0

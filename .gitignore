@@ -1,14 +1,15 @@
---- Python ---
-
-pycache/
+# Python
+__pycache__/
 *.py[cod]
 *$py.class
-.venv
+*.egg-info/
+.eggs/
+dist/
+.venv/
 venv/
 env/
 
---- ROS 2 / Colcon Build Artifacts ---
-
+# ROS 2 / Colcon Build Artifacts
 build/
 install/
 log/
@@ -16,26 +17,23 @@ build_isolated/
 devel_isolated/
 devel/
 
---- Pytest / Testing ---
-
+# Pytest / Testing
 .pytest_cache/
 .coverage
 htmlcov/
 test_results/
 
---- IDEs / Editors ---
-
+# IDEs / Editors
 .vscode/
 .idea/
 *.swp
 *~
+.claude/
 
---- OS Generated ---
-
+# OS Generated
 .DS_Store
 Thumbs.db
 
---- Generated TF Graphs ---
-
+# Generated TF Graphs
 frames_*.gv
 frames_*.pdf

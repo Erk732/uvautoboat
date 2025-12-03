@@ -11,8 +11,6 @@ setup(
          ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', [
-            'launch/simple_controller.launch.py',
-            'launch/path_follower.launch.py',
             'launch/all_in_one_bringup.launch.py',
         ]),
     ],
@@ -30,8 +28,6 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'simple_controller = control.simple_controller:main',
-            'path_follower = control.path_follower:main',
             # Modular controller (TNO style name)
             'buran_controller = control.buran_controller:main',
 

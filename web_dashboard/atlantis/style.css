@@ -1,7 +1,9 @@
 /* Atlantis Dashboard - Vostok1-like Style */
+/* With 1980s Soviet/TNO Theme Option */
 
 /* ========== FONTS ========== */
 @import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
 /* ========== CSS VARIABLES ========== */
 :root {
@@ -14,6 +16,584 @@
     --warning: #ff9800;
     --danger: #f44336;
     --font: 'Roboto Condensed', 'Segoe UI', sans-serif;
+}
+
+/* ========== 1980s SOVIET/TNO THEME ========== */
+/* POST-APOCALYPTIC Soviet computer terminal aesthetic */
+/* Damaged phosphor green CRT, radiation damage, EMP glitches */
+
+/* Severe screen flicker - damaged power supply */
+@keyframes soviet-screen-flicker {
+    0%, 100% { opacity: 1; }
+    2% { opacity: 0.3; }
+    4% { opacity: 0.9; }
+    5% { opacity: 0.2; }
+    6% { opacity: 1; }
+    8% { opacity: 0.7; }
+    25% { opacity: 0.6; }
+    26% { opacity: 1; }
+    50% { opacity: 0.4; }
+    51% { opacity: 0.95; }
+    80% { opacity: 0.3; }
+    81% { opacity: 1; }
+}
+
+/* RGB channel separation - damaged electron gun */
+@keyframes soviet-rgb-shift {
+    0%, 75%, 100% { 
+        text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00;
+    }
+    78% { 
+        text-shadow: 
+            0 0 10px #00ff00,
+            -8px 2px 0 rgba(255, 0, 0, 0.8),
+            6px -1px 0 rgba(0, 255, 255, 0.7);
+    }
+    80% {
+        text-shadow: 
+            0 0 10px #00ff00,
+            -12px 0 0 rgba(255, 0, 0, 0.9),
+            10px 0 0 rgba(0, 255, 255, 0.8);
+    }
+    82% {
+        text-shadow: 
+            0 0 15px rgba(255, 255, 255, 1),
+            -4px -3px 0 rgba(255, 0, 0, 0.7),
+            3px 2px 0 rgba(0, 255, 255, 0.6);
+    }
+}
+
+/* VHS tracking error - horizontal distortion */
+@keyframes soviet-tracking {
+    0%, 85%, 100% { transform: translateX(0) skewX(0); }
+    86% { transform: translateX(-15px) skewX(-1deg); }
+    88% { transform: translateX(20px) skewX(1.5deg); }
+    90% { transform: translateX(-30px) skewX(-2deg); }
+    92% { transform: translateX(15px) skewX(0.5deg); }
+    94% { transform: translateX(-8px); }
+}
+
+/* EMP damage effect */
+@keyframes soviet-emp {
+    0%, 95%, 100% {
+        filter: none;
+        opacity: 1;
+    }
+    96% {
+        filter: brightness(0);
+        opacity: 0;
+    }
+    97% {
+        filter: brightness(5) contrast(0.1) saturate(0);
+        opacity: 1;
+    }
+    98% {
+        filter: brightness(0.3) contrast(3) hue-rotate(180deg);
+        opacity: 0.8;
+    }
+}
+
+/* Radiation static noise */
+@keyframes soviet-static {
+    0%, 100% { background-position: 0 0; }
+    10% { background-position: -10% -10%; }
+    20% { background-position: 20% 15%; }
+    30% { background-position: -15% 20%; }
+    40% { background-position: 25% -10%; }
+    50% { background-position: -20% 25%; }
+    60% { background-position: 15% -15%; }
+    70% { background-position: -25% 10%; }
+    80% { background-position: 10% 20%; }
+    90% { background-position: -10% -20%; }
+}
+
+/* Screen tear effect */
+@keyframes soviet-tear {
+    0%, 95%, 100% { clip-path: inset(0 0 0 0); transform: translateX(0); }
+    96% { clip-path: inset(10% 0 80% 0); transform: translateX(-40px); }
+    97% { clip-path: inset(50% 0 30% 0); transform: translateX(30px); }
+    98% { clip-path: inset(70% 0 10% 0); transform: translateX(-20px); }
+}
+
+body.theme-soviet {
+    --bg: #000000;
+    --panel-bg: #001100;
+    --text: #00ff00;
+    --accent: #00ff00;
+    --accent-2: #00dd00;
+    --success: #00ff00;
+    --warning: #ffaa00;
+    --danger: #ff3300;
+    --font: 'VT323', 'Courier New', monospace;
+}
+
+body.theme-soviet {
+    background: #000000 !important;
+    font-family: 'VT323', 'Courier New', monospace !important;
+    position: relative;
+    -webkit-font-smoothing: none;
+    text-shadow: 
+        0 0 5px rgba(0, 255, 0, 0.9),
+        -2px 0 0 rgba(255, 0, 0, 0.3),
+        2px 0 0 rgba(0, 255, 255, 0.3);
+    animation: 
+        soviet-rgb-shift 10s infinite,
+        soviet-tracking 15s infinite,
+        soviet-emp 40s infinite;
+    filter: contrast(1.15) saturate(0.95);
+}
+
+/* Damaged CRT Scanlines - heavy and uneven */
+body.theme-soviet::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    background: 
+        repeating-linear-gradient(
+            0deg,
+            rgba(0, 0, 0, 0.4) 0px,
+            rgba(0, 0, 0, 0.4) 2px,
+            transparent 2px,
+            transparent 4px
+        ),
+        repeating-linear-gradient(
+            0deg,
+            transparent 0px,
+            transparent 150px,
+            rgba(255, 0, 0, 0.03) 150px,
+            rgba(255, 0, 0, 0.03) 153px
+        );
+    z-index: 9999;
+    opacity: 0.9;
+    animation: soviet-screen-flicker 4s infinite;
+}
+
+/* Static noise overlay */
+body.theme-soviet .container::before {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.1;
+    pointer-events: none;
+    z-index: 9996;
+    animation: soviet-static 0.4s steps(12) infinite;
+}
+
+/* CRT Screen Curvature & Burn Damage */
+body.theme-soviet::after {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    background: 
+        radial-gradient(
+            ellipse at center,
+            transparent 0%,
+            transparent 40%,
+            rgba(0, 0, 0, 0.6) 100%
+        ),
+        radial-gradient(
+            circle at 20% 80%,
+            rgba(0, 255, 0, 0.08) 0%,
+            transparent 25%
+        ),
+        radial-gradient(
+            circle at 80% 20%,
+            rgba(0, 255, 0, 0.05) 0%,
+            transparent 20%
+        );
+    box-shadow: inset 0 0 200px rgba(0, 255, 0, 0.15);
+    z-index: 9998;
+}
+
+body.theme-soviet .container {
+    background: transparent;
+}
+
+body.theme-soviet header {
+    background: linear-gradient(90deg, #000800 0%, #001500 50%, #000800 100%) !important;
+    border-bottom: 3px solid #00ff00 !important;
+    box-shadow: 0 0 30px rgba(0, 255, 0, 0.4) !important;
+}
+
+body.theme-soviet header h1 {
+    color: #00ff00 !important;
+    text-shadow: 
+        0 0 10px #00ff00, 
+        0 0 20px #00ff00, 
+        0 0 40px #00ff00,
+        -3px 0 0 rgba(255, 0, 0, 0.5),
+        3px 0 0 rgba(0, 255, 255, 0.5) !important;
+    font-family: 'VT323', 'Courier New', monospace !important;
+    font-weight: normal !important;
+    letter-spacing: 4px !important;
+    font-size: 28px !important;
+    animation: soviet-tear 20s infinite !important;
+}
+
+body.theme-soviet header h1::before {
+    content: "☭ СИСТЕМА " !important;
+}
+
+body.theme-soviet header h1::after {
+    content: " — СССР ☭" !important;
+}
+
+body.theme-soviet .panel {
+    background: rgba(0, 17, 0, 0.95) !important;
+    border: 2px solid #00ff00 !important;
+    border-radius: 0 !important;
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.2), inset 0 0 50px rgba(0, 255, 0, 0.05) !important;
+}
+
+body.theme-soviet .panel h2 {
+    color: #00ff00 !important;
+    text-shadow: 0 0 10px #00ff00, -2px 0 rgba(255,0,0,0.4), 2px 0 rgba(0,255,255,0.4) !important;
+    font-family: 'VT323', 'Courier New', monospace !important;
+    text-transform: uppercase !important;
+    letter-spacing: 4px !important;
+    border-bottom: 1px dashed #00aa00 !important;
+    padding-bottom: 12px !important;
+    font-size: 20px !important;
+}
+
+body.theme-soviet .label {
+    color: #00aa00 !important;
+    font-family: 'VT323', 'Courier New', monospace !important;
+    text-transform: uppercase !important;
+    font-size: 14px !important;
+    letter-spacing: 2px !important;
+}
+
+body.theme-soviet .value {
+    color: #00ff00 !important;
+    text-shadow: 0 0 8px #00ff00, -1px 0 rgba(255,0,0,0.3), 1px 0 rgba(0,255,255,0.3) !important;
+    font-family: 'VT323', 'Courier New', monospace !important;
+    font-size: 16px !important;
+}
+
+body.theme-soviet .badge {
+    background: #002200 !important;
+    border: 1px solid #00ff00 !important;
+    border-radius: 0 !important;
+    color: #00ff00 !important;
+    text-shadow: 0 0 5px #00ff00 !important;
+    font-family: 'VT323', monospace !important;
+    letter-spacing: 2px !important;
+    animation: soviet-blink 2s infinite !important;
+}
+
+body.theme-soviet .badge.navigating {
+    border-color: #ffaa00 !important;
+    color: #ffaa00 !important;
+    text-shadow: 0 0 8px #ffaa00 !important;
+}
+
+body.theme-soviet .badge.error {
+    border-color: #ff3300 !important;
+    color: #ff3300 !important;
+    text-shadow: 0 0 8px #ff3300 !important;
+}
+
+@keyframes soviet-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.75; }
+}
+
+body.theme-soviet .btn {
+    background: #001a00 !important;
+    border: 2px solid #00ff00 !important;
+    border-radius: 0 !important;
+    color: #00ff00 !important;
+    font-family: 'VT323', 'Courier New', monospace !important;
+    text-transform: uppercase !important;
+    letter-spacing: 3px !important;
+    text-shadow: 0 0 5px #00ff00 !important;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.2) !important;
+    font-size: 14px !important;
+}
+
+body.theme-soviet .btn:hover {
+    background: #003300 !important;
+    box-shadow: 0 0 25px rgba(0, 255, 0, 0.5) !important;
+}
+
+body.theme-soviet .btn.connect {
+    border-color: #00ff00 !important;
+    color: #00ff00 !important;
+}
+
+body.theme-soviet .btn.start {
+    background: #001a00 !important;
+    border-color: #00ff00 !important;
+    color: #00ff00 !important;
+}
+
+body.theme-soviet .btn.stop {
+    background: #1a0000 !important;
+    border-color: #ff3300 !important;
+    color: #ff3300 !important;
+    text-shadow: 0 0 5px #ff3300 !important;
+}
+
+body.theme-soviet .btn.secondary {
+    background: #0d0d00 !important;
+    border-color: #ffaa00 !important;
+    color: #ffaa00 !important;
+    text-shadow: 0 0 5px #ffaa00 !important;
+}
+
+body.theme-soviet .status {
+    font-family: 'VT323', 'Courier New', monospace !important;
+    border: 2px solid #00ff00 !important;
+    border-radius: 0 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 2px !important;
+    font-size: 12px !important;
+}
+
+body.theme-soviet .status.connected {
+    background: #002200 !important;
+    color: #00ff00 !important;
+    text-shadow: 0 0 8px #00ff00 !important;
+    animation: soviet-glow 1.5s infinite !important;
+}
+
+body.theme-soviet .status.disconnected {
+    background: #220000 !important;
+    color: #ff3300 !important;
+    border-color: #ff3300 !important;
+}
+
+@keyframes soviet-glow {
+    0%, 100% { box-shadow: 0 0 5px rgba(0, 255, 0, 0.5); }
+    50% { box-shadow: 0 0 20px rgba(0, 255, 0, 0.9); }
+}
+
+body.theme-soviet .info-grid {
+    border: 1px dashed #005500 !important;
+    padding: 12px !important;
+    background: rgba(0, 34, 0, 0.3) !important;
+}
+
+body.theme-soviet .info-item {
+    border-bottom: 1px dotted #003300 !important;
+    padding: 10px 0 !important;
+}
+
+body.theme-soviet input {
+    background: #000800 !important;
+    border: 2px solid #00aa00 !important;
+    border-radius: 0 !important;
+    color: #00ff00 !important;
+    font-family: 'VT323', 'Courier New', monospace !important;
+    font-size: 16px !important;
+}
+
+body.theme-soviet input:focus {
+    border-color: #00ff00 !important;
+    box-shadow: 0 0 15px rgba(0, 255, 0, 0.6) !important;
+}
+
+body.theme-soviet .config-section {
+    background: rgba(0, 8, 0, 0.8) !important;
+    border: 1px solid #005500 !important;
+    border-radius: 0 !important;
+}
+
+body.theme-soviet .config-section h3 {
+    color: #00ff00 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 3px !important;
+    border-bottom: 1px dashed #005500 !important;
+    font-family: 'VT323', monospace !important;
+}
+
+body.theme-soviet .thrust-bar {
+    background: #001100 !important;
+    border: 1px solid #005500 !important;
+    border-radius: 0 !important;
+}
+
+body.theme-soviet .thrust-fill {
+    background: linear-gradient(90deg, #008800, #00ff00) !important;
+    border-radius: 0 !important;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5) !important;
+}
+
+body.theme-soviet .thrust-fill.reverse {
+    background: linear-gradient(90deg, #cc0000, #ff3300) !important;
+    box-shadow: 0 0 10px rgba(255, 51, 0, 0.5) !important;
+}
+
+body.theme-soviet .terminal-container,
+body.theme-soviet .log-container {
+    background: #000000 !important;
+    border: 2px solid #00ff00 !important;
+    border-radius: 0 !important;
+    box-shadow: inset 0 0 30px rgba(0, 255, 0, 0.1) !important;
+}
+
+body.theme-soviet .terminal-line,
+body.theme-soviet .log-entry {
+    color: #00ff00 !important;
+    font-family: 'VT323', 'Courier New', monospace !important;
+    font-size: 14px !important;
+}
+
+body.theme-soviet .terminal-line .timestamp,
+body.theme-soviet .log-entry .timestamp {
+    color: #008800 !important;
+}
+
+body.theme-soviet .terminal-line.warn .level,
+body.theme-soviet .terminal-line.warn .message,
+body.theme-soviet .log-entry.warn {
+    color: #ffaa00 !important;
+    text-shadow: 0 0 5px rgba(255, 170, 0, 0.5) !important;
+}
+
+body.theme-soviet .terminal-line.error .level,
+body.theme-soviet .terminal-line.error .message,
+body.theme-soviet .log-entry.error {
+    color: #ff3300 !important;
+    text-shadow: 0 0 5px rgba(255, 51, 0, 0.5) !important;
+}
+
+body.theme-soviet .terminal-line.info .level,
+body.theme-soviet .terminal-line.info .message,
+body.theme-soviet .log-entry.info {
+    color: #00dddd !important;
+}
+
+body.theme-soviet .terminal-line.system .message {
+    color: #00ff88 !important;
+}
+
+body.theme-soviet #map {
+    border: 3px solid #00ff00 !important;
+    border-radius: 0 !important;
+    filter: hue-rotate(90deg) saturate(200%) brightness(0.7) contrast(1.2) !important;
+}
+
+body.theme-soviet .map-legend {
+    color: #00ff00 !important;
+    font-family: 'VT323', monospace !important;
+}
+
+body.theme-soviet .legend-color.boat,
+body.theme-soviet .legend-color.current-wp {
+    background: #00ff00 !important;
+    box-shadow: 0 0 8px #00ff00 !important;
+}
+
+body.theme-soviet .follow-boat-control {
+    background: #001100 !important;
+    border: 2px solid #00ff00 !important;
+    border-radius: 0 !important;
+}
+
+body.theme-soviet .follow-boat-btn {
+    background: #001100 !important;
+    color: #00ff00 !important;
+}
+
+body.theme-soviet .follow-boat-btn.active {
+    background: #003300 !important;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5) !important;
+}
+
+body.theme-soviet .waypoint-info {
+    background: #001100 !important;
+    color: #00ff00 !important;
+    border: 1px solid #005500 !important;
+    border-radius: 0 !important;
+}
+
+body.theme-soviet .auto-scroll-label {
+    color: #00aa00 !important;
+    font-family: 'VT323', monospace !important;
+}
+
+body.theme-soviet input[type="checkbox"] {
+    accent-color: #00ff00 !important;
+}
+
+/* Scrollbars for Soviet theme */
+body.theme-soviet ::-webkit-scrollbar {
+    width: 10px;
+}
+
+body.theme-soviet ::-webkit-scrollbar-track {
+    background: #000800;
+    border: 1px solid #003300;
+}
+
+body.theme-soviet ::-webkit-scrollbar-thumb {
+    background: #00aa00;
+    border: 1px solid #00ff00;
+}
+
+body.theme-soviet ::-webkit-scrollbar-thumb:hover {
+    background: #00ff00;
+}
+
+/* ========== THEME TOGGLE BUTTON ========== */
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 15px;
+}
+
+.theme-toggle-btn {
+    background: linear-gradient(135deg, #444 0%, #666 100%);
+    border: 2px solid #888;
+    border-radius: 20px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.theme-toggle-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.theme-toggle-btn .theme-icon {
+    font-size: 16px;
+}
+
+body.theme-soviet .theme-toggle-btn {
+    background: #001100 !important;
+    border: 2px solid #00ff00 !important;
+    color: #00ff00 !important;
+    border-radius: 0 !important;
+    text-shadow: 0 0 5px #00ff00 !important;
+    font-family: 'VT323', monospace !important;
+    letter-spacing: 2px !important;
+}
+
+body.theme-soviet .theme-toggle-btn:hover {
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.6) !important;
 }
 
 /* ========== BASE ========== */

@@ -53,18 +53,20 @@ let currentState = {
     }
 };
 
-// Style mode state: 'normal', 'bureau', 'terminal'
+// Style mode state: 'normal', 'bureau', 'terminal', 'milspec'
 let currentStyleMode = 'normal';
-const styleModes = ['normal', 'bureau', 'terminal'];
+const styleModes = ['normal', 'bureau', 'terminal', 'milspec'];
 const styleModeLabels = {
-    'normal': 'БЮРО | BUREAU MODE',
-    'bureau': 'ТЕРМИНАЛ | TERMINAL MODE', 
-    'terminal': 'ОБЫЧНЫЙ | NORMAL MODE'
+    'normal': 'БЮРО TNO',
+    'bureau': 'ТЕРМИНАЛ', 
+    'terminal': 'ВМФ СССР',
+    'milspec': 'ОБЫЧНЫЙ'
 };
 const styleModeLogMessages = {
-    'normal': 'Переключено на обычный режим | Switched to normal mode',
-    'bureau': 'Переключено на режим бюро | Switched to bureau mode',
-    'terminal': 'Переключено на режим терминала | Switched to terminal mode'
+    'normal': 'Режим: Стандартный интерфейс',
+    'bureau': 'Режим: Бюро ТНО — Социалистический Долгосрочизм',
+    'terminal': 'Режим: Терминал ЭВМ — Командная строка',
+    'milspec': '>>> РЕЖИМ БОЕВОЙ ГОТОВНОСТИ <<<\n>>> ВМФ СССР — ВАРШАВСКИЙ ДОГОВОР <<<\n>>> СПЕЦИФИКАЦИЯ МИЛ-СТД-1553 <<<'
 };
 
 // Initialize everything when page loads
@@ -88,8 +90,8 @@ function initStyleToggle() {
     
     toggleBtn.addEventListener('click', () => {
         // Remove current style class
-        body.classList.remove('bureau-mode', 'terminal-mode');
-        container.classList.remove('bureau-mode', 'terminal-mode');
+        body.classList.remove('bureau-mode', 'terminal-mode', 'milspec-mode');
+        container.classList.remove('bureau-mode', 'terminal-mode', 'milspec-mode');
         
         // Cycle to next style
         const currentIndex = styleModes.indexOf(currentStyleMode);
@@ -110,7 +112,7 @@ function initStyleToggle() {
         console.log(`Style changed to: ${currentStyleMode}`);
     });
     
-    console.log('Style toggle initialized (3-mode cycle: Normal → Bureau → Terminal)');
+    console.log('Style toggle initialized (4-mode cycle: Normal → Bureau → Terminal → MilSpec)');
 }
 
 
@@ -124,11 +126,11 @@ function updateFollowButtonState() {
         if (mapFollowBoat) {
             btn.innerHTML = '🔒';
             btn.classList.add('active');
-            btn.title = 'Following Boat (Click to unlock) | Слежение за судном (Нажмите для отключения)';
+            btn.title = 'Suivi actif (cliquer pour désactiver)';
         } else {
             btn.innerHTML = '🎯';
             btn.classList.remove('active');
-            btn.title = 'Click to follow boat | Нажмите для слежения';
+            btn.title = 'Cliquer pour suivre le navire';
         }
     }
 }
@@ -160,7 +162,7 @@ function initMap() {
             const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control follow-boat-control');
             const button = L.DomUtil.create('a', 'follow-boat-btn', container);
             button.href = '#';
-            button.title = 'Follow Boat | Следить за судном';
+            button.title = 'Suivre le navire';
             button.innerHTML = '🎯';
             button.id = 'follow-boat-toggle';
             
@@ -219,10 +221,10 @@ function connectToROS() {
 function updateConnectionStatus(isConnected) {
     const statusElement = document.getElementById('connection-status');
     if (isConnected) {
-        statusElement.textContent = 'Подключено | Connected';
+        statusElement.textContent = 'Connecté';
         statusElement.className = 'status connected';
     } else {
-        statusElement.textContent = 'Отключено | Disconnected';
+        statusElement.textContent = 'Déconnecté';
         statusElement.className = 'status disconnected';
     }
 }
@@ -402,9 +404,9 @@ function subscribeToTopics() {
             front_distance: data.front_clear,
             left_distance: data.left_clear,
             right_distance: data.right_clear,
-            status: data.is_critical ? '🚨 КРИТИЧНО | CRITICAL' : 
-                    data.obstacle_detected ? '⚠️ ПРЕПЯТСТВИЕ | OBSTACLE' : 
-                    '✅ СВОБОДНО | CLEAR'
+            status: data.is_critical ? '🚨 CRITIQUE' : 
+                    data.obstacle_detected ? '⚠️ OBSTACLE' : 
+                    '✅ DÉGAGÉ'
         });
     });
     
@@ -520,7 +522,7 @@ function subscribeToTopics() {
         }
     });
     
-    addTerminalLine({ level: 20, msg: 'Подключено к ROS | Connected to ROS', name: 'system' });
+    addTerminalLine({ level: 20, msg: 'Connecté à ROS', name: 'system' });
 }
 
 // Update GPS data
@@ -619,13 +621,13 @@ function updateObstacleStatus(data) {
     } else {
         // Fallback to old behavior if status not provided
         if (minDist > 15 || minDist >= 999) {
-            statusBadge.textContent = 'Свободно | Clear';
+            statusBadge.textContent = 'Dégagé';
             statusBadge.className = 'value badge clear';
         } else if (minDist > 5) {
-            statusBadge.textContent = 'Внимание | Warning';
+            statusBadge.textContent = 'Attention';
             statusBadge.className = 'value badge warning';
         } else {
-            statusBadge.textContent = 'Критично | Critical';
+            statusBadge.textContent = 'Critique';
             statusBadge.className = 'value badge critical';
         }
     }
@@ -643,24 +645,24 @@ function updateAntiStuckStatus(data) {
     
     if (stuckStatus) {
         if (data.is_stuck && data.escape_mode) {
-            stuckStatus.textContent = `ЗАСТРЯЛ | STUCK (Попытка ${data.consecutive_attempts})`;
+            stuckStatus.textContent = `BLOQUÉ (Tentative ${data.consecutive_attempts})`;
             stuckStatus.className = 'value badge critical';
         } else {
-            stuckStatus.textContent = 'Норма | Normal';
+            stuckStatus.textContent = 'Normal';
             stuckStatus.className = 'value badge clear';
         }
     }
     
     if (escapePhase) {
         const phases = ['PROBE', 'REVERSE', 'TURN', 'FORWARD', 'IDLE'];
-        const phaseNames = ['ЗОНДИРОВАНИЕ', 'РЕВЕРС', 'ПОВОРОТ', 'ВПЕРЕД', 'ОЖИДАНИЕ'];
+        const phaseNames = ['SONDAGE', 'MARCHE ARRIÈRE', 'VIRAGE', 'AVANT', 'EN ATTENTE'];
         const idx = data.escape_mode ? data.escape_phase : 4;
-        escapePhase.textContent = `${phaseNames[idx]} | ${phases[idx]}`;
+        escapePhase.textContent = phaseNames[idx];
         escapePhase.className = data.escape_mode ? 'value active' : 'value';
     }
     
     if (noGoZones) {
-        noGoZones.textContent = `${data.no_go_zones} зон | zones`;
+        noGoZones.textContent = `${data.no_go_zones}`;
     }
     
     if (driftVector) {
@@ -671,7 +673,7 @@ function updateAntiStuckStatus(data) {
             const angle = Math.atan2(dy, dx) * 180 / Math.PI;
             driftVector.textContent = `${magnitude.toFixed(2)} m/s @ ${angle.toFixed(0)}°`;
         } else {
-            driftVector.textContent = 'Минимально | Minimal';
+            driftVector.textContent = 'Minimal';
         }
     }
     
@@ -682,19 +684,19 @@ function updateAntiStuckStatus(data) {
         const uy = data.drift_uncertainty[1];
         const avgUncertainty = Math.hypot(ux, uy);
         if (avgUncertainty < 0.1) {
-            driftUncertainty.textContent = `Высокая | High conf.`;
+            driftUncertainty.textContent = 'Haute conf.';
             driftUncertainty.style.color = '#4CAF50';
         } else if (avgUncertainty < 0.5) {
             driftUncertainty.textContent = `σ=${avgUncertainty.toFixed(2)}`;
             driftUncertainty.style.color = '#FFC107';
         } else {
-            driftUncertainty.textContent = `σ=${avgUncertainty.toFixed(2)} (сходится)`;
+            driftUncertainty.textContent = `σ=${avgUncertainty.toFixed(2)} (converge)`;
             driftUncertainty.style.color = '#FF9800';
         }
     }
     
     if (escapeHistory) {
-        escapeHistory.textContent = `${data.escape_history_count} записей | records`;
+        escapeHistory.textContent = `${data.escape_history_count} entrées`;
     }
     
     if (probeResults && data.probe_results) {
@@ -704,7 +706,7 @@ function updateAntiStuckStatus(data) {
     // Update best direction indicator if exists
     const bestDirection = document.getElementById('best-direction');
     if (bestDirection && data.best_direction) {
-        bestDirection.textContent = data.best_direction === 'LEFT' ? '← ЛЕВО | LEFT' : '→ ПРАВО | RIGHT';
+        bestDirection.textContent = data.best_direction === 'LEFT' ? '← GAUCHE' : '→ DROITE';
     }
     
     // Add terminal log for stuck events
@@ -876,7 +878,7 @@ function sendConfig(pidOnly = false, restart = false) {
             ki: parseFloat(document.getElementById('cfg-ki').value),
             kd: parseFloat(document.getElementById('cfg-kd').value)
         };
-        addLog('Отправка ПИД | Sending PID config...', 'info');
+        addLog('Envoi configuration PID...', 'info');
     } else {
         // Send all parameters
         config = {
@@ -890,12 +892,12 @@ function sendConfig(pidOnly = false, restart = false) {
             max_speed: parseFloat(document.getElementById('cfg-max-speed').value),
             min_safe_distance: parseFloat(document.getElementById('cfg-safe-dist').value)
         };
-        addLog('Отправка конфигурации | Sending full config...', 'info');
+        addLog('Envoi configuration complète...', 'info');
     }
     
     if (restart) {
         config.restart_mission = true;
-        addLog('Перезапуск миссии | Restarting mission...', 'warning');
+        addLog('Redémarrage de la mission...', 'warning');
     }
     
     const message = new ROSLIB.Message({
@@ -907,7 +909,7 @@ function sendConfig(pidOnly = false, restart = false) {
     if (modularConfigPublisher) {
         modularConfigPublisher.publish(message);
     }
-    addLog('Конфигурация отправлена | Config sent!', 'info');
+    addLog('Configuration envoyée!', 'info');
     console.log('Config sent to both vostok1 and sputnik:', config);
 }
 
@@ -974,7 +976,7 @@ function initTerminal() {
     if (clearBtn) {
         clearBtn.addEventListener('click', () => {
             const terminal = document.getElementById('terminal-output');
-            terminal.innerHTML = '<div class="terminal-line system">[SYSTEM] Терминал очищен | Terminal cleared</div>';
+            terminal.innerHTML = '<div class="terminal-line system">[SYSTEM] Terminal effacé</div>';
         });
     }
 }
@@ -1014,10 +1016,18 @@ function initMissionControl() {
     });
     
     document.getElementById('btn-reset-mission').addEventListener('click', () => {
-        if (confirm('Сбросить миссию? | Reset mission and clear waypoints?')) {
+        if (confirm('Réinitialiser la mission et effacer les waypoints?')) {
             sendMissionCommand('reset_mission');
             clearWaypointPreview();
             addLog('Mission reset - ready for new waypoints', 'warning');
+        }
+    });
+    
+    // Go Home - One-click return to spawn point
+    document.getElementById('btn-go-home').addEventListener('click', () => {
+        if (confirm('🏠 Retour maison: Le bateau va naviguer vers son point de départ. Continuer?')) {
+            sendMissionCommand('go_home');
+            addLog('🏠 Retour maison activé - Navigation vers le point de départ', 'info');
         }
     });
     
@@ -1076,7 +1086,7 @@ function generateWaypoints() {
     const totalWaypoints = lanes * 2 - 1;
     const estimatedDistance = length * lanes + width * (lanes - 1);
     document.getElementById('waypoint-count').textContent = `Waypoints: ~${totalWaypoints}`;
-    document.getElementById('estimated-distance').textContent = `Расстояние | Distance: ~${estimatedDistance}m`;
+    document.getElementById('estimated-distance').textContent = `Distance: ~${estimatedDistance}m`;
     
     addLog(`Generating ${totalWaypoints} waypoints: ${length}m × ${lanes} lanes`, 'info');
 }
@@ -1127,10 +1137,10 @@ function updateMissionControlUI(state) {
     const gpsBadge = document.getElementById('gps-ready-badge');
     if (gpsBadge) {
         if (missionState.gpsReady) {
-            gpsBadge.textContent = '📡 GPS: Готов | Ready';
+            gpsBadge.textContent = '📡 GPS: Prêt';
             gpsBadge.className = 'gps-badge ready';
         } else {
-            gpsBadge.textContent = '📡 GPS: Ожидание... | Waiting...';
+            gpsBadge.textContent = '📡 GPS: En attente...';
             gpsBadge.className = 'gps-badge not-ready';
         }
     }
@@ -1139,16 +1149,16 @@ function updateMissionControlUI(state) {
     const stateBadge = document.getElementById('mission-state-badge');
     if (stateBadge) {
         const stateLabels = {
-            'INIT': '🔄 ИНИТ | INIT',
-            'IDLE': 'ОЖИДАНИЕ | IDLE',
-            'WAITING_CONFIRM': '👁️ ПОДТВЕРЖДЕНИЕ | CONFIRM',
-            'WAYPOINTS_PREVIEW': '👁️ ПРЕДПРОСМОТР | PREVIEW',
-            'READY': '✅ ГОТОВ | READY',
-            'RUNNING': '🚀 ВЫПОЛНЯЕТСЯ | RUNNING',
-            'DRIVING': '🚀 ВЫПОЛНЯЕТСЯ | DRIVING',
-            'PAUSED': '⏸️ ПАУЗА | PAUSED',
-            'JOYSTICK': '🎮 ДЖОЙСТИК | JOYSTICK',
-            'FINISHED': '🏁 ЗАВЕРШЕНО | FINISHED'
+            'INIT': '🔄 Initialisation',
+            'IDLE': 'En attente',
+            'WAITING_CONFIRM': '👁️ Confirmation',
+            'WAYPOINTS_PREVIEW': '👁️ Aperçu',
+            'READY': '✅ Prêt',
+            'RUNNING': '🚀 En cours',
+            'DRIVING': '🚀 En cours',
+            'PAUSED': '⏸️ Pause',
+            'JOYSTICK': '🎮 Joystick',
+            'FINISHED': '🏁 Terminé'
         };
         stateBadge.textContent = stateLabels[missionState.state] || missionState.state;
         stateBadge.className = `mission-badge ${missionState.state.toLowerCase()}`;

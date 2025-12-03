@@ -126,6 +126,47 @@ function initUI() {
     document.getElementById('btn-apply-controller').addEventListener('click', applyControllerParams);
     document.getElementById('btn-clear-log').addEventListener('click', clearLog);
     document.getElementById('btn-clear-terminal').addEventListener('click', clearTerminal);
+    
+    // Theme toggle initialization
+    initThemeToggle();
+}
+
+// ============================================
+// THEME SWITCHER - 1980s Soviet/TNO Style
+// ============================================
+function initThemeToggle() {
+    const themeBtn = document.getElementById('theme-toggle-btn');
+    const themeIcon = themeBtn.querySelector('.theme-icon');
+    const themeText = themeBtn.querySelector('.theme-text');
+    
+    // Load saved theme preference
+    const savedTheme = localStorage.getItem('atlantis-theme');
+    if (savedTheme === 'soviet') {
+        document.body.classList.add('theme-soviet');
+        themeIcon.textContent = '🌐';
+        themeText.textContent = 'MODERN';
+    }
+    
+    themeBtn.addEventListener('click', () => {
+        const isSoviet = document.body.classList.toggle('theme-soviet');
+        
+        if (isSoviet) {
+            // Switched to Soviet theme
+            themeIcon.textContent = '🌐';
+            themeText.textContent = 'MODERN';
+            localStorage.setItem('atlantis-theme', 'soviet');
+            log('СИСТЕМА АКТИВИРОВАНА — 1980 USSR MODE', 'info');
+            terminalLog('>>> ПЕРЕКЛЮЧЕНИЕ НА СОВЕТСКИЙ РЕЖИМ <<<', 'system');
+            terminalLog('СИСТЕМА КОНТРОЛЯ СУДНА АКТИВНА', 'system');
+        } else {
+            // Switched to Modern theme
+            themeIcon.textContent = '☭';
+            themeText.textContent = 'USSR 1980';
+            localStorage.setItem('atlantis-theme', 'modern');
+            log('Switched to Modern theme', 'info');
+            terminalLog('Theme switched to Modern', 'system');
+        }
+    });
 }
 
 function initTerminal() {

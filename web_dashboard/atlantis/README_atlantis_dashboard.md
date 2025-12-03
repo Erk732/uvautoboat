@@ -2,6 +2,55 @@
 
 A clean, ergonomic web interface for the Atlantis Controller and Planner, styled to match the Vostok1 dashboard.
 
+## Prerequisites
+
+### ROS2 Rosbridge Suite (Required for WebSocket on port 9090)
+
+If you're having trouble connecting to port 9090, install the rosbridge suite:
+
+```bash
+# For ROS2 Jazzy (Ubuntu 24.04)
+sudo apt update
+sudo apt install ros-jazzy-rosbridge-suite
+
+# For ROS2 Humble (Ubuntu 22.04)
+sudo apt install ros-humble-rosbridge-suite
+```
+
+After installation, source your ROS2 environment:
+
+```bash
+source /opt/ros/jazzy/setup.bash  # or humble
+```
+
+### Troubleshooting Port 9090
+
+If the dashboard shows "Disconnected" or can't connect:
+
+1. **Check if rosbridge is running:**
+
+   ```bash
+   ros2 node list | grep rosbridge
+   ```
+
+2. **Check if port 9090 is listening:**
+
+   ```bash
+   ss -tuln | grep 9090
+   ```
+
+3. **Check for firewall issues:**
+
+   ```bash
+   sudo ufw allow 9090
+   ```
+
+4. **Restart rosbridge:**
+
+   ```bash
+   ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
+   ```
+
 ## Features
 
 - **Real-time Status Display**: Mission state, waypoint progress, GPS position
@@ -16,6 +65,38 @@ A clean, ergonomic web interface for the Atlantis Controller and Planner, styled
   - Trajectory line showing actual path traveled
 - **Terminal Output**: Real-time ROS2 node logs from atlantis nodes
 - **Full Parameter Control**: All ROS 2 parameters adjustable via inputs
+- **Theme Switcher**: Toggle between Modern and 1980s Soviet/TNO style
+
+## 🎨 Theme Switcher - 1980s Soviet Mode
+
+The dashboard includes a unique **1980s Soviet/TNO theme** that transforms the interface into an authentic Cold War-era Soviet computer terminal aesthetic.
+
+### Features of Soviet Theme
+
+- **CRT Phosphor Green**: Authentic green phosphor display colors
+- **Scanline Effect**: Simulated CRT scanlines overlay
+- **Screen Glow**: Subtle CRT screen glow effect
+- **VT323 Font**: Retro terminal-style monospace typography
+- **Cyrillic Labels**: Russian text for header elements ("СИСТЕМА", "СССР")
+- **Amber Warnings**: 1980s-style amber warning colors
+- **Angular UI**: Sharp, utilitarian Soviet design aesthetic
+
+### How to Use
+
+1. Click the **"☭ USSR 1980"** button in the header to activate Soviet theme
+2. Click **"🌐 MODERN"** to switch back to the modern gradient style
+3. Theme preference is saved in localStorage and persists across sessions
+
+### Visual Style Comparison
+
+| Element | Modern Theme | Soviet Theme |
+|---------|--------------|--------------|
+| Background | Purple-blue gradient | Pure black |
+| Accent Color | Purple (#667eea) | Phosphor green (#00ff00) |
+| Font | Roboto Condensed | VT323 (CRT terminal) |
+| Panels | White, rounded | Dark green, angular |
+| Map | Normal colors | Green-tinted (hue-rotated) |
+| Effects | Smooth shadows | Scanlines, glow |
 
 ## Quick Start
 
@@ -24,6 +105,10 @@ A clean, ergonomic web interface for the Atlantis Controller and Planner, styled
 ```bash
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
 ```
+
+> **Important:** The `delay_between_messages:=0.0` parameter is required for ROS 2 Jazzy due to a parameter type bug.
+
+This starts a WebSocket server on `ws://localhost:9090`.
 
 ### 2. Start Atlantis Nodes (Option A: Launch File)
 
