@@ -431,6 +431,164 @@ cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1 && python3 -m http.server 8000
 
 Then open: **<http://localhost:8000>**
 
+---
+
+## 🚀 Mission Workflow Guide
+
+This section describes the typical workflow for running autonomous missions using the web dashboard.
+
+### Modular Mode Workflow (OKO + SPUTNIK + BURAN)
+
+The modular architecture uses three separate nodes for perception, planning, and control. This is the **recommended** mode for production use.
+
+#### Step 1: Launch the System (4 Terminals)
+
+```bash
+# Terminal 1: Gazebo simulation
+ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+
+# Terminal 2: Rosbridge WebSocket server
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
+
+# Terminal 3: Modular navigation stack
+ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml
+
+# Terminal 4: Web dashboard server
+cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1 && python3 -m http.server 8000
+```
+
+#### Step 2: Open Dashboard & Wait for GPS
+
+1. Open **<http://localhost:8000>** in your browser
+2. Verify connection status shows **Connected** (green)
+3. Wait for GPS coordinates to appear (may take 5-10 seconds after simulation starts)
+4. The Mission Control panel will show state: **INIT**
+
+#### Step 3: Configure Mission Parameters (Optional)
+
+In the **Configuration** panel, you can adjust:
+
+- **Scan Length/Width**: Coverage area dimensions in meters
+- **Lanes**: Number of lawnmower lanes
+- **PID Gains (Kp, Ki, Kd)**: Heading control tuning
+- **Base/Max Speed**: Thruster power limits
+- **Safe Distance**: Obstacle detection threshold
+
+Click **Send Config** to apply changes.
+
+#### Step 4: Generate Waypoints
+
+1. Click **📍 Generate Waypoints** button
+2. Waypoints will appear on the map as blue dots
+3. The planned path is shown as a blue line
+4. State changes to: **WAITING_CONFIRM**
+5. Review the waypoints on the map
+
+#### Step 5: Confirm & Start Mission
+
+1. Click **✓ Confirm** to lock in the waypoints
+2. State changes to: **READY**
+3. Click **▶ Start** to begin the mission
+4. State changes to: **DRIVING**
+5. The boat will begin navigating to waypoints
+
+#### Step 6: Monitor Progress
+
+- **Current waypoint** indicator shows progress (e.g., "3/15")
+- **Distance to target** shows meters to current waypoint
+- **Obstacle status** shows clearance in each direction
+- **Trajectory** is drawn on the map as the boat moves
+- Watch the terminal for log messages
+
+#### Step 7: Mission Control During Operation
+
+| Button | Action |
+|--------|--------|
+| **⏸ Stop** | Pause mission, stop motors immediately |
+| **▶ Resume** | Continue mission from current waypoint |
+| **🏠 Go Home** | Cancel mission, navigate to spawn point |
+| **🔄 Reset** | Clear all waypoints, return to INIT |
+
+#### Step 8: Handle Blocked/Stuck Situations
+
+If the boat gets stuck:
+
+1. BURAN automatically enters **escape mode** (SASS v2.0)
+2. The anti-stuck panel shows escalation level
+3. After 4 failed attempts, waypoint is automatically skipped
+4. You can manually click **⏸ Stop** then **🏠 Go Home** to return
+
+#### Step 9: Mission Complete
+
+- When all waypoints are reached, state changes to: **FINISHED**
+- Click **🏠 Go Home** to return to spawn
+- Or click **▶ Start** to run the mission again
+
+---
+
+### Integrated Mode Workflow (Vostok1 Single Node)
+
+The integrated Vostok1 node combines all functionality in one process. Useful for simpler deployments.
+
+#### Step 1: Launch the System (4 Terminals)
+
+```bash
+# Terminal 1: Gazebo simulation
+ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+
+# Terminal 2: Rosbridge WebSocket server
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
+
+# Terminal 3: Integrated Vostok1 navigation
+ros2 run plan vostok1
+
+# Terminal 4: Web dashboard server
+cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1 && python3 -m http.server 8000
+```
+
+#### Step 2-9: Same as Modular Mode
+
+The workflow is identical - the dashboard automatically detects which mode is running and subscribes to the appropriate topics.
+
+---
+
+### CLI Alternative (No Web Dashboard)
+
+You can also control missions via the command-line interface:
+
+```bash
+# Modular mode (default)
+ros2 run plan vostok1_cli generate --lanes 8 --length 50 --width 20
+ros2 run plan vostok1_cli confirm
+ros2 run plan vostok1_cli start
+ros2 run plan vostok1_cli status
+ros2 run plan vostok1_cli stop
+ros2 run plan vostok1_cli resume
+ros2 run plan vostok1_cli home
+ros2 run plan vostok1_cli reset
+
+# Integrated mode
+ros2 run plan vostok1_cli --mode vostok1 generate
+ros2 run plan vostok1_cli --mode vostok1 start
+
+# Interactive mode (menu-driven)
+ros2 run plan vostok1_cli interactive
+```
+
+---
+
+### Troubleshooting Common Issues
+
+| Problem | Solution |
+|---------|----------|
+| Stop button doesn't work | Ensure latest code is built (`colcon build --packages-select plan control`) |
+| Boat stuck in escape mode after stop | Fixed in latest version - escape state resets on stop/resume |
+| Go Home doesn't respond | Check GPS is available, ensure state is not INIT |
+| Waypoints don't appear on map | Wait for GPS fix, check browser console for errors |
+| Mission state stuck | Try Reset button, then Generate new waypoints |
+
+---
+
 ## Files
 
 - `index.html` - Main dashboard structure

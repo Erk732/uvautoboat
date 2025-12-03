@@ -112,7 +112,7 @@ This starts a WebSocket server on `ws://localhost:9090`.
 
 ### 2. Start Atlantis Nodes
 
-**Option A: YAML Launch File (Recommended)**
+#### Option A: YAML Launch File (Recommended)
 
 ```bash
 # From the workspace
@@ -124,13 +124,13 @@ ros2 launch launch/atlantis.launch.yaml
 
 > **Note:** To change parameters, edit the `atlantis.launch.yaml` file directly or use the web dashboard controls.
 
-**Option B: Python Launch File**
+#### Option B: Python Launch File
 
 ```bash
 ros2 launch launch/atlantis.launch.py
 ```
 
-**Option C: Separate Terminals (Manual)**
+#### Option C: Separate Terminals (Manual)
 
 ```bash
 # Terminal 1 - Planner
