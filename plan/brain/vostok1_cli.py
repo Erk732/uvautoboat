@@ -128,6 +128,22 @@ class MissionCLI(Node):
         except:
             pass
     
+    def wait_for_ready(self, timeout=5.0):
+        """Wait for navigation system to be ready"""
+        print("⏳ Waiting for navigation system...")
+        start = time.time()
+        while time.time() - start < timeout:
+            rclpy.spin_once(self, timeout_sec=0.2)
+            if self.config_status is not None:
+                print("✅ Navigation system ready!")
+                return True
+        print("⚠️ Navigation system not responding. Is it running?")
+        if self.mode == 'modular' or self.mode == 'sputnik':
+            print("   Start with: ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml")
+        else:
+            print("   Start with: ros2 run plan vostok1")
+        return False
+    
     def send_command(self, command):
         """Send mission command"""
         msg = String()
@@ -142,19 +158,58 @@ class MissionCLI(Node):
         self.config_pub.publish(msg)
         self.get_logger().info(f"Sent config: {config}")
         
-    def generate_waypoints(self, lanes=8, length=50.0, width=20.0):
-        """Generate waypoints with specified parameters"""
+    def generate_waypoints(self, lanes=8, length=50.0, width=20.0, 
+                            kp=None, ki=None, kd=None, base_speed=None, max_speed=None):
+        """Generate waypoints with specified parameters and optional PID/speed config"""
+        # Wait for navigation system to be ready
+        if not self.wait_for_ready():
+            return False
+            
+        # Waypoint config (for SPUTNIK)
         config = {
             'lanes': lanes,
             'scan_length': length,
             'scan_width': width
         }
+        
+        # Add PID/speed if specified (for BURAN - it also listens to /sputnik/set_config)
+        if kp is not None:
+            config['kp'] = kp
+        if ki is not None:
+            config['ki'] = ki
+        if kd is not None:
+            config['kd'] = kd
+        if base_speed is not None:
+            config['base_speed'] = base_speed
+        if max_speed is not None:
+            config['max_speed'] = max_speed
+            
         self.send_config(config)
         time.sleep(0.2)
         self.send_command('generate_waypoints')
+        
         print(f"\n✅ Waypoints generated: {lanes} lanes × {length}m length × {width}m width")
         print(f"   Estimated waypoints: {lanes * 2 - 1}")
         print(f"   Estimated distance: {length * lanes + width * (lanes - 1):.0f}m")
+        
+        # Show PID/speed if configured
+        pid_info = []
+        if kp is not None:
+            pid_info.append(f"Kp={kp}")
+        if ki is not None:
+            pid_info.append(f"Ki={ki}")
+        if kd is not None:
+            pid_info.append(f"Kd={kd}")
+        if pid_info:
+            print(f"   PID: {', '.join(pid_info)}")
+            
+        speed_info = []
+        if base_speed is not None:
+            speed_info.append(f"base={base_speed}")
+        if max_speed is not None:
+            speed_info.append(f"max={max_speed}")
+        if speed_info:
+            print(f"   Speed: {', '.join(speed_info)}")
         
     def start_mission(self):
         """Start the mission"""
@@ -327,15 +382,25 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Generate waypoints only
   ros2 run plan vostok1_cli generate --lanes 8 --length 50 --width 20
+  
+  # Generate with PID and speed in one command
+  ros2 run plan vostok1_cli generate --lanes 10 --length 60 --width 25 --kp 400 --ki 20 --kd 100 --base 500 --max 800
+  
+  # Mission control
+  ros2 run plan vostok1_cli confirm
   ros2 run plan vostok1_cli start
+  ros2 run plan vostok1_cli status
+  ros2 run plan vostok1_cli stop
+  ros2 run plan vostok1_cli home
+  
+  # Separate PID/speed commands
   ros2 run plan vostok1_cli pid --kp 500 --ki 25 --kd 120
   ros2 run plan vostok1_cli speed --base 600 --max 900
-  ros2 run plan vostok1_cli status
-  ros2 run plan vostok1_cli interactive
   
-  # For modular mode (Sputnik planner):
-  ros2 run plan vostok1_cli --mode modular start
+  # Interactive mode
+  ros2 run plan vostok1_cli interactive
         """
     )
     
@@ -346,11 +411,16 @@ Examples:
     
     subparsers = parser.add_subparsers(dest='command', help='Command to execute')
     
-    # Generate command
-    gen_parser = subparsers.add_parser('generate', help='Generate waypoints')
+    # Generate command with optional PID/speed
+    gen_parser = subparsers.add_parser('generate', help='Generate waypoints (with optional PID/speed)')
     gen_parser.add_argument('--lanes', '-l', type=int, default=8, help='Number of lanes')
     gen_parser.add_argument('--length', '-L', type=float, default=50.0, help='Lane length in meters')
     gen_parser.add_argument('--width', '-w', type=float, default=20.0, help='Lane width in meters')
+    gen_parser.add_argument('--kp', type=float, help='PID Proportional gain (optional)')
+    gen_parser.add_argument('--ki', type=float, help='PID Integral gain (optional)')
+    gen_parser.add_argument('--kd', type=float, help='PID Derivative gain (optional)')
+    gen_parser.add_argument('--base', type=float, help='Base speed in N (optional)')
+    gen_parser.add_argument('--max', type=float, help='Max speed in N (optional)')
     
     # Simple commands
     subparsers.add_parser('start', help='Start mission')
@@ -384,7 +454,11 @@ Examples:
     
     try:
         if args.command == 'generate':
-            cli.generate_waypoints(args.lanes, args.length, args.width)
+            cli.generate_waypoints(
+                args.lanes, args.length, args.width,
+                kp=args.kp, ki=args.ki, kd=args.kd,
+                base_speed=args.base, max_speed=args.max
+            )
         elif args.command == 'start':
             cli.start_mission()
         elif args.command == 'stop':

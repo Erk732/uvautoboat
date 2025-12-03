@@ -693,18 +693,30 @@ DÉTOUR! Inserting detour waypoint LEFT at (45.2, -12.8)
 
 ## Terminal Mission Control
 
-The **vostok1_cli** provides terminal-based mission control when the web dashboard is unavailable or for scripted automation. It supports both navigation architectures.
+The **vostok1_cli** provides terminal-based mission control when the web dashboard is unavailable or for scripted automation. It supports both navigation architectures and includes automatic readiness checking.
+
+### Features
+
+| Feature | Description |
+|:--------|:------------|
+| **Auto-Ready Check** | Waits for navigation system before sending commands |
+| **All-in-One Generate** | Waypoints + PID + Speed in a single command |
+| **Dual Mode** | Works with both modular and integrated systems |
+| **Interactive Shell** | Rapid command entry without retyping prefixes |
 
 ### Modes
 
 | Mode | Flag | Description |
 |:-----|:-----|:------------|
 | **Modular** | `--mode modular` (default) | Sputnik + Buran |
+| **Sputnik** | `--mode sputnik` | Alias for modular |
 | **Vostok1** | `--mode vostok1` | Integrated navigation |
 
-> **Note:** Default mode is now `modular` since the Sputnik + Buran architecture is the primary system.
+> **Note:** Default mode is `modular` since the Sputnik + Buran architecture is the primary system.
 
 ### Waypoint Generation
+
+The `generate` command automatically waits for the navigation system to be ready before sending commands.
 
 ```bash
 # Default: 8 lanes, 50m length, 20m width
@@ -712,6 +724,21 @@ ros2 run plan vostok1_cli generate
 
 # Custom parameters
 ros2 run plan vostok1_cli generate --lanes 10 --length 50 --width 20
+
+# All-in-one: waypoints + PID + speed in one command
+ros2 run plan vostok1_cli generate --lanes 10 --length 60 --width 25 --kp 400 --ki 20 --kd 100 --base 500 --max 800
+```
+
+**Output:**
+
+```text
+⏳ Waiting for navigation system...
+✅ Navigation system ready!
+✅ Waypoints generated: 10 lanes × 60m length × 25m width
+   Estimated waypoints: 19
+   Estimated distance: 825m
+   PID: Kp=400, Ki=20, Kd=100
+   Speed: base=500, max=800
 ```
 
 | Parameter | Default | Description |
@@ -719,6 +746,11 @@ ros2 run plan vostok1_cli generate --lanes 10 --length 50 --width 20
 | `--lanes`, `-l` | 8 | Number of parallel scan lines |
 | `--length`, `-L` | 50.0 | Length of each lane (meters) |
 | `--width`, `-w` | 20.0 | Spacing between lanes (meters) |
+| `--kp` | - | PID Proportional gain (optional) |
+| `--ki` | - | PID Integral gain (optional) |
+| `--kd` | - | PID Derivative gain (optional) |
+| `--base` | - | Base speed in N (optional) |
+| `--max` | - | Max speed in N (optional) |
 
 ### Mission Control
 
@@ -782,6 +814,7 @@ ros2 run plan vostok1_cli --mode vostok1 interactive
 ### Typical Workflow
 
 > **Prerequisites:** Make sure Gazebo and the navigation system are running first!
+>
 > ```bash
 > # Terminal 1: Start Gazebo simulation
 > ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
@@ -791,8 +824,9 @@ ros2 run plan vostok1_cli --mode vostok1 interactive
 > ```
 
 ```bash
-# 1. Generate waypoints (uses modular mode by default)
-ros2 run plan vostok1_cli generate --lanes 10 --length 60 --width 25
+# 1. Generate waypoints with PID and speed (all-in-one)
+#    CLI will wait for navigation system to be ready
+ros2 run plan vostok1_cli generate --lanes 10 --length 60 --width 25 --kp 400 --ki 20 --kd 100 --base 500 --max 800
 
 # 2. Confirm waypoints
 ros2 run plan vostok1_cli confirm
@@ -812,6 +846,8 @@ ros2 run plan vostok1_cli resume
 # 7. Return home when done
 ros2 run plan vostok1_cli home
 ```
+
+> **Auto-Ready Check:** The `generate` command automatically waits up to 5 seconds for the navigation system to respond. If not ready, it will show which command to run to start the navigation system.
 
 ---
 
