@@ -38,7 +38,8 @@ class WaypointVisualizer(Node):
         self.ref_lat = None
         self.ref_lon = None
         
-        # Subscribe to Vostok1 status topics
+        # Subscribe to both Vostok1 (integrated) and Sputnik (modular) topics
+        # Vostok1 topics (integrated mode)
         self.create_subscription(
             String,
             '/vostok1/mission_status',
@@ -50,6 +51,21 @@ class WaypointVisualizer(Node):
             String,
             '/vostok1/waypoints',
             self.waypoints_callback,
+            10
+        )
+        
+        # Sputnik topics (modular mode)
+        self.create_subscription(
+            String,
+            '/planning/mission_status',
+            self.mission_status_callback_modular,
+            10
+        )
+        
+        self.create_subscription(
+            String,
+            '/planning/waypoints',
+            self.waypoints_callback_modular,
             10
         )
         
@@ -95,16 +111,47 @@ class WaypointVisualizer(Node):
             pass
             
     def waypoints_callback(self, msg):
-        """Receive waypoint list from Vostok1"""
+        """Receive waypoint list from Vostok1 (integrated mode)"""
         try:
             data = json.loads(msg.data)
             if 'waypoints' in data:
                 self.waypoints = [(wp['x'], wp['y']) for wp in data['waypoints']]
-                self.get_logger().info(f"📍 Received {len(self.waypoints)} waypoints")
+                self.get_logger().info(f"📍 Received {len(self.waypoints)} waypoints (Vostok1)")
             if 'no_go_zones' in data:
                 self.no_go_zones = data['no_go_zones']
         except json.JSONDecodeError:
             pass
+
+    def mission_status_callback_modular(self, msg):
+        """Parse mission status from Sputnik (modular mode)"""
+        try:
+            data = json.loads(msg.data)
+            if 'current_waypoint' in data:
+                self.current_wp_index = data['current_waypoint'] - 1  # Convert 1-indexed to 0-indexed
+            if 'total_waypoints' in data:
+                self.total_waypoints = data['total_waypoints']
+        except json.JSONDecodeError:
+            pass
+
+    def waypoints_callback_modular(self, msg):
+        """Receive waypoint list from Sputnik (modular mode) - handles both formats"""
+        try:
+            data = json.loads(msg.data)
+            if 'waypoints' in data:
+                # Handle both formats: [(x, y), ...] or [{'x': x, 'y': y}, ...]
+                raw_waypoints = data['waypoints']
+                if raw_waypoints and len(raw_waypoints) > 0:
+                    if isinstance(raw_waypoints[0], (list, tuple)):
+                        # Tuple/list format from Sputnik
+                        self.waypoints = [(wp[0], wp[1]) for wp in raw_waypoints]
+                    elif isinstance(raw_waypoints[0], dict):
+                        # Dict format from Vostok1
+                        self.waypoints = [(wp['x'], wp['y']) for wp in raw_waypoints]
+                    self.get_logger().info(f"📍 Received {len(self.waypoints)} waypoints (Sputnik)")
+            if 'no_go_zones' in data:
+                self.no_go_zones = data['no_go_zones']
+        except (json.JSONDecodeError, KeyError, IndexError) as e:
+            self.get_logger().warn(f"Waypoint parse error: {e}")
                 
     def gps_to_local(self, lat, lon):
         """Convert GPS to local ENU coordinates"""
