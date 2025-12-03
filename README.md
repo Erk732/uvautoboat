@@ -303,15 +303,15 @@ Understanding the coordinate system is essential for working with VRX simulation
 
 AutoBoat provides multiple navigation systems:
 
-| Aspect | Vostok1 (Integrated) | Modular (TNO) | Apollo11 (Legacy) |
-|:-------|:---------------------|:--------------|:------------------|
-| **Approach** | Self-contained node | Distributed nodes | Modular subsystems |
+| Aspect | Vostok1 (Integrated) | Modular (TNO) | Atlantis (Control Group) |
+|:-------|:---------------------|:--------------|:-------------------------|
+| **Approach** | Self-contained node | Distributed nodes | Integrated controller |
 | **LIDAR** | 3D PointCloud2 | 3D PointCloud2 | 2D LaserScan |
 | **Detection** | Full 3D volume | Full 3D volume | Horizontal plane |
-| **Control** | PID heading | PID (configurable) | Direct thrust |
-| **Monitoring** | Terminal + Web | Terminal (bilingual) | Terminal only |
+| **Control** | PID heading | PID (configurable) | PID heading |
+| **Monitoring** | Terminal + Web | Terminal (bilingual) | Web Dashboard |
 | **Anti-Stuck** | SASS v2.0 | SASS v2.0 | Basic reverse |
-| **Best For** | Production use | Custom tuning | Simple testing |
+| **Best For** | Production use | Custom tuning | Control group testing |
 
 ### Modular Architecture (TNO Style)
 
@@ -322,6 +322,55 @@ The modular system uses Soviet/Russian space program naming:
 | **ОКО** (Oko) | `oko_perception` | 3D LIDAR obstacle detection |
 | **СПУТНИК** (Sputnik) | `sputnik_planner` | GPS waypoint planning |
 | **БУРАН** (Buran) | `buran_controller` | PID heading control + SASS |
+
+### Modular Topic Flow Diagram
+
+Detailed ROS 2 topic connections between the modular nodes:
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          VOSTOK1 MODULAR SYSTEM                                 │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌──────────┐                                                                   │
+│  │   OKO    │ /perception/obstacle_info ────────────► BURAN (obstacle_callback) │
+│  │ (LiDAR)  │                           ────────────► SPUTNIK (obstacle_callback)│
+│  └──────────┘                                                                   │
+│       ▲                                                                         │
+│       │ /wamv/sensors/lidars/lidar_wamv/points                                  │
+│                                                                                 │
+│  ┌──────────┐  /planning/current_target ────────────► BURAN (target_callback)   │
+│  │ SPUTNIK  │  /planning/mission_status ────────────► BURAN (mission_status_cb) │
+│  │(Planner) │  /sputnik/config          ────────────► BURAN (sputnik_config_cb) │
+│  └──────────┘                                                                   │
+│       ▲  ▲                                                                      │
+│       │  │ /planning/detour_request ◄────────────────── BURAN (pub_detour)      │
+│       │  │                                                                      │
+│       │  └─ /wamv/sensors/gps/gps/fix                                           │
+│       └──── /sputnik/mission_command ◄───────────────── CLI / Dashboard         │
+│                                                                                 │
+│  ┌──────────┐  /wamv/thrusters/left/thrust  ────────► Gazebo Simulator          │
+│  │  BURAN   │  /wamv/thrusters/right/thrust ────────► Gazebo Simulator          │
+│  │(Control) │  /buran/status                ────────► Web Dashboard             │
+│  └──────────┘                                                                   │
+│       ▲  ▲                                                                      │
+│       │  └─ /wamv/sensors/imu/imu/data                                          │
+│       └──── /vostok1/set_config ◄────────────────────── Dashboard (runtime PID) │
+│                                                                                 │
+│  External Control:                                                              │
+│  ├─ /sputnik/set_config         ◄─────────── Dashboard (waypoint radius, etc.) │
+│  └─ /sputnik/mission_command    ◄─────────── CLI: start, pause, stop, go_home  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**JSON Message Formats:**
+
+| Topic | Format |
+|:------|:-------|
+| `/perception/obstacle_info` | `{obstacle_detected, min_distance, front_clear, left_clear, right_clear, is_critical}` |
+| `/planning/current_target` | `{current_position, target_waypoint, distance_to_target, waypoint_index, target_heading}` |
+| `/planning/mission_status` | `{state, current_waypoint, total_waypoints, progress_percent, elapsed_time}` |
+| `/planning/detour_request` | `{type, x, y}` |
 
 ### Data Flow Diagram
 
