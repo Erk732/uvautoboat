@@ -781,6 +781,15 @@ ros2 run plan vostok1_cli --mode vostok1 interactive
 
 ### Typical Workflow
 
+> **Prerequisites:** Make sure Gazebo and the navigation system are running first!
+> ```bash
+> # Terminal 1: Start Gazebo simulation
+> ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+> 
+> # Terminal 2: Start modular navigation system
+> ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml
+> ```
+
 ```bash
 # 1. Generate waypoints (uses modular mode by default)
 ros2 run plan vostok1_cli generate --lanes 10 --length 60 --width 25

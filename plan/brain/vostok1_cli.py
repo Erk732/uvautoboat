@@ -212,20 +212,38 @@ class MissionCLI(Node):
             
     def show_status(self):
         """Show current status"""
-        # Spin briefly to get updates
-        for _ in range(10):
+        # Spin longer to ensure we receive status messages
+        print("\n⏳ Waiting for status...")
+        for _ in range(30):
             rclpy.spin_once(self, timeout_sec=0.1)
+            if self.mission_status:
+                break
             
         print("\n" + "=" * 50)
         print("VOSTOK1 STATUS | STATUT VOSTOK1")
         print("=" * 50)
         
         if self.mission_status:
-            print(f"State: {self.mission_status.get('state', 'Unknown')}")
-            print(f"Waypoint: {self.mission_status.get('waypoint', '?')}/{self.mission_status.get('total_waypoints', '?')}")
-            print(f"Distance to WP: {self.mission_status.get('distance_to_waypoint', '?')}m")
+            state = self.mission_status.get('state', 'Unknown')
+            # Support both key names (modular uses 'current_waypoint', integrated uses 'waypoint')
+            waypoint = self.mission_status.get('current_waypoint', self.mission_status.get('waypoint', '?'))
+            total = self.mission_status.get('total_waypoints', '?')
+            progress = self.mission_status.get('progress_percent', '?')
+            elapsed = self.mission_status.get('elapsed_time', '?')
+            position = self.mission_status.get('position', ['?', '?'])
+            
+            print(f"State: {state}")
+            print(f"Waypoint: {waypoint}/{total}")
+            print(f"Progress: {progress}%")
+            print(f"Elapsed Time: {elapsed}s")
+            print(f"Position: ({position[0]}, {position[1]})")
         else:
-            print("⚠️ No mission status received - is Vostok1 running?")
+            print("⚠️ No mission status received")
+            print("   Check if the navigation system is running:")
+            if self.mode == 'modular' or self.mode == 'sputnik':
+                print("   ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml")
+            else:
+                print("   ros2 run plan vostok1")
             
         if self.config_status:
             print(f"\nConfig:")
