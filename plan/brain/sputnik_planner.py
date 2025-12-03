@@ -122,6 +122,9 @@ class SputnikPlanner(Node):
         
         # Publish config at 1Hz
         self.create_timer(1.0, self.publish_config)
+        
+        # Publish mission status at 5Hz (always, not just during DRIVING)
+        self.create_timer(0.2, self.publish_mission_status_timer)
 
         self.get_logger().info("=" * 50)
         self.get_logger().info("SPUTNIK - Systeme de Planification de Trajectoire")
@@ -539,9 +542,19 @@ class SputnikPlanner(Node):
             'total_waypoints': len(self.waypoints),
             'progress_percent': round(100 * self.current_wp_index / max(1, len(self.waypoints)), 1),
             'elapsed_time': round(elapsed, 1),
-            'position': [round(curr_x, 2), round(curr_y, 2)]
+            'position': [round(curr_x, 2), round(curr_y, 2)],
+            'mission_armed': self.mission_armed,
+            'gps_ready': self.current_gps is not None
         })
         self.pub_mission_status.publish(msg)
+
+    def publish_mission_status_timer(self):
+        """Timer callback to publish mission status continuously (even when not DRIVING)"""
+        if self.current_gps is not None:
+            curr_x, curr_y = self.latlon_to_meters(self.current_gps[0], self.current_gps[1])
+        else:
+            curr_x, curr_y = 0.0, 0.0
+        self.publish_mission_status(curr_x, curr_y)
 
 
 def main(args=None):
