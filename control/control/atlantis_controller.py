@@ -22,9 +22,9 @@ class AtlantisController(Node):
         self.declare_parameter('ki', 20.0)
         self.declare_parameter('kd', 100.0)
         
-        # Obstacle parameters
-        self.declare_parameter('min_safe_distance', 12.0) 
-        self.declare_parameter('critical_distance', 2.5)   
+        # --- OBSTACLE PARAMETERS (UPDATED FOR SAFETY) ---
+        self.declare_parameter('min_safe_distance', 15.0)  # INCREASED: Was 12.0
+        self.declare_parameter('critical_distance', 5.0)   # INCREASED: Was 2.5 (Panic earlier!)
         self.declare_parameter('obstacle_slow_factor', 0.08)  
         self.declare_parameter('hysteresis_distance', 2.5)   
         self.declare_parameter('reverse_timeout', 10.0)    
@@ -110,7 +110,7 @@ class AtlantisController(Node):
         self.create_subscription(Path, '/atlantis/path', self.path_callback, 10)
         self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, 10)
         self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_callback, 10)
-        self.create_subscription(PointCloud2, '/wamv/sensors/lidars/lidar_wamv_sensor/points', self.lidar_callback, rclpy.qos.qos_profile_sensor_data)
+        self.create_subscription(PointCloud2, '/wamv/sensors/lidars/lidar_wamv_sensor/points', self.lidar_callback, 10)
         self.create_subscription(Empty, '/atlantis/start', self.start_callback, 10)
         self.create_subscription(Empty, '/atlantis/stop', self.stop_callback, 10)
 
@@ -121,8 +121,8 @@ class AtlantisController(Node):
         self.pub_obstacle_status = self.create_publisher(String, '/atlantis/obstacle_status', 10)
         self.pub_anti_stuck = self.create_publisher(String, '/atlantis/anti_stuck_status', 10)
 
-        # --- NEW: HELPER INIT ---
-        self.lidar_detector = LidarObstacleDetector(min_distance=0.3, max_distance=100.0)
+        # --- HELPER INIT (Z-Filter OFF) ---
+        self.lidar_detector = LidarObstacleDetector(min_distance=0.3, max_distance=100.0, z_filter_enabled=False)
 
         # --- TIMER ---
         self.dt = 0.05
@@ -132,7 +132,6 @@ class AtlantisController(Node):
         self.get_logger().info("Atlantis Controller Ready - Waiting for GPS and Path...")
 
     def path_callback(self, msg):
-        # NEW: Safety check to stop path updates during rescue
         if self.escape_mode or self.is_stuck:
             return
 
@@ -192,47 +191,60 @@ class AtlantisController(Node):
         cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
         self.current_yaw = math.atan2(siny_cosp, cosy_cosp)
 
-    # --- NEW: FAST LIDAR CALLBACK ---
+    # --- UPDATED: LIDAR CALLBACK WITH DIAGNOSTICS ---
     def lidar_callback(self, msg):
-        # 1. Use the helper to process the data (Fast!)
+        # 1. Use the helper to process the data
         point_step = msg.point_step
+        
+        # Ensure filter is off for raw access
+        self.lidar_detector.z_filter_enabled = False 
+        
         detected_obstacles = self.lidar_detector.process_pointcloud(msg.data, point_step, sampling_factor=10)
 
-        # 2. Convert to Controller format
         points = []
+        
         for obs in detected_obstacles:
             # Re-filter for specific boat constraints
-            is_forward = obs.x > -2.0
-            is_not_too_far_left = obs.y > -25.0
-            is_not_too_far_right = obs.y < 25.0
+            # Look 20m ahead, 10m wide
+            is_forward = obs.x > -2.0 and obs.x < 20.0 
+            is_width = abs(obs.y) < 10.0 
             
-            if is_forward and is_not_too_far_left and is_not_too_far_right:
+            if is_forward and is_width:
                 points.append((obs.x, obs.y, obs.z, obs.distance))
 
-        if not points:
+        if points:
+            # Find closest obstacle
+            closest = min(points, key=lambda p: p[3])
+            
+            # DIAGNOSTIC PRINT: See exactly what the lidar sees
+            self.get_logger().info(
+                f"DETECTED: Dist:{closest[3]:.2f}m | X:{closest[0]:.1f} | Y:{closest[1]:.1f} | Z(Height):{closest[2]:.2f}",
+                throttle_duration_sec=1.0
+            )
+
+            distances = [p[3] for p in points]
+            self.min_obstacle_distance = min(distances)
+            
+            front_obstacles = [p for p in points if p[0] > -1.0 and abs(p[1]) < 12.0]
+            if front_obstacles:
+                front_min_distance = min([p[3] for p in front_obstacles])
+            else:
+                front_min_distance = 100.0
+            
+            if self.obstacle_detected:
+                exit_threshold = self.min_safe_distance + self.hysteresis_distance
+                self.obstacle_detected = front_min_distance < exit_threshold
+            else:
+                self.obstacle_detected = front_min_distance < self.min_safe_distance
+
+            self.analyze_scan_sectors_3d(points)
+        else:
+            # No obstacles found
             self.min_obstacle_distance = 50.0
             if not self.obstacle_detected:
                 self.front_clear = 50.0
                 self.left_clear = 50.0
                 self.right_clear = 50.0
-            return
-
-        distances = [p[3] for p in points]
-        self.min_obstacle_distance = min(distances)
-        
-        front_obstacles = [p for p in points if p[0] > -1.0 and abs(p[1]) < 12.0]
-        if front_obstacles:
-            front_min_distance = min([p[3] for p in front_obstacles])
-        else:
-            front_min_distance = 100.0
-        
-        if self.obstacle_detected:
-            exit_threshold = self.min_safe_distance + self.hysteresis_distance
-            self.obstacle_detected = front_min_distance < exit_threshold
-        else:
-            self.obstacle_detected = front_min_distance < self.min_safe_distance
-
-        self.analyze_scan_sectors_3d(points)
 
     def analyze_scan_sectors_3d(self, points):
         front_points = []
