@@ -14,6 +14,11 @@
 
 1. [Abstract](#abstract)
 2. [Project Overview](#project-overview)
+   - [Project Status](#project-status)
+   - [Project Structure](#project-structure)
+   - [Additional Documentation](#additional-documentation)
+   - [System Requirements](#system-requirements)
+   - [Key Features](#key-features)
 3. [Background Concepts](#background-concepts-for-new-users)
 4. [Installation](#installation)
 5. [Quick Start](#quick-start)
@@ -27,10 +32,11 @@
 13. [Technical Documentation](#technical-documentation)
 14. [Troubleshooting](#troubleshooting)
 15. [Command Cheatsheet](#command-cheatsheet)
-16. [Contributing](#contributing)
-17. [References](#references)
-18. [Acknowledgments](#acknowledgments)
-19. [License](#license)
+16. [Future Roadmap](#future-roadmap)
+17. [Contributing](#contributing)
+18. [References](#references)
+19. [Acknowledgments](#acknowledgments)
+20. [License](#license)
 
 ---
 
@@ -62,6 +68,48 @@ The project implements a hierarchical autonomous navigation framework combining 
 | Phase 4 | Integration & Testing | 🔄 80% |
 
 See [Board.md](Board.md) for detailed milestones and progress tracking.
+
+### Project Structure
+
+```text
+uvautoboat/
+├── control/                    # ROS 2 Control Package
+│   └── control/
+│       ├── atlantis_controller.py   # Integrated controller (Atlantis team)
+│       ├── buran_controller.py      # Modular controller (BURAN)
+│       ├── keyboard_teleop.py       # Manual control interface
+│       ├── lidar_obstacle_avoidance.py
+│       └── gps_imu_pose.py
+├── plan/                       # ROS 2 Planning Package
+│   ├── brain/
+│   │   ├── vostok1.py               # Integrated navigation system
+│   │   ├── oko_perception.py        # 3D LIDAR perception (OKO)
+│   │   ├── sputnik_planner.py       # Waypoint planner (SPUTNIK)
+│   │   ├── atlantis_planner.py      # Alternative planner (Atlantis)
+│   │   ├── vostok1_cli.py           # Terminal mission control
+│   │   └── lidar_obstacle_avoidance.py
+│   └── launch/
+│       └── vostok1_modular_navigation.launch.py
+├── launch/                     # Top-level launch files
+│   ├── vostok1.launch.yaml         # Modular system configuration
+│   └── atlantis.launch.yaml        # Atlantis system configuration
+├── web_dashboard/              # Real-time monitoring interfaces
+│   ├── vostok1/                     # Vostok1 dashboard
+│   └── atlantis/                    # Atlantis dashboard
+├── test_environment/           # Custom Gazebo worlds and models
+├── images/                     # Documentation images
+├── Board.md                    # Development progress tracking
+└── README.md                   # This file
+```
+
+### Additional Documentation
+
+| Document | Description |
+|:---------|:------------|
+| [LIDAR_OBSTACLE_AVOIDANCE_GUIDE.md](LIDAR_OBSTACLE_AVOIDANCE_GUIDE.md) | Detailed LIDAR processing and obstacle detection |
+| [MISSION_CONTROL_GUIDE.md](MISSION_CONTROL_GUIDE.md) | Mission control interface usage |
+| [LAUNCH_YAML_GUIDE.md](LAUNCH_YAML_GUIDE.md) | YAML launch file configuration |
+| [CODE_REVIEW.md](CODE_REVIEW.md) | Code review notes and standards |
 
 ### System Requirements
 
