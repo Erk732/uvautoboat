@@ -122,7 +122,7 @@ class AtlantisController(Node):
         self.pub_anti_stuck = self.create_publisher(String, '/atlantis/anti_stuck_status', 10)
 
         # --- HELPER INIT (Z-Filter OFF) ---
-        self.lidar_detector = LidarObstacleDetector(min_distance=2.0, max_distance=100.0, z_filter_enabled=False)
+        self.lidar_detector = LidarObstacleDetector(min_distance=2.0, max_distance=100.0, z_filter_enabled=False) #change it to tune 
 
         # --- TIMER ---
         self.dt = 0.05
