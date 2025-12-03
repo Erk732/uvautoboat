@@ -109,6 +109,7 @@ def generate_launch_description():
             'scan_width': LaunchConfiguration('scan_width'),
             'lanes': LaunchConfiguration('lanes'),
             'waypoint_tolerance': 2.0,
+            'waypoint_skip_timeout': 45.0,  # Skip waypoint if obstacle blocks
         }]
     )
 
@@ -124,9 +125,15 @@ def generate_launch_description():
             'kd': LaunchConfiguration('kd'),
             'base_speed': LaunchConfiguration('base_speed'),
             'max_speed': LaunchConfiguration('max_speed'),
+            # Obstacle Avoidance
             'obstacle_slow_factor': 0.3,
             'critical_distance': 5.0,
             'reverse_timeout': 5.0,
+            # Smart Anti-Stuck System (SASS)
+            'stuck_timeout': 3.0,
+            'stuck_threshold': 0.5,
+            'no_go_zone_radius': 8.0,
+            'detour_distance': 12.0,
         }]
     )
 
