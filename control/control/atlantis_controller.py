@@ -37,6 +37,11 @@ class AtlantisController(Node):
         self.declare_parameter('drift_compensation_gain', 0.3)
         self.declare_parameter('probe_angle', 45.0)
         self.declare_parameter('detour_distance', 12.0)
+        
+        # Return-to-path parameters
+        self.declare_parameter('path_return_timeout', 10.0)
+        self.declare_parameter('path_return_angle_tolerance', 30.0)  # degrees
+        self.declare_parameter('path_return_distance_tolerance', 5.0)
 
         # Get params
         self.base_speed = self.get_parameter('base_speed').value
@@ -55,6 +60,11 @@ class AtlantisController(Node):
         self.drift_compensation_gain = self.get_parameter('drift_compensation_gain').value
         self.probe_angle = self.get_parameter('probe_angle').value
         self.detour_distance = self.get_parameter('detour_distance').value
+        
+        # Return-to-path
+        self.path_return_timeout = self.get_parameter('path_return_timeout').value
+        self.path_return_angle_tolerance = self.get_parameter('path_return_angle_tolerance').value
+        self.path_return_distance_tolerance = self.get_parameter('path_return_distance_tolerance').value
 
         # --- STATE ---
         self.start_gps = None
@@ -98,6 +108,11 @@ class AtlantisController(Node):
         self.detour_waypoint_inserted = False
         self.last_escape_position = None
         self.adaptive_escape_duration = 12.0
+        
+        # Return-to-path tracking
+        self.return_to_path_start_pos = None
+        self.return_to_path_start_time = None
+        self.is_returning_to_path = False
         
         # Statistics & Time
         self.total_distance = 0.0
@@ -397,6 +412,10 @@ class AtlantisController(Node):
         left_thrust = max(-1000.0, min(1000.0, speed - turn_power))
         right_thrust = max(-1000.0, min(1000.0, speed + turn_power))
         
+        # NEW: Check if we can return to original path after avoidance
+        if self.avoidance_mode:
+            self.check_return_to_path(curr_x, curr_y, (target_x, target_y))
+        
         self.send_thrust(left_thrust, right_thrust)
         self.publish_dashboard_status(curr_x, curr_y, target_x, target_y, dist)
         
@@ -587,6 +606,88 @@ class AtlantisController(Node):
         left_score = sum(1 for r in self.escape_history if r['direction'] == 'LEFT' and r['success'])
         right_score = sum(1 for r in self.escape_history if r['direction'] == 'RIGHT' and r['success'])
         return 'LEFT' if left_score >= right_score else 'RIGHT'
+
+    def calculate_path_line_distance(self, point_x, point_y, line_start, line_end):
+        """
+        Calculate perpendicular distance from point to line between two waypoints
+        
+        Args:
+            point_x, point_y: Point to measure from
+            line_start, line_end: Waypoint tuples (x, y)
+            
+        Returns:
+            Distance to line (positive = perpendicular distance)
+        """
+        x1, y1 = line_start
+        x2, y2 = line_end
+        
+        # Line vector
+        dx = x2 - x1
+        dy = y2 - y1
+        
+        if dx == 0 and dy == 0:
+            return math.sqrt((point_x - x1)**2 + (point_y - y1)**2)
+        
+        # Perpendicular distance formula
+        numerator = abs(dy * point_x - dx * point_y + x2 * y1 - y2 * x1)
+        denominator = math.sqrt(dx**2 + dy**2)
+        
+        return numerator / denominator if denominator > 0 else float('inf')
+    
+    def is_path_clear_to_waypoint(self, curr_x, curr_y, target_wp, min_clearance=10.0):
+        """
+        Check if the direct path to a waypoint is obstacle-free
+        
+        Args:
+            curr_x, curr_y: Current position
+            target_wp: Target waypoint (x, y) tuple
+            min_clearance: Minimum distance from obstacles
+            
+        Returns:
+            True if path is clear
+        """
+        if self.min_obstacle_distance < min_clearance:
+            return False
+        
+        target_x, target_y = target_wp
+        dist_to_target = math.hypot(target_x - curr_x, target_y - curr_y)
+        
+        return dist_to_target > 2.0  # Must be moving toward target
+    
+    def check_return_to_path(self, curr_x, curr_y, target_wp):
+        """
+        Detect when avoidance maneuver is complete and boat can return to original path
+        
+        Args:
+            curr_x, curr_y: Current position
+            target_wp: Original target waypoint
+        """
+        if not self.avoidance_mode:
+            return
+        
+        if self.return_to_path_start_pos is None:
+            self.return_to_path_start_pos = (curr_x, curr_y)
+            self.return_to_path_start_time = self.get_clock().now()
+            return
+        
+        # Check if path is clear enough to return
+        if self.is_path_clear_to_waypoint(curr_x, curr_y, target_wp, 
+                                          min_clearance=self.get_parameter('min_safe_distance').value):
+            self.avoidance_mode = False
+            self.avoidance_commit_time = None
+            self.avoidance_direction = None
+            self.return_to_path_start_pos = None
+            self.is_returning_to_path = False
+            self.get_logger().info("✓ Path clear! Returning to original waypoint...")
+        
+        # Timeout: give up avoidance after too long
+        elapsed = (self.get_clock().now() - self.return_to_path_start_time).nanoseconds / 1e9
+        if elapsed > self.path_return_timeout:
+            self.get_logger().warn(f"Return-to-path timeout after {elapsed:.1f}s - Continuing to next waypoint")
+            self.avoidance_mode = False
+            self.avoidance_commit_time = None
+            self.avoidance_direction = None
+            self.return_to_path_start_pos = None
 
     def send_thrust(self, left, right):
         # Safety check: ensure rclpy is okay

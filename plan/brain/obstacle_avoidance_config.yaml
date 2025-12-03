@@ -1,0 +1,108 @@
+# Obstacle Avoidance Configuration for Atlantis USV
+# Tuning this file allows adjustment of LIDAR-based obstacle detection and avoidance behavior
+
+obstacle_avoidance:
+  # LIDAR Point Cloud Processing
+  lidar:
+    sampling_factor: 50        # Process every Nth point (higher = less CPU, less precise)
+    min_distance: 5.0          # Ignore points closer than this (meters, self-filtering)
+    max_distance: 50.0         # Ignore points farther than this (meters)
+    min_height: -0.2           # Ignore points below this height (meters, for ground filtering)
+    max_height: 3.0            # Ignore points above this height (meters, for sky filtering)
+    
+  # Clustering & Detection
+  clustering:
+    cluster_radius: 2.0        # Group obstacles within this distance as one obstacle (meters)
+    critical_threshold: 8.0    # Obstacles closer than this trigger warnings (meters)
+    
+  # Planner (Path Generation) Safety
+  planner:
+    safe_distance: 10.0        # Minimum distance to keep waypoints from obstacles (meters)
+    lookahead_distance: 15.0   # How far ahead to plan avoidance (meters)
+    waypoint_adjustment: true  # Enable smart adjustment of waypoints around obstacles
+    
+  # Controller (Real-time Driving) Safety
+  controller:
+    min_safe_distance: 15.0                    # Slow down when closer than this (meters)
+    critical_distance: 5.0                     # PANIC REVERSE threshold (meters)
+    obstacle_slow_factor: 0.3                  # Speed multiplier when obstacle detected
+    hysteresis_distance: 2.0                   # Hysteresis to prevent jitter
+    
+    # Turn Commitment (prevents oscillation)
+    turn_commitment_duration: 1.5              # Minimum time to commit to a turn (seconds)
+    best_turn_direction_logic: "left_or_right" # Choose by: left_or_right, front_only, or adaptive
+    
+    # Return-to-Path Behavior
+    path_return_timeout: 10.0                  # Max time to try returning to original path (seconds)
+    path_return_angle_tolerance: 30.0          # Angle tolerance when checking return-to-path (degrees)
+    path_return_distance_tolerance: 5.0        # Distance tolerance when checking return-to-path (meters)
+    
+  # Escape Maneuver Settings (when stuck against obstacle)
+  escape:
+    stuck_timeout: 5.0                         # Time before considering boat stuck (seconds)
+    stuck_threshold: 1.0                       # Movement threshold for stuck detection (meters)
+    reverse_timeout: 5.0                       # How long to reverse in panic mode (seconds)
+    consecutive_stuck_limit: 4                 # Skip waypoint after this many stuck attempts
+    
+    # Probing Strategy (test escape directions)
+    probe_left_duration: 0.6                   # Duration of left probe (seconds)
+    probe_right_duration: 0.6                  # Duration of right probe (seconds)
+    probe_settle_duration: 0.6                 # Wait after probing (seconds)
+    
+    # Escape Phase Durations (adaptive, scaled by consecutive count)
+    base_reverse_duration: 2.0                 # Base time to reverse (seconds)
+    base_turn_duration: 2.0                    # Base time to turn away (seconds)
+    base_forward_duration: 2.0                 # Base time to move forward (seconds)
+    duration_per_stuck_attempt: 2.0            # Additional duration per consecutive stuck attempt
+    max_total_escape_duration: 20.0            # Never exceed this total duration
+    
+    # Escape Power
+    reverse_power: -700.0                      # Thrust when reversing
+    turn_power_base: 600.0                     # Base turn thrust
+    turn_power_per_attempt: 100.0              # Additional turn power per attempt
+    forward_probe_power: 400.0                 # Thrust when probing forward
+    
+    # Drift Compensation (for current/wind)
+    drift_compensation_gain: 0.3               # How aggressively to compensate for drift
+    
+    # Learning
+    enable_escape_learning: true               # Learn which escape direction works best
+    
+  # Anti-Stuck Features
+  anti_stuck:
+    no_go_zone_radius: 8.0                    # Radius of zones to avoid after getting stuck (meters)
+    max_no_go_zones: 20                        # Max number of no-go zones to track
+    detour_insertion_attempt: 2                # Insert detour waypoint after Nth stuck attempt
+    detour_distance: 12.0                      # Distance of inserted detour waypoint (meters)
+
+# === TUNING RECOMMENDATIONS ===
+#
+# For Narrow/Cluttered Environments:
+#   - Decrease safe_distance to 8.0 (more aggressive)
+#   - Decrease critical_distance to 3.0
+#   - Decrease lookahead_distance to 10.0
+#   - Increase turn_commitment_duration to 2.0
+#
+# For Open Water:
+#   - Increase safe_distance to 15.0
+#   - Increase lookahead_distance to 20.0
+#   - Decrease turn_commitment_duration to 1.0
+#
+# For Windy/Drifting Conditions:
+#   - Increase drift_compensation_gain to 0.5
+#   - Decrease obstacle_slow_factor to 0.2 (tighter control)
+#
+# For Heavy Obstacle Load:
+#   - Increase cluster_radius to 3.0 (group more points)
+#   - Increase lidar_sampling_factor to 100 (skip more points)
+#   - Decrease lookahead_distance to 12.0
+#
+# For Precision Missions (survey):
+#   - Decrease safe_distance to 8.0
+#   - Decrease critical_distance to 4.0
+#   - Enable path_return_timeout = 15.0 (try harder to return)
+#
+# For Speed Priority:
+#   - Increase obstacle_slow_factor to 0.6
+#   - Decrease turn_commitment_duration to 1.0
+#   - Decrease lookahead_distance to 12.0

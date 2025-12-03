@@ -12,6 +12,14 @@ import time
 import math
 import struct
 
+# Import new obstacle avoidance module
+from .lidar_obstacle_avoidance import (
+    LidarObstacleDetector,
+    ObstacleClustering,
+    ObstacleAvoider,
+    RealtimeObstacleMonitor
+)
+
 class AtlantisPlanner(Node):
     def __init__(self):
         super().__init__('atlantis_planner')
@@ -29,12 +37,18 @@ class AtlantisPlanner(Node):
         self.declare_parameter('geo_max_y', 100.0)
         
         # --- OBSTACLE AVOIDANCE PARAMETERS ---
-        self.declare_parameter('planner_safe_dist', 10.0) # Keep waypoints 10m away from obstacles
+        self.declare_parameter('planner_safe_dist', 10.0)  # Keep waypoints 10m away from obstacles
+        self.declare_parameter('obstacle_lookahead', 15.0)  # Look-ahead distance for avoidance
+        self.declare_parameter('obstacle_cluster_radius', 2.0)  # Radius for clustering
+        self.declare_parameter('obstacle_min_distance', 5.0)  # Min LIDAR range
+        self.declare_parameter('obstacle_max_distance', 50.0)  # Max LIDAR range
+        self.declare_parameter('lidar_sampling_factor', 50)  # Process every Nth point
 
         # Publishers
         self.path_pub = self.create_publisher(Path, '/atlantis/path', 10)
         self.pub_waypoints = self.create_publisher(String, '/atlantis/waypoints', 10)
         self.pub_config = self.create_publisher(String, '/atlantis/config', 10)
+        self.pub_obstacle_map = self.create_publisher(String, '/atlantis/obstacle_map', 10)
 
         # Subscribers
         self.create_subscription(Empty, '/atlantis/replan', self.replan_callback, 10)
@@ -52,12 +66,31 @@ class AtlantisPlanner(Node):
         # Timers
         self.create_timer(1.0, self.publish_path)
         self.create_timer(1.0, self.publish_config)
+        self.create_timer(0.5, self.publish_obstacle_map)
 
         # State
         self.path_msg = Path()
         self.waypoints = []
         self.shutdown_flag = False
-        self.known_obstacles = [] # List of (x, y) tuples
+        self.known_obstacles = []  # List of (x, y) tuples
+        
+        # --- OBSTACLE AVOIDANCE MODULES ---
+        self.lidar_detector = LidarObstacleDetector(
+            min_distance=self.get_parameter('obstacle_min_distance').value,
+            max_distance=self.get_parameter('obstacle_max_distance').value
+        )
+        self.clusterer = ObstacleClustering(
+            cluster_radius=self.get_parameter('obstacle_cluster_radius').value
+        )
+        self.avoider = ObstacleAvoider(
+            safe_distance=self.get_parameter('planner_safe_dist').value,
+            look_ahead=self.get_parameter('obstacle_lookahead').value
+        )
+        self.monitor = RealtimeObstacleMonitor()
+        
+        # Current obstacles from latest LIDAR scan
+        self.current_obstacles = []
+        self.current_clusters = []
         
         # --- AUTO START ---
         # Wait a moment for LIDAR to warm up before generating first path
@@ -91,51 +124,80 @@ class AtlantisPlanner(Node):
                 pass
 
     def lidar_callback(self, msg):
-        """Builds a simple map of obstacles for the planner"""
-        # We only update this occasionally or if empty to save CPU
-        if len(self.known_obstacles) > 500: 
-            self.known_obstacles = [] # Reset occasionally to clear moving objects
+        """Enhanced: Process LIDAR point cloud with advanced obstacle detection"""
+        try:
+            # Extract obstacles using new detector
+            point_step = msg.point_step
+            sampling_factor = self.get_parameter('lidar_sampling_factor').value
             
-        point_step = msg.point_step
-        data = msg.data
-        
-        # Sample points to find big obstacles (skip every 50 points to save CPU)
-        for i in range(0, len(data) - point_step, point_step * 50):
-            try:
-                x, y, z = struct.unpack_from('fff', data, i)
-                if math.isnan(x) or math.isinf(x): continue
-                
-                # We only care about obstacles that are somewhat close (within 50m) 
-                # but not TOO close (ignore self)
-                dist = math.sqrt(x*x + y*y)
-                if dist > 5.0 and dist < 50.0:
-                    # Convert to World Coordinates (Approximate, assuming planner is at 0,0 relative)
-                    # NOTE: Ideally this needs TF2, but for now we assume Lidar Frame ~ Map Frame
-                    # relative to start position if boat hasn't moved much.
-                    self.known_obstacles.append((x, y))
-            except:
-                continue
+            self.current_obstacles = self.lidar_detector.process_pointcloud(
+                msg.data, point_step, sampling_factor
+            )
+            
+            # Cluster obstacles
+            self.current_clusters = self.clusterer.cluster_obstacles(self.current_obstacles)
+            
+            # Analyze sectors for real-time monitoring
+            self.monitor.analyze_sectors(self.current_obstacles)
+            
+            # Update known obstacles for path planning
+            self.known_obstacles = [(obs.x, obs.y) for obs in self.current_obstacles]
+            
+            # Log sector analysis occasionally
+            if len(self.current_obstacles) > 0:
+                if self.monitor.is_critical(threshold=8.0):
+                    self.get_logger().warn(
+                        f"LIDAR: Front={self.monitor.front_distance:.1f}m, "
+                        f"Left={self.monitor.left_distance:.1f}m, "
+                        f"Right={self.monitor.right_distance:.1f}m"
+                    )
+                    
+        except Exception as e:
+            self.get_logger().error(f"LIDAR callback error: {e}")
 
     def is_point_safe(self, x, y):
-        """Checks if a point is too close to a known obstacle"""
+        """Enhanced: Check if point is too close to known obstacles"""
         safe_dist = self.get_parameter('planner_safe_dist').value
         
         for obs_x, obs_y in self.known_obstacles:
-            # Simple distance check
+            # Distance check
             dist = math.sqrt((x - obs_x)**2 + (y - obs_y)**2)
             if dist < safe_dist:
                 return False, obs_x, obs_y
         return True, None, None
 
-    def adjust_point_for_obstacles(self, x, y):
-        """If point is unsafe, shifts it until it is safe"""
+    def adjust_point_for_obstacles(self, x, y, target_x=None, target_y=None):
+        """
+        Enhanced: If point is unsafe, shifts it away from obstacles toward target
+        
+        Args:
+            x, y: Point to check
+            target_x, target_y: Original target (for smart direction)
+            
+        Returns:
+            Adjusted (x, y) coordinates
+        """
         is_safe, obs_x, obs_y = self.is_point_safe(x, y)
         
         if not is_safe:
-            # Simple avoidance: Shift the point "Up" (positive Y) or "Down"
-            # This is a basic heuristic.
             self.get_logger().warn(f"Waypoint ({x:.1f}, {y:.1f}) is unsafe! Adjusting...")
-            return x, y + 15.0 # Shift 15m away
+            safe_dist = self.get_parameter('planner_safe_dist').value
+            
+            # If we have target, shift away from obstacle toward target
+            if target_x is not None and target_y is not None:
+                # Direction from obstacle to target
+                dx = target_x - obs_x
+                dy = target_y - obs_y
+                dist = math.sqrt(dx**2 + dy**2)
+                
+                if dist > 0.1:
+                    # Shift in direction away from obstacle
+                    shift_x = (dx / dist) * (safe_dist + 2.0)
+                    shift_y = (dy / dist) * (safe_dist + 2.0)
+                    return obs_x + shift_x, obs_y + shift_y
+            
+            # Fallback: Simple perpendicular shift
+            return x, y + safe_dist + 2.0
             
         return x, y
 
@@ -201,9 +263,13 @@ class AtlantisPlanner(Node):
             safe_start_x, safe_start_y = self.apply_geofence(x_start, y_pos)
             safe_end_x, safe_end_y = self.apply_geofence(x_end, y_pos)
             
-            # 2. Check Obstacles (NEW)
-            safe_start_x, safe_start_y = self.adjust_point_for_obstacles(safe_start_x, safe_start_y)
-            safe_end_x, safe_end_y = self.adjust_point_for_obstacles(safe_end_x, safe_end_y)
+            # 2. Check Obstacles (ENHANCED: pass target for smart adjustment)
+            safe_start_x, safe_start_y = self.adjust_point_for_obstacles(
+                safe_start_x, safe_start_y, safe_end_x, safe_end_y
+            )
+            safe_end_x, safe_end_y = self.adjust_point_for_obstacles(
+                safe_end_x, safe_end_y, safe_start_x, safe_start_y
+            )
 
             # Start of lane
             pose_start = PoseStamped()
@@ -225,8 +291,10 @@ class AtlantisPlanner(Node):
             if i < lanes - 1:
                 next_y = (i + 1) * scan_width
                 safe_next_x, safe_next_y = self.apply_geofence(x_end, next_y)
-                # Check Obstacles for transition
-                safe_next_x, safe_next_y = self.adjust_point_for_obstacles(safe_next_x, safe_next_y)
+                # Check Obstacles for transition (ENHANCED)
+                safe_next_x, safe_next_y = self.adjust_point_for_obstacles(
+                    safe_next_x, safe_next_y, safe_start_x, safe_start_y
+                )
                 
                 pose_trans = PoseStamped()
                 pose_trans.header = self.path_msg.header
@@ -235,7 +303,7 @@ class AtlantisPlanner(Node):
                 self.path_msg.poses.append(pose_trans)
                 self.waypoints.append((safe_next_x, safe_next_y))
 
-        self.get_logger().info(f"GENERATED: Mission Path ({len(self.waypoints)} points)")
+        self.get_logger().info(f"GENERATED: Mission Path ({len(self.waypoints)} points, {len(self.current_clusters)} obstacles detected)")
         self.publish_path()
 
     def publish_path(self):
@@ -255,6 +323,21 @@ class AtlantisPlanner(Node):
         msg = String()
         msg.data = json.dumps(config)
         self.pub_config.publish(msg)
+    
+    def publish_obstacle_map(self):
+        """Publish current obstacle detections for visualization"""
+        obstacle_data = {
+            'count': len(self.current_obstacles),
+            'clusters': len(self.current_clusters),
+            'front_distance': self.monitor.front_distance if self.monitor.front_distance != float('inf') else 999.9,
+            'left_distance': self.monitor.left_distance if self.monitor.left_distance != float('inf') else 999.9,
+            'right_distance': self.monitor.right_distance if self.monitor.right_distance != float('inf') else 999.9,
+            'best_direction': self.monitor.get_best_direction(),
+            'is_critical': self.monitor.is_critical(threshold=8.0)
+        }
+        msg = String()
+        msg.data = json.dumps(obstacle_data)
+        self.pub_obstacle_map.publish(msg)
         
     def stop_all(self):
         self.shutdown_flag = True
