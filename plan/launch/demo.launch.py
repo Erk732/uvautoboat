@@ -19,16 +19,23 @@ def generate_launch_description():
             output='screen'
         ),
 
-        # 2. Planner Node (Brain)
-        # NOTE: astar_planner was removed - use sputnik_planner or apollo11/vostok1 instead
-        # Node(
-        #     package=pkg_name,
-        #     executable='astar_planner',
-        #     name='planner_node',
-        #     output='screen'
-        # ),
+        # 2. Planner Node (Brain with LIDAR Obstacle Avoidance)
+        Node(
+            package=pkg_name,
+            executable='atlantis_planner',
+            name='atlantis_planner',
+            output='screen'
+        ),
 
-        # 3. Mission Trigger (The Auto-Start) <--- THIS IS NEW
+        # 3. Controller Node (Real-time obstacle avoidance & path following)
+        Node(
+            package='control',
+            executable='atlantis_controller',
+            name='atlantis_controller',
+            output='screen'
+        ),
+
+        # 4. Mission Trigger (The Auto-Start)
         Node(
             package=pkg_name,
             executable='mission_trigger',
@@ -36,7 +43,7 @@ def generate_launch_description():
             output='screen'
         ),
 
-        # 4. Rviz2 (Visualization)
+        # 5. Rviz2 (Visualization)
         Node(
             package='rviz2',
             executable='rviz2',
@@ -45,7 +52,7 @@ def generate_launch_description():
             output='screen'
         ),
 
-        # 5. TF Broadcaster
+        # 6. TF Broadcaster
         Node(
             package='plan',
             executable='tf_broadcaster',
