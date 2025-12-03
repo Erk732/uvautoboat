@@ -379,20 +379,32 @@ class BuranController(Node):
             if was_active and not self.mission_active:
                 self.target_x = None
                 self.target_y = None
-                # IMPORTANT: Reset all escape/stuck/avoidance state when mission stops
-                self.escape_mode = False
-                self.is_stuck = False
-                self.avoidance_mode = False
-                self.reverse_start_time = None
-                self.integral_error = 0.0
-                self.escape_phase = 0
-                self.best_escape_direction = None
-                self.probe_results = {'left': 0.0, 'right': 0.0, 'back': 0.0}
-                self.consecutive_stuck_count = 0
+                self._reset_all_escape_state()
                 self.stop()
                 self.get_logger().info(f"🛑 Mission inactive (state={state}) - stopping & resetting all states")
+            
+            # If mission just became active (e.g., go_home, resume), reset escape state for fresh start
+            elif not was_active and self.mission_active:
+                self._reset_all_escape_state()
+                self.get_logger().info(f"✅ Mission active (state={state}) - escape state reset for fresh start")
+                
         except (json.JSONDecodeError, KeyError) as e:
             self.get_logger().warn(f"Invalid mission status: {e}")
+    
+    def _reset_all_escape_state(self):
+        """Reset all escape/stuck/avoidance state variables"""
+        self.escape_mode = False
+        self.is_stuck = False
+        self.avoidance_mode = False
+        self.reverse_start_time = None
+        self.integral_error = 0.0
+        self.escape_phase = 0
+        self.best_escape_direction = None
+        self.probe_results = {'left': 0.0, 'right': 0.0, 'back': 0.0}
+        self.consecutive_stuck_count = 0
+        # Reset stuck detection timing
+        self.last_position = None
+        self.stuck_check_time = None
 
     def config_callback(self, msg):
         """Handle runtime configuration changes for PID and speed"""
@@ -692,6 +704,12 @@ class BuranController(Node):
     
     def execute_smart_escape(self):
         """Execute smart escape maneuver with probing and adaptive duration"""
+        # SAFETY: Abort escape immediately if mission is no longer active
+        if not self.mission_active:
+            self._reset_all_escape_state()
+            self.stop()
+            return
+        
         elapsed = (self.get_clock().now() - self.escape_start_time).nanoseconds / 1e9
         
         # Phase boundaries
