@@ -457,24 +457,40 @@ For configurable PID and distributed architecture:
 ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml
 ```
 
-**With Custom Parameters:**
+> **Note:** The YAML launch file contains all default parameters. Edit the file directly to customize, or use the Python launch file for command-line arguments.
+
+**Alternative with Python Launch (supports command-line args):**
 
 ```bash
 ros2 launch plan vostok1_modular_navigation.launch.py kp:=500.0 ki:=30.0 kd:=150.0
 ```
 
-**Available Launch Parameters:**
+**Available Parameters (in `vostok1.launch.yaml`):**
 
-| Parameter | Default | Description |
-|:----------|:--------|:------------|
-| `kp` | 400.0 | PID Proportional gain |
-| `ki` | 20.0 | PID Integral gain |
-| `kd` | 100.0 | PID Derivative gain |
-| `base_speed` | 500.0 | Base thrust speed |
-| `max_speed` | 800.0 | Maximum thrust limit |
-| `min_safe_distance` | 12.0 | Obstacle safe distance (m) |
-| `min_range` | 5.0 | Ignore obstacles closer than this (m) |
-| `waypoint_skip_timeout` | 45.0 | Skip blocked waypoint after (s) |
+| Node | Parameter | Default | Description |
+|:-----|:----------|:--------|:------------|
+| **OKO** | `min_safe_distance` | 12.0 | Obstacle safe distance (m) |
+| | `critical_distance` | 4.0 | Critical obstacle distance (m) |
+| | `min_height` | -15.0 | Min Z to detect (lake bank, water) |
+| | `max_height` | 10.0 | Max Z to detect |
+| | `min_range` | 5.0 | Ignore obstacles closer (boat structure) |
+| | `max_range` | 50.0 | Max detection range (m) |
+| **SPUTNIK** | `scan_length` | 15.0 | Lawnmower lane length (m) |
+| | `scan_width` | 30.0 | Lane spacing (m) |
+| | `lanes` | 10 | Number of lawnmower lanes |
+| | `waypoint_tolerance` | 2.0 | Arrival radius (m) |
+| | `waypoint_skip_timeout` | 45.0 | Skip blocked waypoint after (s) |
+| **BURAN** | `kp` | 400.0 | PID Proportional gain |
+| | `ki` | 20.0 | PID Integral gain |
+| | `kd` | 100.0 | PID Derivative gain |
+| | `base_speed` | 500.0 | Base thrust speed (N) |
+| | `max_speed` | 800.0 | Maximum thrust (N) |
+| | `obstacle_slow_factor` | 0.3 | Speed reduction near obstacles |
+| | `critical_distance` | 5.0 | Stop distance (m) |
+| | `stuck_timeout` | 3.0 | SASS: stuck detection time (s) |
+| | `stuck_threshold` | 0.5 | SASS: min movement to not be stuck (m) |
+| | `no_go_zone_radius` | 8.0 | SASS: no-go zone radius (m) |
+| | `detour_distance` | 12.0 | SASS: detour waypoint distance (m) |
 
 ### Keyboard Teleop
 
