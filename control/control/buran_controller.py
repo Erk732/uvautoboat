@@ -285,14 +285,14 @@ class BuranController(Node):
         # Subscribe to runtime config updates (PID, speed)
         self.create_subscription(
             String,
-            '/vostok1/config',
+            '/vostok1/set_config',
             self.config_callback,
             10
         )
         # Also listen to modular config topic
         self.create_subscription(
             String,
-            '/sputnik/config',
+            '/sputnik/set_config',
             self.config_callback,
             10
         )
