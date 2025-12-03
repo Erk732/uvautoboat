@@ -102,6 +102,14 @@ class SputnikPlanner(Node):
             self.obstacle_callback,
             10
         )
+        
+        # Detour request from BURAN controller
+        self.create_subscription(
+            String,
+            '/planning/detour_request',
+            self.detour_request_callback,
+            10
+        )
 
         # --- PUBLISHERS ---
         self.pub_waypoints = self.create_publisher(String, '/planning/waypoints', 10)
@@ -236,6 +244,23 @@ class SputnikPlanner(Node):
             self.obstacle_detected = data.get('obstacle_detected', False)
         except:
             pass
+    
+    def detour_request_callback(self, msg):
+        """Handle detour waypoint request from BURAN controller"""
+        import json
+        try:
+            data = json.loads(msg.data)
+            detour_x = data.get('detour_x')
+            detour_y = data.get('detour_y')
+            
+            if detour_x is not None and detour_y is not None and self.state == "DRIVING":
+                # Insert detour waypoint before current target
+                detour_wp = {'x': detour_x, 'y': detour_y, 'is_detour': True}
+                self.waypoints.insert(self.current_wp_index, detour_wp)
+                self.get_logger().info(f"📍 Detour waypoint inserted at ({detour_x:.1f}, {detour_y:.1f})")
+                self.publish_waypoints()
+        except Exception as e:
+            self.get_logger().warn(f"Detour request error: {e}")
             
     def config_callback(self, msg):
         """Handle runtime configuration changes"""

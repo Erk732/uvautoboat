@@ -44,7 +44,7 @@ def generate_launch_description():
     # === OKO Perception Arguments ===
     min_safe_distance_arg = DeclareLaunchArgument(
         'min_safe_distance',
-        default_value='15.0',
+        default_value='12.0',
         description='Minimum safe distance to obstacles (meters)'
     )
     
@@ -80,6 +80,7 @@ def generate_launch_description():
     )
 
     # ŒIL Perception Node - 3D LIDAR Processing
+    # Parameters tuned for lake bank and harbour detection
     oko_perception = Node(
         package='plan',
         executable='oko_perception',
@@ -87,13 +88,13 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'min_safe_distance': LaunchConfiguration('min_safe_distance'),
-            'critical_distance': 5.0,
-            'hysteresis_distance': 2.0,
-            'min_height': -0.2,
-            'max_height': 3.0,
-            'min_range': 1.0,
-            'max_range': 100.0,
-            'sample_rate': 10,
+            'critical_distance': 4.0,
+            'hysteresis_distance': 1.5,
+            'min_height': -15.0,     # Catch lake bank, harbour, water-level obstacles
+            'max_height': 10.0,      # Catch tall structures
+            'min_range': 5.0,        # Ignore spawn dock and boat structure
+            'max_range': 50.0,
+            'sample_rate': 1,        # Process ALL points for maximum detection
         }]
     )
 

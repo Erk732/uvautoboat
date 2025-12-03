@@ -305,11 +305,20 @@ def main():
 Examples:
   ros2 run plan vostok1_cli generate --lanes 8 --length 50 --width 20
   ros2 run plan vostok1_cli start
-  ros2 run plan vostok1_cli stop
+  ros2 run plan vostok1_cli pid --kp 500 --ki 25 --kd 120
+  ros2 run plan vostok1_cli speed --base 600 --max 900
   ros2 run plan vostok1_cli status
   ros2 run plan vostok1_cli interactive
+  
+  # For modular mode (Sputnik planner):
+  ros2 run plan vostok1_cli --mode modular start
         """
     )
+    
+    # Global mode argument
+    parser.add_argument('--mode', '-m', type=str, default='modular',
+                        choices=['vostok1', 'modular', 'sputnik'],
+                        help='Mode: vostok1 (integrated) or modular/sputnik (default: modular)')
     
     subparsers = parser.add_subparsers(dest='command', help='Command to execute')
     
