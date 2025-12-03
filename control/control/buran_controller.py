@@ -375,6 +375,10 @@ class BuranController(Node):
             was_active = self.mission_active
             self.mission_active = (state == "DRIVING")
             
+            # Debug log every status change
+            if was_active != self.mission_active:
+                self.get_logger().info(f"🔄 Mission status changed: {was_active} → {self.mission_active} (state={state})")
+            
             # If mission just became inactive, clear target and stop
             if was_active and not self.mission_active:
                 self.target_x = None
@@ -605,7 +609,12 @@ class BuranController(Node):
         return angle
 
     def send_thrust(self, left, right):
-        """Publish thruster commands"""
+        """Publish thruster commands - with mission safety check"""
+        # SAFETY: If mission is not active, force zero thrust
+        if not self.mission_active:
+            left = 0.0
+            right = 0.0
+        
         left_msg = Float64()
         left_msg.data = left
         self.pub_left.publish(left_msg)

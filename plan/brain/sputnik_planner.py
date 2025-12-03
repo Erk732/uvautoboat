@@ -159,6 +159,8 @@ class SputnikPlanner(Node):
                     self.generate_lawnmower_path()
                     self.state = "WAITING_CONFIRM"
                     self.get_logger().info(f"Waypoints generated: {len(self.waypoints)} points")
+                    self.publish_waypoints()
+                    self.publish_mission_status_timer()
                 else:
                     self.get_logger().warn("GPS not available - cannot generate waypoints")
                     
@@ -166,6 +168,7 @@ class SputnikPlanner(Node):
                 if self.waypoints:
                     self.state = "READY"
                     self.get_logger().info("Waypoints confirmed - ready to start")
+                    self.publish_mission_status_timer()
                     
             elif command == 'start_mission':
                 if self.waypoints and self.state in ["READY", "WAITING_CONFIRM", "PAUSED", "FINISHED"]:
@@ -174,20 +177,37 @@ class SputnikPlanner(Node):
                     self.state = "DRIVING"
                     self.mission_armed = True
                     self.mission_start_time = self.get_clock().now()
+                    self.obstacle_blocking_time = 0.0
+                    self.detour_waypoint_inserted = False
                     self.get_logger().info("🚀 MISSION STARTED!")
+                    # Force immediate publishes so BURAN responds instantly
+                    self.publish_mission_status_timer()
+                    self._publish_current_target_immediate()
                 else:
                     self.get_logger().warn(f"Cannot start - state={self.state}, waypoints={len(self.waypoints)}")
                     
             elif command == 'stop_mission':
+                prev_state = self.state
                 self.state = "PAUSED"
                 self.mission_armed = False
-                self.get_logger().info("🛑 MISSION STOPPED")
+                self.get_logger().info(f"🛑 MISSION STOPPED (was {prev_state} → now PAUSED)")
+                # Force immediate status publish so BURAN stops quickly
+                self.publish_mission_status_timer()
                 
             elif command == 'resume_mission':
                 if self.state == "PAUSED" and self.waypoints:
                     self.state = "DRIVING"
                     self.mission_armed = True
+                    # Reset obstacle blocking time for fresh start
+                    self.obstacle_blocking_time = 0.0
+                    self.detour_waypoint_inserted = False
                     self.get_logger().info("▶️ MISSION RESUMED")
+                    # Force immediate status publish so BURAN resets and starts
+                    self.publish_mission_status_timer()
+                    # Force immediate target publish so BURAN has target right away
+                    self._publish_current_target_immediate()
+                else:
+                    self.get_logger().warn(f"Cannot resume - state={self.state}, waypoints={len(self.waypoints)}")
                     
             elif command == 'cancel_waypoints':
                 # Cancel waypoints, go back to init
@@ -195,25 +215,32 @@ class SputnikPlanner(Node):
                 self.current_wp_index = 0
                 self.state = "INIT"
                 self.mission_armed = False
+                self.go_home_mode = False
                 self.get_logger().info("Waypoints ANNULÉS | CANCELLED")
+                self.publish_mission_status_timer()
                     
             elif command == 'reset_mission':
                 self.waypoints = []
                 self.current_wp_index = 0
                 self.state = "INIT"
                 self.mission_armed = False
+                self.go_home_mode = False
+                self.obstacle_blocking_time = 0.0
                 self.get_logger().info("🔄 MISSION RESET")
+                self.publish_mission_status_timer()
                 
             elif command == 'joystick_enable':
                 # Enable joystick override mode
                 self.state = "JOYSTICK"
                 self.mission_armed = False
                 self.get_logger().info("🎮 JOYSTICK ACTIVÉ | JOYSTICK MODE ENABLED")
+                self.publish_mission_status_timer()
                 
             elif command == 'joystick_disable':
                 # Disable joystick mode
                 self.state = "INIT" if not self.waypoints else "WAITING_CONFIRM"
                 self.get_logger().info("🎮 JOYSTICK DÉSACTIVÉ | JOYSTICK MODE DISABLED")
+                self.publish_mission_status_timer()
             
             elif command == 'go_home':
                 # Navigate back to spawn point (one-click return home)
@@ -233,6 +260,10 @@ class SputnikPlanner(Node):
                     self.get_logger().info(f"   Position locale: ({home_x:.1f}m, {home_y:.1f}m)")
                     # Publish updated waypoints
                     self.publish_waypoints()
+                    # Force immediate status publish so BURAN resets escape state
+                    self.publish_mission_status_timer()
+                    # Force immediate target publish so BURAN has target right away
+                    self._publish_current_target_immediate()
                 else:
                     self.get_logger().warn("Cannot go home - no spawn point recorded")
                 
@@ -356,6 +387,7 @@ class SputnikPlanner(Node):
         # Check if mission complete
         if self.current_wp_index >= len(self.waypoints):
             self.state = "FINISHED"
+            self.mission_armed = False  # Disarm when finished
             self.publish_mission_status(curr_x, curr_y)
             self.finish_mission(curr_x, curr_y)
             return
@@ -544,7 +576,8 @@ class SputnikPlanner(Node):
             'elapsed_time': round(elapsed, 1),
             'position': [round(curr_x, 2), round(curr_y, 2)],
             'mission_armed': self.mission_armed,
-            'gps_ready': self.current_gps is not None
+            'gps_ready': self.current_gps is not None,
+            'joystick_override': self.state == "JOYSTICK"
         })
         self.pub_mission_status.publish(msg)
 
@@ -555,6 +588,17 @@ class SputnikPlanner(Node):
         else:
             curr_x, curr_y = 0.0, 0.0
         self.publish_mission_status(curr_x, curr_y)
+
+    def _publish_current_target_immediate(self):
+        """Immediately publish current target (called on resume/go_home for instant BURAN response)"""
+        if self.current_gps is None or not self.waypoints or self.current_wp_index >= len(self.waypoints):
+            return
+        
+        curr_x, curr_y = self.latlon_to_meters(self.current_gps[0], self.current_gps[1])
+        target_x, target_y = self.waypoints[self.current_wp_index]
+        dist = math.hypot(target_x - curr_x, target_y - curr_y)
+        self.publish_current_target(curr_x, curr_y, target_x, target_y, dist)
+        self.get_logger().info(f"📍 Target published: ({target_x:.1f}, {target_y:.1f}) - {dist:.1f}m away")
 
 
 def main(args=None):
