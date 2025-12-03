@@ -415,7 +415,7 @@ function subscribeToTopics() {
             obstacle_count: data.obstacle_count || 0,
             best_gap: data.best_gap || null,
             clusters: data.clusters || [],
-            velocity_estimate: data.velocity_estimate || {vx: 0, vy: 0}
+            moving_obstacles: data.moving_obstacles || []  // OKO v2.0: array of {id, vx, vy, speed}
         });
     });
     
