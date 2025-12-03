@@ -1,36 +1,15 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                  СИСТЕМА «ОКО» / OKO PERCEPTION SYSTEM                       ║
-║             РАННЕЕ ПРЕДУПРЕЖДЕНИЕ / EARLY WARNING DETECTION                  ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  СПЕЦИФИКАЦИЯ: МИЛ-СТД-1553Б / ГОСТ Р 52070-2003                             ║
-║  КЛАССИФИКАЦИЯ: ВАРШАВСКИЙ ДОГОВОР / WARSAW PACT MIL-SPEC                    ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  СОВЕТСКАЯ СИСТЕМА ВОСПРИЯТИЯ / SOVIET PERCEPTION SYSTEM:                    ║
-║                                                                              ║
-║  ТРОЙНОЕ РЕЗЕРВИРОВАНИЕ СЕКТОРОВ / TRIPLE-SECTOR REDUNDANCY:                 ║
-║  - Front sector: -45° to +45° (forward threat detection)                     ║
-║  - Left sector: +45° to +135° (port-side awareness)                          ║
-║  - Right sector: -135° to -45° (starboard-side awareness)                    ║
-║                                                                              ║
-║  ПОМЕХОЗАЩИЩЁННОСТЬ / NOISE REJECTION:                                       ║
-║  - 10th percentile filtering (robust to outliers)                            ║
-║  - Height-based filtering (reject sky/water reflections)                     ║
-║  - Minimum range filtering (reject self-reflections)                         ║
-║                                                                              ║
-║  ГИСТЕРЕЗИС / HYSTERESIS:                                                    ║
-║  - Entry threshold: min_safe_distance                                        ║
-║  - Exit threshold: min_safe_distance + hysteresis_distance                   ║
-║  - Prevents oscillation at boundary (предотвращение колебаний)               ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-
-Perception Node - 3D LIDAR Point Cloud Processing
+OKO Perception - 3D LiDAR Point Cloud Processing
 
 Part of the modular Vostok1 architecture.
-Subscribes to 3D LIDAR data, processes point cloud, publishes obstacle information.
+Subscribes to 3D LiDAR data, processes point cloud, publishes obstacle information.
+
+Features:
+- Three-sector obstacle detection (front, left, right)
+- 10th percentile filtering for noise rejection
+- Height-based filtering to reject sky/water reflections
+- Hysteresis to prevent oscillation at detection boundary
 
 Topics:
     Subscribes:

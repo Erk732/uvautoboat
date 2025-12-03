@@ -1,43 +1,15 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                КОНТРОЛЛЕР «БУРАН» / BURAN CONTROLLER                      ║
-║              СИСТЕМА УПРАВЛЕНИЯ ДВИЖЕНИЕМ / MOTION CONTROL               ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  СПЕЦИФИКАЦИЯ: МИЛ-СТД-1553Б / ГОСТ Р 52070-2003                             ║
-║  КЛАССИФИКАЦИЯ: ВАРШАВСКИЙ ДОГОВОР / WARSAW PACT MIL-SPEC                    ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  СОВЕТСКАЯ СИСТЕМА УПРАВЛЕНИЯ / SOVIET CONTROL SYSTEM:                        ║
-║                                                                              ║
-║  ПИД-РЕГУЛЯТОР С ЖЁСТКИМИ ОГРАНИЧЕНИЯМИ / PID WITH HARD LIMITS:            ║
-║  - Anti-windup integral clamping (анти-накопление)                          ║
-║  - Rate limiting on control output (ограничение скорости)                  ║
-║  - Dead-zone filtering (зона нечувствительности)                              ║
-║  - Bumpless transfer between modes (безударный переход)                    ║
-║                                                                              ║
-║  СИСТЕМА САСС / SASS (Smart Anti-Stuck System):                             ║
-║  - Kalman-filtered drift estimation                                         ║
-║  - No-go zone memory with exponential decay                                 ║
-║  - Adaptive escape duration based on history                                ║
-║  - Multi-phase escape: PROBE → REVERSE → TURN → FORWARD                    ║
-║                                                                              ║
-║  БЕЗОПАСНЫЙ ОТКАЗ / FAIL-SAFE:                                              ║
-║  - Unknown state → FULL STOP                                                ║
-║  - Sensor timeout → conservative response                                   ║
-║  - Watchdog timer on control loop                                            ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+Buran Controller - Motion Control System
 
 Part of the modular Vostok1 architecture.
 Subscribes to planner targets and perception data, outputs thruster commands.
-Includes advanced anti-stuck system with:
-- Adaptive escape duration
-- Multi-direction probing
+
+Features:
+- PID heading control with anti-windup
+- Smart Anti-Stuck System (SASS) with Kalman-filtered drift estimation
+- Multi-phase escape maneuvers
 - No-go zone memory
-- Drift/current compensation (Kalman filtered)
-- Detour waypoint insertion
-- Simple escape learning
 
 Topics:
     Subscribes:
@@ -50,7 +22,7 @@ Topics:
         /wamv/thrusters/left/thrust (Float64) - Left thruster command
         /wamv/thrusters/right/thrust (Float64) - Right thruster command
         /control/status (String) - Controller status
-        /control/anti_stuck_status (String) - Smart anti-stuck system status
+        /control/anti_stuck_status (String) - Anti-stuck system status
 """
 
 import rclpy
@@ -64,26 +36,13 @@ from std_msgs.msg import Float64, String
 
 
 # =============================================================================
-# СОВЕТСКИЕ КОНСТАНТЫ БЕЗОПАСНОСТИ / SOVIET SAFETY CONSTANTS
+# CONTROL CONSTANTS
 # =============================================================================
-# МИЛ-СТД-1553Б rated limits with Warsaw Pact safety factor (К_без = 2.0)
-
-MIL_SPEC_MAX_THRUST = 1000.0        # Н / Newtons - absolute hardware limit
-MIL_SPEC_SAFE_THRUST = 800.0        # Н - operational limit (80% of max)
-MIL_SPEC_EMERGENCY_THRUST = 1000.0  # Н - emergency override only
-
-# PID Anti-windup limits (анти-накопление)
-MIL_SPEC_INTEGRAL_LIMIT = 0.5       # radians - prevent integral windup
-MIL_SPEC_TURN_POWER_LIMIT = 800.0   # Н - maximum differential thrust
-
-# Rate limiting (ограничение скорости изменения)
-MIL_SPEC_MAX_THRUST_RATE = 500.0    # Н/s - maximum thrust change rate
-MIL_SPEC_DEAD_ZONE = 0.02           # radians - heading dead-zone (~ 1°)
-
-# Fail-safe timeouts (временные ограничения безопасности)
-MIL_SPEC_WATCHDOG_TIMEOUT = 1.0     # seconds - control loop watchdog
-MIL_SPEC_SENSOR_TIMEOUT = 2.0       # seconds - sensor validity timeout
-MIL_SPEC_COMMAND_TIMEOUT = 5.0      # seconds - command freshness timeout
+MAX_THRUST = 1000.0          # Newtons - hardware limit
+SAFE_THRUST = 800.0          # Newtons - operational limit
+INTEGRAL_LIMIT = 0.5         # radians - prevent integral windup
+TURN_POWER_LIMIT = 800.0     # Newtons - max differential thrust
+SENSOR_TIMEOUT = 2.0         # seconds
 
 
 # =============================================================================
@@ -542,20 +501,9 @@ class BuranController(Node):
             target_angle = math.atan2(dy, dx)
             angle_error = self.normalize_angle(target_angle - self.current_yaw)
 
-        # =====================================================================
-        # MIL-SPEC PID CONTROLLER
-        # =====================================================================
-        # Implements: anti-windup, dead-zone, rate limiting
-        
-        # --- DEAD-ZONE FILTERING ---
-        # Prevent micro-corrections that waste energy and cause wear
-        if abs(angle_error) < MIL_SPEC_DEAD_ZONE:
-            angle_error = 0.0
-        
-        # --- ANTI-WINDUP INTEGRAL ---
+        # PID Controller with anti-windup
         self.integral_error += angle_error * self.dt
-        self.integral_error = max(-MIL_SPEC_INTEGRAL_LIMIT, 
-                                   min(MIL_SPEC_INTEGRAL_LIMIT, self.integral_error))
+        self.integral_error = max(-INTEGRAL_LIMIT, min(INTEGRAL_LIMIT, self.integral_error))
 
         derivative_error = (angle_error - self.previous_error) / self.dt
 
@@ -567,17 +515,8 @@ class BuranController(Node):
 
         self.previous_error = angle_error
         
-        # --- HARD LIMITS ---
-        turn_power = max(-MIL_SPEC_TURN_POWER_LIMIT, 
-                         min(MIL_SPEC_TURN_POWER_LIMIT, turn_power))
-        
-        # --- RATE LIMITING ---
-        # Prevents sudden thrust changes that could damage actuators
-        if hasattr(self, 'last_turn_power'):
-            max_change = MIL_SPEC_MAX_THRUST_RATE * self.dt
-            turn_power = max(self.last_turn_power - max_change,
-                            min(self.last_turn_power + max_change, turn_power))
-        self.last_turn_power = turn_power
+        # Limit turn power
+        turn_power = max(-TURN_POWER_LIMIT, min(TURN_POWER_LIMIT, turn_power))
 
         # --- SPEED CALCULATION ---
         angle_error_deg = abs(math.degrees(angle_error))
@@ -596,13 +535,13 @@ class BuranController(Node):
         if self.obstacle_detected:
             speed *= self.obstacle_slow_factor
 
-        # --- DIFFERENTIAL THRUST WITH MIL-SPEC LIMITS ---
+        # Differential thrust
         left_thrust = speed - turn_power
         right_thrust = speed + turn_power
 
-        # Apply Soviet safety limits (К_без = 2.0 safety factor)
-        left_thrust = max(-MIL_SPEC_SAFE_THRUST, min(MIL_SPEC_SAFE_THRUST, left_thrust))
-        right_thrust = max(-MIL_SPEC_SAFE_THRUST, min(MIL_SPEC_SAFE_THRUST, right_thrust))
+        # Clamp to safe limits
+        left_thrust = max(-SAFE_THRUST, min(SAFE_THRUST, left_thrust))
+        right_thrust = max(-SAFE_THRUST, min(SAFE_THRUST, right_thrust))
 
         self.send_thrust(left_thrust, right_thrust)
         

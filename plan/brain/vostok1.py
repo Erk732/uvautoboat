@@ -1,42 +1,15 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    ПРОЕКТ-17 «ВОСТОК-1» / PROJET-17 VOSTOK-1                 ║
-║                 СИСТЕМА АВТОНОМНОЙ НАВИГАЦИИ / AUTONOMOUS NAV                ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  СПЕЦИФИКАЦИЯ: МИЛ-СТД-1553Б / ГОСТ Р 52070-2003                             ║
-║  КЛАССИФИКАЦИЯ: ВАРШАВСКИЙ ДОГОВОР / WARSAW PACT MIL-SPEC                    ║
-║  ВЕРСИЯ: 2.0 (SASS — Smart Anti-Stuck System)                                ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  ПРИНЦИПЫ СОВЕТСКОЙ ИНЖЕНЕРИИ / SOVIET ENGINEERING PRINCIPLES:              ║
-║                                                                              ║
-║  1. ТРОЙНОЕ РЕЗЕРВИРОВАНИЕ (Triple Redundancy)                              ║
-║     - Three independent sensor channels with voting logic                   ║
-║     - 2-of-3 majority voting for critical decisions                         ║
-║     - Graceful degradation when sensors fail                                ║
-║                                                                              ║
-║  2. ЖЁСТКИЕ ОГРАНИЧЕНИЯ (Hard Limits)                                       ║
-║     - Conservative safety margins (коэффициент безопасности = 2.0)          ║
-║     - Absolute velocity/thrust limits enforced at all times                 ║
-║     - No parameter can exceed MIL-SPEC rated maximums                       ║
-║                                                                              ║
-║  3. ДЕТЕРМИНИРОВАННАЯ ЛОГИКА (Deterministic State Machine)                  ║
-║     - Explicit state transitions, no probabilistic guessing                 ║
-║     - Every state has defined entry/exit conditions                         ║
-║     - Timeout-based failsafes on all operations                             ║
-║                                                                              ║
-║  4. БЕЗОПАСНЫЙ ОТКАЗ (Fail-Safe Defaults)                                   ║
-║     - When in doubt → STOP (полный стоп)                                    ║
-║     - Unknown state → return to IDLE                                        ║
-║     - Sensor failure → conservative assumptions                              ║
-║                                                                              ║
-║  5. ПОМЕХОЗАЩИЩЁННОСТЬ (Anti-Jamming / Noise Rejection)                     ║
-║     - Kalman filtering for drift/noise rejection                            ║
-║     - Hysteresis on all threshold crossings                                 ║
-║     - Rate limiting on control outputs                                       ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+Vostok1 - Autonomous Navigation System
+Version 2.0 with Smart Anti-Stuck System (SASS)
+
+Features:
+- Lawnmower path planning for coverage missions
+- PID-based heading control
+- LiDAR obstacle detection and avoidance
+- Kalman-filtered drift estimation
+- Smart anti-stuck with escape maneuvers
+- Web dashboard integration
 """
 
 import rclpy
@@ -52,23 +25,11 @@ from std_msgs.msg import Float64, String
 
 
 # =============================================================================
-# СОВЕТСКИЕ КОНСТАНТЫ БЕЗОПАСНОСТИ / SOVIET SAFETY CONSTANTS
+# CONTROL CONSTANTS
 # =============================================================================
-# МИЛ-СТД-1553Б rated limits with Warsaw Pact safety factor (К_без = 2.0)
-
-MIL_SPEC_MAX_THRUST = 1000.0        # Н / Newtons - absolute hardware limit
-MIL_SPEC_SAFE_THRUST = 800.0        # Н - operational limit (80% of max)
-MIL_SPEC_EMERGENCY_THRUST = 1000.0  # Н - emergency override only
-
-MIL_SPEC_MAX_TURN_RATE = 45.0       # °/s - structural limit
-MIL_SPEC_SAFE_TURN_RATE = 30.0      # °/s - operational limit
-
-MIL_SPEC_MIN_DISTANCE = 3.0         # м - absolute minimum approach distance
-MIL_SPEC_SAFETY_FACTOR = 2.0        # К_без - Soviet safety coefficient
-
-# Triple-redundancy voting thresholds
-TRIPLE_REDUNDANCY_AGREEMENT = 2     # 2-of-3 sensors must agree
-SENSOR_VALIDITY_TIMEOUT = 2.0       # seconds before sensor marked invalid
+MAX_THRUST = 1000.0         # Newtons - hardware limit
+SAFE_THRUST = 800.0         # Newtons - operational limit
+SENSOR_TIMEOUT = 2.0        # seconds before sensor marked invalid
 
 
 # =============================================================================
@@ -140,23 +101,22 @@ SENSOR_VALIDITY_TIMEOUT = 2.0       # seconds before sensor marked invalid
 # =============================================================================
 
 # =============================================================================
-# ТРОЙНОЕ РЕЗЕРВИРОВАНИЕ СЕНСОРОВ / TRIPLE-REDUNDANCY SENSOR VOTING
+# TRIPLE-REDUNDANCY SENSOR VOTING
 # =============================================================================
-# Soviet MIL-SPEC requires 2-of-3 agreement for critical navigation decisions
-# This class implements Warsaw Pact standard voting logic
+# 2-of-3 voting for critical navigation decisions
 
 class TripleRedundancyVoter:
     """
-    СИСТЕМА ГОЛОСОВАНИЯ 2-ИЗ-3 / 2-OF-3 VOTING SYSTEM
+    2-of-3 Voting System
     
-    Implements Soviet triple-redundancy standard for critical measurements.
+    Implements triple-redundancy for critical measurements.
     Used for obstacle detection, position validation, and heading consensus.
     
-    Voting Logic (ГОСТ Р 52070-2003):
-    - All 3 agree → HIGH confidence, use average
-    - 2 of 3 agree → MEDIUM confidence, use agreeing pair average
-    - All 3 disagree → LOW confidence, use most conservative value
-    - Any sensor timeout → mark as DEGRADED, continue with remaining
+    Voting Logic:
+    - All 3 agree -> HIGH confidence, use average
+    - 2 of 3 agree -> MEDIUM confidence, use agreeing pair average
+    - All 3 disagree -> LOW confidence, use most conservative value
+    - Any sensor timeout -> mark as DEGRADED, continue with remaining
     """
     
     def __init__(self, agreement_threshold=0.2, timeout=2.0):
@@ -203,11 +163,11 @@ class TripleRedundancyVoter:
         n_valid = len(valid_readings)
         
         if n_valid == 0:
-            # ОТКАЗ СИСТЕМЫ / SYSTEM FAILURE - no valid sensors
+            # SYSTEM FAILURE - no valid sensors
             return (float('inf'), 'FAILED', 0)
             
         elif n_valid == 1:
-            # ДЕГРАДИРОВАННЫЙ РЕЖИМ / DEGRADED MODE - single sensor
+            # DEGRADED MODE - single sensor
             return (valid_readings[0][1], 'LOW', 1)
             
         elif n_valid == 2:
@@ -251,16 +211,15 @@ class TripleRedundancyVoter:
 
 class KalmanDriftEstimator:
     """
-    ФИЛЬТР КАЛМАНА ДЛЯ ОЦЕНКИ ДРЕЙФА / KALMAN FILTER FOR DRIFT ESTIMATION
+    Kalman Filter for Drift Estimation
     
     2D Kalman Filter for estimating water/wind drift affecting the boat.
-    Implements ПОМЕХОЗАЩИЩЁННОСТЬ (anti-jamming) per Soviet MIL-SPEC.
     
     State vector: [drift_x, drift_y]
     These represent the velocity components (m/s) of environmental forces
     pushing the boat off course.
     
-    Learning Points:
+    Tuning:
     - Process noise Q: How much we expect drift to change between updates
       (small Q = assume drift is very stable, large Q = drift can change quickly)
     - Measurement noise R: How noisy our velocity/position measurements are
@@ -1264,11 +1223,6 @@ class Vostok1(Node):
             while angle_error < -math.pi:
                 angle_error += 2.0 * math.pi
 
-        # Dead-zone filtering - ignore sensor noise below threshold
-        dead_zone_threshold = 0.02  # ~1 degree - prevents hunting oscillations
-        if abs(angle_error) < dead_zone_threshold:
-            angle_error = 0.0
-
         # PID Controller
         self.integral_error += angle_error * self.dt
         self.integral_error = max(-0.5, min(0.5, self.integral_error))
@@ -1283,16 +1237,6 @@ class Vostok1(Node):
 
         self.previous_error = angle_error
 
-        # Rate limiting - prevent abrupt control changes
-        if not hasattr(self, 'previous_turn_power'):
-            self.previous_turn_power = 0.0
-        max_rate = 2.0 * self.dt * 1000.0  # Max change per timestep
-        if turn_power - self.previous_turn_power > max_rate:
-            turn_power = self.previous_turn_power + max_rate
-        elif self.previous_turn_power - turn_power > max_rate:
-            turn_power = self.previous_turn_power - max_rate
-        self.previous_turn_power = turn_power
-
         # Limit turn power
         turn_power = max(-800.0, min(800.0, turn_power))
 
@@ -1303,7 +1247,7 @@ class Vostok1(Node):
         elif angle_error_deg > 20:
             speed = self.base_speed * 0.75
         else:
-            speed = self.base_speed * 0.95  # 5% safety margin
+            speed = self.base_speed
 
         # Distance-based speed adjustment
         if dist < 5.0:

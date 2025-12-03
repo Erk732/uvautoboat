@@ -1,36 +1,15 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║               ПЛАНИРОВЩИК «СПУТНИК» / SPUTNIK PLANNER                       ║
-║              СИСТЕМА ПЛАНИРОВАНИЯ ТРАЕКТОРИЙ / PATH PLANNING               ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  СПЕЦИФИКАЦИЯ: МИЛ-СТД-1553Б / ГОСТ Р 52070-2003                             ║
-║  КЛАССИФИКАЦИЯ: ВАРШАВСКИЙ ДОГОВОР / WARSAW PACT MIL-SPEC                    ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  СОВЕТСКАЯ СИСТЕМА ПЛАНИРОВАНИЯ / SOVIET PLANNING SYSTEM:                     ║
-║                                                                              ║
-║  ДЕТЕРМИНИРОВАННАЯ ЛОГИКА / DETERMINISTIC STATE MACHINE:                   ║
-║  - Explicit states: INIT → WAITING_CONFIRM → READY → DRIVING → FINISHED    ║
-║  - Each transition has defined entry/exit conditions                        ║
-║  - No probabilistic state changes                                           ║
-║                                                                              ║
-║  МАРШРУТНЫЙ АЛГОРИТМ / LAWNMOWER PATH ALGORITHM:                            ║
-║  - Systematic coverage pattern (систематическое покрытие)                   ║
-║  - Configurable lane width and count                                        ║
-║  - Efficient turn transitions between lanes                                 ║
-║                                                                              ║
-║  БЕЗОПАСНЫЙ ОТКАЗ / FAIL-SAFE DEFAULTS:                                     ║
-║  - GPS loss → hold current waypoint                                         ║
-║  - Waypoint timeout → skip to next (пропуск точки)                         ║
-║  - Return home mode with detour insertion                                   ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-
-Planner Node - GPS Waypoint Navigation Planning
+Sputnik Planner - GPS Waypoint Navigation Planning
 
 Part of the modular Vostok1 architecture.
 Generates lawnmower pattern waypoints, publishes navigation path.
+
+Features:
+- Lawnmower pattern generation for systematic coverage
+- State machine: INIT -> WAITING_CONFIRM -> READY -> DRIVING -> FINISHED
+- Waypoint timeout with skip-to-next fallback
+- Return home mode with detour insertion
 
 Topics:
     Subscribes:
