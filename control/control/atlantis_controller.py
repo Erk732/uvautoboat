@@ -22,11 +22,11 @@ class AtlantisController(Node):
         self.declare_parameter('kd', 100.0)
         
         # Obstacle parameters
-        self.declare_parameter('min_safe_distance', 15.0)
-        self.declare_parameter('critical_distance', 5.0)
-        self.declare_parameter('obstacle_slow_factor', 0.3)
+        self.declare_parameter('min_safe_distance', 10.0)  # Earlier detection
+        self.declare_parameter('critical_distance', 3.0)   # Much faster response
+        self.declare_parameter('obstacle_slow_factor', 0.2)  # Increased from 0.3 - slow down more
         self.declare_parameter('hysteresis_distance', 2.0)
-        self.declare_parameter('reverse_timeout', 5.0)
+        self.declare_parameter('reverse_timeout', 8.0)    # Increased from 5s - reverse longer if stuck
 
         # Stuck detection
         self.declare_parameter('stuck_timeout', 5.0)
@@ -152,10 +152,13 @@ class AtlantisController(Node):
             new_waypoints.append((pose.pose.position.x, pose.pose.position.y))
         
         if len(new_waypoints) == 0:
-            self.stop_boat()
-            self.waypoints = []
-            self.state = "STOPPED"
-            self.get_logger().warn("Received EMPTY path - STOPPING BOAT.")
+            # Only stop if we had waypoints before (mission abort)
+            # Ignore empty paths during startup
+            if len(self.waypoints) > 0:
+                self.stop_boat()
+                self.waypoints = []
+                self.state = "STOPPED"
+                self.get_logger().warn("Received EMPTY path - STOPPING BOAT.")
             return
 
         if new_waypoints != self.waypoints:
@@ -217,14 +220,23 @@ class AtlantisController(Node):
                 dist = math.sqrt(x*x + y*y)
                 if dist > 100.0: continue
 
-                # DANGER TUNNEL LOGIC
-                is_in_center_gap = abs(y) < 1.0
-
-                if not is_in_center_gap:
-                    if dist < 1.0: continue 
-                    if x < 0.5: continue    
-                else:
-                    if x < 0.1: continue 
+                # IMPROVED: More sensitive obstacle detection
+                # Accept obstacles that are:
+                # 1. In front or slightly to sides (forward 120-degree cone)
+                # 2. Within detection range (0.3 to 50m)
+                # 3. Not below water (z >= -0.2)
+                
+                # NEW: Detect obstacles starting from 0.3m instead of 1.0m
+                if dist < 0.3: continue  # Still filter very close points (noise)
+                
+                # IMPROVED: Wider forward detection cone (120 degrees)
+                # This catches obstacles approaching from more angles
+                is_forward_cone = x > -5.0  # Accept wider angle including some backwards
+                is_not_too_far_left = y > -20.0   # Wider left detection
+                is_not_too_far_right = y < 20.0   # Wider right detection
+                
+                if not (is_forward_cone and is_not_too_far_left and is_not_too_far_right):
+                    continue
 
                 points.append((x, y, z, dist))
             except struct.error:

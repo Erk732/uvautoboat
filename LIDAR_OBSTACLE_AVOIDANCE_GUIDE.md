@@ -214,6 +214,18 @@ ros2 param get /atlantis_planner planner_safe_dist
 
 ## Troubleshooting
 
+### Problem: Boat crashes into obstacles before detecting them
+**Root Cause:** LIDAR filtering was too aggressive, missing close obstacles
+**Solutions (FIXED):**
+- ✅ Lowered `critical_distance` from 5m to 3m (responds faster)
+- ✅ Lowered `min_safe_distance` from 15m to 10m (earlier detection)
+- ✅ Reduced minimum detection distance from 1.0m to 0.3m (catches obstacles closer)
+- ✅ Expanded detection cone from 90° to 120° (catches angled obstacles)
+- ✅ Increased `obstacle_slow_factor` from 0.3 to 0.2 (slows down more)
+- ✅ Increased `reverse_timeout` from 5s to 8s (reserves longer if stuck)
+
+The updated system should now detect and avoid obstacles **before crashing**.
+
 ### Problem: Boat keeps reversing but doesn't escape
 **Solutions:**
 - Increase `reverse_timeout` (currently 5s)

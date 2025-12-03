@@ -27,7 +27,7 @@ class LidarObstacleDetector:
     """Detects and tracks obstacles from LIDAR point cloud"""
     
     def __init__(self, 
-                 min_distance: float = 5.0,
+                 min_distance: float = 3.0,    # Reduced from 5.0 for earlier detection
                  max_distance: float = 50.0,
                  min_height: float = -0.2,
                  max_height: float = 3.0,
