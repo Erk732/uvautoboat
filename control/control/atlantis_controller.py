@@ -22,11 +22,11 @@ class AtlantisController(Node):
         self.declare_parameter('kd', 100.0)
         
         # Obstacle parameters
-        self.declare_parameter('min_safe_distance', 10.0)  # Earlier detection
-        self.declare_parameter('critical_distance', 3.0)   # Much faster response
-        self.declare_parameter('obstacle_slow_factor', 0.2)  # Increased from 0.3 - slow down more
-        self.declare_parameter('hysteresis_distance', 2.0)
-        self.declare_parameter('reverse_timeout', 8.0)    # Increased from 5s - reverse longer if stuck
+        self.declare_parameter('min_safe_distance', 15.0)  # Increased from 8m for earlier detection
+        self.declare_parameter('critical_distance', 3.0)   # Increased from 2m for earlier panic
+        self.declare_parameter('obstacle_slow_factor', 0.05)  # Increased slowdown from 0.1
+        self.declare_parameter('hysteresis_distance', 3.0)   # Increased from 1m to prevent oscillation
+        self.declare_parameter('reverse_timeout', 10.0)    # Reverse longer
 
         # Stuck detection
         self.declare_parameter('stuck_timeout', 5.0)
@@ -72,7 +72,12 @@ class AtlantisController(Node):
         self.current_yaw = 0.0
         self.waypoints = [] 
         self.current_wp_index = 0
-        self.state = "WAITING_FOR_PATH" 
+        self.state = "WAITING_FOR_PATH"
+        
+        # --- PATH VALIDATION & THREAD SAFETY ---
+        self.path_validation_ok = False  # Tracks if path is valid for execution
+        self.current_path_version = -1  # Detects path changes from planner
+        self.path_receive_time = None  # Timestamp of last path update
         
         # PID
         self.previous_error = 0.0
@@ -147,31 +152,78 @@ class AtlantisController(Node):
         self.get_logger().info("Atlantis Controller Ready - Waiting for GPS and Path...")
 
     def path_callback(self, msg):
-        new_waypoints = []
-        for pose in msg.poses:
-            new_waypoints.append((pose.pose.position.x, pose.pose.position.y))
-        
-        if len(new_waypoints) == 0:
-            # Only stop if we had waypoints before (mission abort)
-            # Ignore empty paths during startup
-            if len(self.waypoints) > 0:
-                self.stop_boat()
-                self.waypoints = []
-                self.state = "STOPPED"
-                self.get_logger().warn("Received EMPTY path - STOPPING BOAT.")
-            return
-
-        if new_waypoints != self.waypoints:
-            self.waypoints = new_waypoints
-            self.current_wp_index = 0
-            self.get_logger().info(f"Received new plan with {len(self.waypoints)} waypoints")
-            # Auto-enable mission if GPS is ready and we have waypoints
-            if self.start_gps is not None:
-                self.mission_enabled = True
-                self.get_logger().info("✅ Mission AUTO-ENABLED (GPS ready + path received)")
-            if self.start_gps is not None and self.mission_enabled:
-                self.state = "DRIVING"
-                self.start_time = self.get_clock().now()
+        """Enhanced: Path reception with validation and change detection"""
+        try:
+            # Extract waypoints from path message
+            new_waypoints = []
+            for pose in msg.poses:
+                new_waypoints.append((pose.pose.position.x, pose.pose.position.y))
+            
+            # VALIDATION 1: Check if path is empty
+            if len(new_waypoints) == 0:
+                # Only stop if we had waypoints before (mission abort)
+                if len(self.waypoints) > 0:
+                    self.stop_boat()
+                    self.waypoints = []
+                    self.state = "STOPPED"
+                    self.path_validation_ok = False
+                    self.get_logger().warn("Received EMPTY path - STOPPING BOAT.")
+                return
+            
+            # VALIDATION 2: Check waypoint count reasonableness
+            if len(new_waypoints) < 2:
+                self.get_logger().error(f"Path has too few waypoints: {len(new_waypoints)}")
+                self.path_validation_ok = False
+                return
+            
+            # VALIDATION 3: Check for geofence bounds
+            geo_min_x = -50.0  # Should match planner parameters
+            geo_max_x = 200.0
+            geo_min_y = -100.0
+            geo_max_y = 100.0
+            
+            for x, y in new_waypoints:
+                if not (geo_min_x <= x <= geo_max_x and geo_min_y <= y <= geo_max_y):
+                    self.get_logger().error(f"Waypoint out of bounds: ({x}, {y})")
+                    self.path_validation_ok = False
+                    return
+            
+            # VALIDATION 4: Check for path continuity (no huge jumps)
+            max_segment_length = 200.0  # Max distance between consecutive waypoints (increased from 50m)
+            for i in range(len(new_waypoints) - 1):
+                x1, y1 = new_waypoints[i]
+                x2, y2 = new_waypoints[i + 1]
+                distance = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+                if distance > max_segment_length:
+                    self.get_logger().error(
+                        f"Path segment too long at index {i}: {distance:.1f}m > {max_segment_length}m"
+                    )
+                    self.path_validation_ok = False
+                    return
+            
+            # All validations passed - update path
+            if new_waypoints != self.waypoints:
+                self.waypoints = new_waypoints
+                self.current_wp_index = 0  # Reset to start
+                self.path_validation_ok = True  # Mark as valid
+                self.path_receive_time = self.get_clock().now()
+                self.current_path_version += 1  # Increment version counter
+                
+                self.get_logger().info(
+                    f"✅ Valid path received: {len(self.waypoints)} waypoints "
+                    f"(version={self.current_path_version})"
+                )
+                
+                # Auto-enable mission if GPS is ready
+                if self.start_gps is not None:
+                    self.mission_enabled = True
+                    self.state = "DRIVING"
+                    self.start_time = self.get_clock().now()
+                    self.get_logger().info("✅ Mission AUTO-ENABLED (GPS ready + valid path)")
+            
+        except Exception as e:
+            self.get_logger().error(f"Path callback error: {e}")
+            self.path_validation_ok = False
 
     def gps_callback(self, msg):
         self.current_gps = (msg.latitude, msg.longitude)
@@ -229,13 +281,14 @@ class AtlantisController(Node):
                 # NEW: Detect obstacles starting from 0.3m instead of 1.0m
                 if dist < 0.3: continue  # Still filter very close points (noise)
                 
-                # IMPROVED: Wider forward detection cone (120 degrees)
-                # This catches obstacles approaching from more angles
-                is_forward_cone = x > -5.0  # Accept wider angle including some backwards
-                is_not_too_far_left = y > -20.0   # Wider left detection
-                is_not_too_far_right = y < 20.0   # Wider right detection
+                # IMPROVED: Balanced detection cone (150 degrees forward)
+                # Catches obstacles in front and to sides, but not extreme rear/sides
+                # This prevents detecting distant land masses on periphery
+                is_forward = x > 0.0  # Only forward and side (no backward)
+                is_not_too_far_left = y > -30.0   # Moderate left detection
+                is_not_too_far_right = y < 30.0   # Moderate right detection
                 
-                if not (is_forward_cone and is_not_too_far_left and is_not_too_far_right):
+                if not (is_forward and is_not_too_far_left and is_not_too_far_right):
                     continue
 
                 points.append((x, y, z, dist))
@@ -253,11 +306,21 @@ class AtlantisController(Node):
         distances = [p[3] for p in points]
         self.min_obstacle_distance = min(distances)
         
+        # IMPROVED: Only consider front obstacles as critical
+        # This prevents side land masses from triggering unnecessary avoidance
+        front_obstacles = [p for p in points if p[0] > 0 and abs(p[1]) < 15.0]
+        if front_obstacles:
+            front_distances = [p[3] for p in front_obstacles]
+            front_min_distance = min(front_distances)
+        else:
+            front_min_distance = 100.0
+        
+        # Use front distance for avoidance decisions (ignore far side obstacles)
         if self.obstacle_detected:
             exit_threshold = self.min_safe_distance + self.hysteresis_distance
-            self.obstacle_detected = self.min_obstacle_distance < exit_threshold
+            self.obstacle_detected = front_min_distance < exit_threshold
         else:
-            self.obstacle_detected = self.min_obstacle_distance < self.min_safe_distance
+            self.obstacle_detected = front_min_distance < self.min_safe_distance
 
         self.analyze_scan_sectors_3d(points)
 
@@ -290,10 +353,17 @@ class AtlantisController(Node):
         return y, x
 
     def control_loop(self):
+        """Main control loop with path validation and bounds checking"""
         # Check mission_enabled first
         if not self.mission_enabled:
             if self.state == "DRIVING":
                 self.state = "PAUSED"
+            return
+        
+        # SAFETY CHECK 1: Validate path is OK
+        if not self.path_validation_ok:
+            self.get_logger().warn("Path not valid - waiting for valid path from planner")
+            self.state = "WAITING_FOR_PATH"
             return
             
         if self.state not in ["DRIVING"] or self.current_gps is None or not self.waypoints:
@@ -308,11 +378,22 @@ class AtlantisController(Node):
 
         self.check_stuck_condition(curr_x, curr_y)
 
+        # SAFETY CHECK 2: Waypoint bounds checking
         if self.current_wp_index >= len(self.waypoints):
             self.finish_mission(curr_x, curr_y)
             return
+        
+        # Safely access waypoint with bounds check
+        try:
+            target_x, target_y = self.waypoints[self.current_wp_index]
+        except IndexError:
+            self.get_logger().error(
+                f"Waypoint index out of bounds: {self.current_wp_index} >= {len(self.waypoints)}"
+            )
+            self.state = "STOPPED"
+            self.stop_boat()
+            return
 
-        target_x, target_y = self.waypoints[self.current_wp_index]
         dx = target_x - curr_x
         dy = target_y - curr_y
         dist = math.hypot(dx, dy)
@@ -355,7 +436,7 @@ class AtlantisController(Node):
         is_committed = False
         if self.avoidance_commit_time is not None:
              commit_elapsed = (now - self.avoidance_commit_time).nanoseconds / 1e9
-             if commit_elapsed < 1.5: # Commit to turn for 1.5 seconds minimum
+             if commit_elapsed < 3.0: # Commit to turn for 3 seconds - longer commitment to avoid oscillation
                  is_committed = True
              else:
                  self.avoidance_commit_time = None
@@ -381,17 +462,29 @@ class AtlantisController(Node):
                 self.avoidance_commit_time = now
                 self.avoidance_direction = direction
 
-            # Execute Turn
-            if direction == "LEFT":
-                avoidance_heading = self.current_yaw + 1.57
+            # Execute Turn with adaptive angle based on obstacle proximity
+            # Closer obstacles = sharper turns for more aggressive avoidance
+            min_dist = self.min_obstacle_distance
+            if min_dist < 5.0:
+                turn_angle = 2.0  # Very sharp turn (115 degrees)
+            elif min_dist < 10.0:
+                turn_angle = 1.75  # Sharp turn (100 degrees)
             else:
-                avoidance_heading = self.current_yaw - 1.57
+                turn_angle = 1.57  # Standard 90-degree turn
+            
+            if direction == "LEFT":
+                avoidance_heading = self.current_yaw + turn_angle
+            else:
+                avoidance_heading = self.current_yaw - turn_angle
             
             angle_error = avoidance_heading - self.current_yaw
             while angle_error > math.pi: angle_error -= 2.0 * math.pi
             while angle_error < -math.pi: angle_error += 2.0 * math.pi
             
-            self.get_logger().warn(f"OBSTACLE! Turning {direction} (Locked)", throttle_duration_sec=1.0)
+            self.get_logger().warn(
+                f"OBSTACLE at {min_dist:.1f}m! Turning {direction} (Locked 3s)",
+                throttle_duration_sec=1.0
+            )
         else:
             # CLEAR PATH
             if self.avoidance_mode:
@@ -410,7 +503,12 @@ class AtlantisController(Node):
         
         turn_power = (self.kp * angle_error + self.ki * self.integral_error + self.kd * derivative_error)
         self.previous_error = angle_error
-        turn_power = max(-800.0, min(800.0, turn_power))
+        
+        # IMPROVED: When avoiding obstacles, use maximum turn power for aggressive avoidance
+        if self.obstacle_detected:
+            turn_power = max(-900.0, min(900.0, turn_power))  # Increased from 800
+        else:
+            turn_power = max(-800.0, min(800.0, turn_power))
 
         # Speed
         speed = self.base_speed

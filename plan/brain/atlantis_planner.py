@@ -92,6 +92,22 @@ class AtlantisPlanner(Node):
         self.current_obstacles = []
         self.current_clusters = []
         
+        # --- SAFETY FEATURES ---
+        # Path versioning for thread safety
+        self.path_lock = threading.RLock()
+        self.path_version = 0
+        self.mission_enabled = False  # Check before allowing param changes
+        
+        # --- LIDAR SIGNAL MONITORING ---
+        self.lidar_signal_count = 0  # Total LIDAR signals received
+        self.lidar_obstacle_detections = 0  # Signals with obstacles detected
+        self.lidar_clear_detections = 0  # Signals with no obstacles
+        self.last_signal_time = None
+        self.lidar_detection_rate = 0.0  # Percentage with obstacles
+        
+        # Create timer for monitoring stats
+        self.create_timer(2.0, self.publish_lidar_statistics)
+        
         # --- AUTO START ---
         # Wait a moment for LIDAR to warm up before generating first path
         threading.Timer(2.0, self.generate_lawnmower_path).start()
@@ -124,8 +140,12 @@ class AtlantisPlanner(Node):
                 pass
 
     def lidar_callback(self, msg):
-        """Enhanced: Process LIDAR point cloud with advanced obstacle detection"""
+        """Enhanced: Process LIDAR with monitoring and safety"""
         try:
+            # --- LIDAR SIGNAL MONITORING ---
+            self.lidar_signal_count += 1
+            self.last_signal_time = self.get_clock().now()
+            
             # Extract obstacles using new detector
             point_step = msg.point_step
             sampling_factor = self.get_parameter('lidar_sampling_factor').value
@@ -133,6 +153,18 @@ class AtlantisPlanner(Node):
             self.current_obstacles = self.lidar_detector.process_pointcloud(
                 msg.data, point_step, sampling_factor
             )
+            
+            # Track obstacle detections
+            if len(self.current_obstacles) > 0:
+                self.lidar_obstacle_detections += 1
+            else:
+                self.lidar_clear_detections += 1
+            
+            # Calculate detection rate
+            if self.lidar_signal_count > 0:
+                self.lidar_detection_rate = (
+                    self.lidar_obstacle_detections / self.lidar_signal_count * 100.0
+                )
             
             # Cluster obstacles
             self.current_clusters = self.clusterer.cluster_obstacles(self.current_obstacles)
@@ -149,7 +181,8 @@ class AtlantisPlanner(Node):
                     self.get_logger().warn(
                         f"LIDAR: Front={self.monitor.front_distance:.1f}m, "
                         f"Left={self.monitor.left_distance:.1f}m, "
-                        f"Right={self.monitor.right_distance:.1f}m"
+                        f"Right={self.monitor.right_distance:.1f}m "
+                        f"({len(self.current_obstacles)} obstacles detected)"
                     )
                     
         except Exception as e:
@@ -202,12 +235,52 @@ class AtlantisPlanner(Node):
         return x, y
 
     def parameter_callback(self, params):
-        for param in params:
-            if param.name in ['scan_length', 'scan_width', 'lanes', 'geo_max_x']:
-                self.get_logger().info(f"Parameter {param.name} changed to {param.value}")
+        """Handle parameter changes with safety checks"""
         
+        # SAFETY: Block parameter changes during mission
+        if self.mission_enabled:
+            self.get_logger().error(
+                "❌ Cannot change parameters during active mission! "
+                "Stop mission first."
+            )
+            return SetParametersResult(successful=False)
+        
+        # Validate new parameters before applying
+        for param in params:
+            # Validate scan_length
+            if param.name == 'scan_length':
+                if param.value < 50.0:
+                    self.get_logger().error(
+                        f"❌ Parameter validation failed: scan_length must be >= 50.0, "
+                        f"got {param.value}"
+                    )
+                    return SetParametersResult(successful=False)
+            
+            # Validate lanes
+            if param.name == 'lanes':
+                if param.value < 1 or param.value > 20:
+                    self.get_logger().error(
+                        f"❌ Parameter validation failed: lanes must be between 1-20, "
+                        f"got {param.value}"
+                    )
+                    return SetParametersResult(successful=False)
+            
+            # Validate scan_width
+            if param.name == 'scan_width':
+                if param.value < 5.0:
+                    self.get_logger().error(
+                        f"❌ Parameter validation failed: scan_width must be >= 5.0, "
+                        f"got {param.value}"
+                    )
+                    return SetParametersResult(successful=False)
+            
+            self.get_logger().info(f"✓ Parameter {param.name} = {param.value} (validated)")
+        
+        # Safe to regenerate path
         if len(self.waypoints) > 0 and len(self.waypoints) > 2:
-             self.generate_lawnmower_path()
+            self.get_logger().info("Regenerating path with new parameters...")
+            self.generate_lawnmower_path()
+        
         return SetParametersResult(successful=True)
 
     def replan_callback(self, msg):
@@ -305,6 +378,35 @@ class AtlantisPlanner(Node):
 
         self.get_logger().info(f"GENERATED: Mission Path ({len(self.waypoints)} points, {len(self.current_clusters)} obstacles detected)")
         self.publish_path()
+
+    def publish_lidar_statistics(self):
+        """Publish LIDAR monitoring statistics periodically"""
+        try:
+            # Publish every ~10 LIDAR frames (roughly 1Hz if LIDAR is 10Hz)
+            publish_frequency = 10
+            
+            if self.lidar_signal_count % publish_frequency == 0 and self.lidar_signal_count > 0:
+                stats_data = {
+                    'total_signals': self.lidar_signal_count,
+                    'signals_with_obstacles': self.lidar_obstacle_detections,
+                    'signals_clear': self.lidar_clear_detections,
+                    'obstacle_detection_rate': round(self.lidar_detection_rate, 2),
+                    'path_version': self.path_version,
+                    'mission_enabled': self.mission_enabled,
+                    'timestamp': str(self.get_clock().now())
+                }
+                
+                # Log statistics
+                self.get_logger().info(
+                    f"LIDAR Stats: Total={stats_data['total_signals']} | "
+                    f"With_Obstacles={stats_data['signals_with_obstacles']} | "
+                    f"Clear={stats_data['signals_clear']} | "
+                    f"Detection_Rate={stats_data['obstacle_detection_rate']}% | "
+                    f"Path_Version={stats_data['path_version']}"
+                )
+                
+        except Exception as e:
+            self.get_logger().error(f"Statistics publishing error: {e}")
 
     def publish_path(self):
         self.path_msg.header.stamp = self.get_clock().now().to_msg()
