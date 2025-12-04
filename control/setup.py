@@ -14,7 +14,7 @@ setup(
             'launch/all_in_one_bringup.launch.py',
         ]),
     ],
-    install_requires=['setuptools', 'tf2_ros'],
+    install_requires=['setuptools'],
     zip_safe=True,
     maintainer='ghostzero',
     maintainer_email='yinpuchen0@gmail.com',
