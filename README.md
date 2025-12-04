@@ -42,14 +42,14 @@
 
 ## Abstract
 
-AutoBoat is an autonomous navigation system for unmanned surface vehicles (USVs) developed for the Virtual RobotX (VRX) competition. The system integrates advanced path planning, real-time obstacle avoidance, and precise trajectory tracking algorithms optimized for the WAM-V maritime platform. Built on **ROS 2 Jazzy** and **Gazebo Harmonic**, the framework provides a robust foundation for autonomous maritime navigation in simulated environments.
+AutoBoat is an autonomous navigation system for unmanned surface vehicles (USVs) developed for the Virtual RobotX ([VRX](https://github.com/osrf/vrx)) competition. The system integrates advanced path planning, real-time obstacle avoidance, and precise trajectory tracking algorithms optimized for the WAM-V maritime platform. Built on **[ROS 2 Jazzy](https://docs.ros.org/en/jazzy/)** and **[Gazebo Harmonic](https://gazebosim.org/docs/harmonic/)**, the framework provides a robust foundation for autonomous maritime navigation in simulated environments.
 
 The project implements a hierarchical autonomous navigation framework combining perception, planning, and control subsystems to enable intelligent waypoint navigation while dynamically responding to environmental constraints. By processing sensor data streams and mission objectives in real-time, the architecture generates collision-free trajectories that account for static obstacles, operational boundaries, and vehicle dynamics, ensuring safe and efficient autonomous operation.
 
 **Key Contributions:**
 
 - **Vostok1 Navigation System**: Integrated autonomous navigation with 3D LIDAR perception
-- **Modular Architecture**: Distributed nodes (ОКО-СПУТНИК-БУРАН) for flexible deployment
+- **Modular Architecture**: Distributed nodes (OKO-SPUTNIK-BURAN) for flexible deployment
 - **Smart Anti-Stuck System (SASS)**: Intelligent recovery with Kalman-filtered drift compensation
 - **Web Dashboard**: Real-time monitoring with better visualization
 - **Waypoint Skip Strategy**: Automatic skip for blocked waypoints ensuring mission completion
@@ -271,6 +271,8 @@ correction = Kp × error + Ki × ∫error + Kd × d(error)/dt
 ### Simulation Time (use_sim_time)
 
 When running in Gazebo, time moves differently than real-world time. The `use_sim_time` parameter synchronizes ROS nodes with simulation time.
+
+ Currently only `control/launch/all_in_one_bringup.launch.py` sets this flag for its nodes; other launches run on wall time unless updated.
 
 ---
 
