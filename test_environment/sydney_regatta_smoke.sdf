@@ -7,21 +7,22 @@
   Based on: sydney_regatta_DEFAULT.sdf (VRX Official World)
 
   Modifications:
-    - Added official Gazebo Fuel "Fog Generator" model for smoke/fog effects
-    - Smoke generator positioned near the buoy area for sensor testing (offset to avoid collision)
+    - Added custom inline particle emitter for realistic sea pollution/fire smoke
+    - Simulates maritime hazards: ship fires, oil spill fires, emergency scenarios
+    - Long-lasting dense smoke (20 min lifetime) for low-visibility testing
 
-  Fog Generator Controls (via Gazebo Transport):
+  Smoke Generator Controls (via Gazebo Transport):
     # Stop emitting:
-    gz topic -t /model/fog_generator/link/fog_link/particle_emitter/emitter/cmd \
+    gz topic -t /model/smoke_generator/link/smoke_link/particle_emitter/smoke_emitter/cmd \
       -m gz.msgs.ParticleEmitter -p 'emitting: {data: false}'
 
     # Resume emitting:
-    gz topic -t /model/fog_generator/link/fog_link/particle_emitter/emitter/cmd \
+    gz topic -t /model/smoke_generator/link/smoke_link/particle_emitter/smoke_emitter/cmd \
       -m gz.msgs.ParticleEmitter -p 'emitting: {data: true}'
 
-    # Increase density (e.g., 100 particles/sec):
-    gz topic -t /model/fog_generator/link/fog_link/particle_emitter/emitter/cmd \
-      -m gz.msgs.ParticleEmitter -p 'rate: {data: 100}'
+    # Change density (particles/sec):
+    gz topic -t /model/smoke_generator/link/smoke_link/particle_emitter/smoke_emitter/cmd \
+      -m gz.msgs.ParticleEmitter -p 'rate: {data: 50}'
 
   Sensor Effects:
     - Camera: Particles visible
@@ -384,15 +385,72 @@
     </include>
 
     <!-- ========================================
-         SMOKE GENERATOR - Official Gazebo Fuel Model
+         SMOKE GENERATOR - Sea Pollution / Fire Accident Simulation
          ======================================== -->
-    <!-- Smoke generator positioned near the buoy area for sensor testing -->
-    <!-- Note: Position offset from buoys to avoid collision -->
-    <include>
-      <name>fog_generator</name>
+    <!--
+      Purpose:
+        Realistically mimic real-world sea pollutants and maritime hazards,
+        such as:
+          - Ship fire accidents (vessel fires, engine room fires)
+          - Oil spill fires on water surface
+          - Industrial vessel smoke emissions
+          - Maritime emergency/distress scenarios
+
+      Use Cases:
+        - Testing autonomous boat navigation in low-visibility conditions
+        - Evaluating sensor performance (camera, lidar, depth) under smoke
+        - Training perception algorithms for maritime hazard detection
+        - Simulating search and rescue scenarios
+
+      No external model needed - fully self-contained particle emitter.
+    -->
+    <model name="smoke_generator">
       <pose>-532 189 0.5 0 0 0</pose>
-      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/fog generator</uri>
-    </include>
+      <static>true</static>
+
+      <link name="smoke_link">
+        <particle_emitter name="smoke_emitter" type="box">
+          <!-- Emit continuously to simulate ongoing fire -->
+          <emitting>true</emitting>
+
+          <!-- Emission region: simulates fire source on a vessel (~5m x 5m) -->
+          <size>5 5 0.5</size>
+
+          <!-- Larger particles for dense, realistic fire smoke -->
+          <particle_size>2.0 2.0 2.0</particle_size>
+
+          <!-- Very long lifetime (1200s = 20 min average)
+               Note: Gazebo particle emitter doesn't support min/max lifetime range.
+               Combined with velocity variance (0.3-1.0 m/s), particles naturally
+               reach different heights and disperse at different times, creating
+               pseudo-randomness in the 15-25 min effective visibility range. -->
+          <lifetime>1200</lifetime>
+
+          <!-- Fire smoke rises quickly due to heat convection -->
+          <min_velocity>0.3</min_velocity>
+          <max_velocity>1.0</max_velocity>
+
+          <!-- Higher emission rate for dense fire smoke -->
+          <rate>30</rate>
+
+          <!-- Smoke expands as it rises and cools -->
+          <scale_rate>0.8</scale_rate>
+
+          <!-- Emit upwards (+z) by rotating -90° around Y axis -->
+          <pose>0 0 0 0 -1.5707 0</pose>
+
+          <!-- Dark smoke color - realistic ship fire / oil fire smoke -->
+          <material>
+            <diffuse>0.15 0.15 0.15 0.8</diffuse>
+            <specular>0.05 0.05 0.05 1.0</specular>
+          </material>
+
+          <!-- Higher scatter ratio - dense smoke significantly affects
+               depth cameras and lidar, simulating real sensor degradation -->
+          <particle_scatter_ratio>0.05</particle_scatter_ratio>
+        </particle_emitter>
+      </link>
+    </model>
 
     <include>
       <name>mb_marker_buoy_red</name>
