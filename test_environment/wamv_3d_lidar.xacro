@@ -27,7 +27,7 @@
     - noise_stddev: 0.01
   
   WARNING: Do NOT modify this file. Keep it as the pure reference version.
-           Create a copy if you need custom LIDAR parameters.
+           Create a copy if you need custom LIDAR parameters or you can modify directly in the vrx folder.
   ============================================================================
 -->
 <robot xmlns:xacro="http://ros.org/wiki/xacro">

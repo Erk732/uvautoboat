@@ -20,7 +20,11 @@
   
   Usage:
     ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
-  
+    
+  Important Notes:
+    - Do NOT modify this file directly. Keep it as the pure reference version.
+    - Use the custom world file for any modifications.
+
   To create a custom world:
     1. Copy this file and rename it (e.g., sydney_regatta_custom.sdf)
     2. Add your custom models, obstacles, or modify terrain
