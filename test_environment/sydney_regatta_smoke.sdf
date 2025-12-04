@@ -463,6 +463,56 @@
       </link>
     </model>
 
+    <!-- Secondary smoke source near open water, offset from buoy cluster -->
+    <model name="smoke_generator_east">
+      <pose>-520 175 0.5 0 0 0</pose>
+      <static>true</static>
+
+      <link name="smoke_link">
+        <particle_emitter name="smoke_emitter" type="box">
+          <emitting>true</emitting>
+          <size>5 5 0.5</size>
+          <particle_size>2.0 2.0 2.0</particle_size>
+          <lifetime>1200</lifetime>
+          <min_velocity>0.3</min_velocity>
+          <max_velocity>1.0</max_velocity>
+          <rate>30</rate>
+          <scale_rate>0.8</scale_rate>
+          <pose>0 0 0 0 -1.5707 0</pose>
+          <material>
+            <diffuse>0.15 0.15 0.15 0.8</diffuse>
+            <specular>0.05 0.05 0.05 1.0</specular>
+          </material>
+          <particle_scatter_ratio>0.05</particle_scatter_ratio>
+        </particle_emitter>
+      </link>
+    </model>
+
+    <!-- Tertiary smoke source north-west, spaced away from posts and tents -->
+    <model name="smoke_generator_north">
+      <pose>-545 205 0.5 0 0 0</pose>
+      <static>true</static>
+
+      <link name="smoke_link">
+        <particle_emitter name="smoke_emitter" type="box">
+          <emitting>true</emitting>
+          <size>5 5 0.5</size>
+          <particle_size>2.0 2.0 2.0</particle_size>
+          <lifetime>1200</lifetime>
+          <min_velocity>0.3</min_velocity>
+          <max_velocity>1.0</max_velocity>
+          <rate>30</rate>
+          <scale_rate>0.8</scale_rate>
+          <pose>0 0 0 0 -1.5707 0</pose>
+          <material>
+            <diffuse>0.15 0.15 0.15 0.8</diffuse>
+            <specular>0.05 0.05 0.05 1.0</specular>
+          </material>
+          <particle_scatter_ratio>0.05</particle_scatter_ratio>
+        </particle_emitter>
+      </link>
+    </model>
+
     <include>
       <name>mb_marker_buoy_red</name>
       <pose>-528 191 0 0 0 0</pose>
