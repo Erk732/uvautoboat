@@ -20,9 +20,20 @@
     gz topic -t /model/smoke_generator/link/smoke_link/particle_emitter/smoke_emitter/cmd \
       -m gz.msgs.ParticleEmitter -p 'emitting: {data: true}'
 
+
     # Change density (particles/sec):
     gz topic -t /model/smoke_generator/link/smoke_link/particle_emitter/smoke_emitter/cmd \
       -m gz.msgs.ParticleEmitter -p 'rate: {data: 50}'
+
+    # Change lifetime dynamically (for randomness):
+    # Set to 15 min (900s):
+    gz topic -t /model/smoke_generator/link/smoke_link/particle_emitter/smoke_emitter/cmd \
+      -m gz.msgs.ParticleEmitter -p 'lifetime: {data: 900}'
+
+    # Set to 25 min (1500s):
+    gz topic -t /model/smoke_generator/link/smoke_link/particle_emitter/smoke_emitter/cmd \
+      -m gz.msgs.ParticleEmitter -p 'lifetime: {data: 1500}'
+
 
   Sensor Effects:
     - Camera: Particles visible
