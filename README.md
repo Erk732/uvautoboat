@@ -1193,6 +1193,14 @@ For navigating to arbitrary points through obstacle fields:
 - No circling behavior
 - Efficient paths through complex environments
 
+### Technical Debt
+
+| Issue | Description |
+|:------|:------------|
+| **ROS 2 Parameter Migration** | Hardcoded parameters can be migrated to ROS 2 parameter server, but these settings may not always work reliably |
+| **Multi-Terminal Launch** | Lack of shell script (.sh file) to open multiple terminals and run multiple nodes simultaneously |
+| **Debugging Required** | Complex planning and obstacle detection still need debugging |
+
 ---
 
 ## Contributing

@@ -207,17 +207,17 @@
 | 3 | Start simple, add complexity incrementally |
 | 4 | Document early to reduce technical debt |
 
-### Technical DebtTesting
+### Technical Debt
 
-- Hardcoded parameters → migrate to ROS 2 parameter server
-- Limited unit test coverage → add automated testing
-- Complex planner versions need debugging
+- Hardcoded parameters can be migrated to ROS 2 parameter server, but these settings may not always work reliably
+- Lack of shell script (.sh file) to open multiple terminals and run multiple nodes simultaneously
+- Complex planning and obstacle detection still need debugging
 
 ---
 
 ## 📜 Acknowledgments
 
-**Document Version**: 6.0 | **Last Updated**: 03/12/2025
+**Document Version**: 6.0 | **Last Updated**: 04/12/2025
 
 **Maintained By**: AutoBoat Development Team
 
