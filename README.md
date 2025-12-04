@@ -51,7 +51,7 @@ The project implements a hierarchical autonomous navigation framework combining 
 - **Vostok1 Navigation System**: Integrated autonomous navigation with 3D LIDAR perception
 - **Modular Architecture**: Distributed nodes (ОКО-СПУТНИК-БУРАН) for flexible deployment
 - **Smart Anti-Stuck System (SASS)**: Intelligent recovery with Kalman-filtered drift compensation
-- **Web Dashboard**: Real-time monitoring with TNO Cold War aesthetic
+- **Web Dashboard**: Real-time monitoring with better visualization
 - **Waypoint Skip Strategy**: Automatic skip for blocked waypoints ensuring mission completion
 
 ---
@@ -415,9 +415,9 @@ The modular system uses Soviet/Russian space program naming:
 
 | Node | Name | Function |
 |:-----|:-----|:---------|
-| **ОКО** (Oko) | `oko_perception` | 3D LIDAR obstacle detection |
-| **СПУТНИК** (Sputnik) | `sputnik_planner` | GPS waypoint planning |
-| **БУРАН** (Buran) | `buran_controller` | PID heading control + SASS |
+| **OKO** | `oko_perception` | 3D LIDAR obstacle detection |
+| **SPUTNIK** | `sputnik_planner` | GPS waypoint planning |
+| **BURAN** | `buran_controller` | PID heading control + SASS |
 
 ### Modular Topic Flow Diagram
 
@@ -592,7 +592,7 @@ ros2 run plan vostok1
 ```text
 [INFO] PROJET-17 — Vostok 1 Navigation System
 [INFO] Waiting for GPS signal...
-[INFO] МИССИЯ НАЧАТА! (Mission Started!)
+[INFO] MISSION DÉMARRÉE ! | MISSION STARTED!
 [INFO] PT 1/19 | Pos: (5.2, 3.1) | Cible: (15.0, 0.0) | Dist: 10.2m | Cap: 45°
 [INFO] ✅ DÉGAGÉ | CLEAR (F:50.0 L:50.0 R:50.0)
 ```
@@ -1068,7 +1068,7 @@ The Kalman filter is Bayes' theorem for continuous states with Gaussian distribu
 
 | Stage | Expected Output |
 |:------|:----------------|
-| Startup | "МИССИЯ НАЧАТА! (Mission Started!)" |
+| Startup | "MISSION DÉMARRÉE / MISSION STARTED" |
 | Navigation | "PT X/19 \| Pos: (x, y) \| Cible: (tx, ty)" |
 | Obstacle | "🚨 OBSTACLE DETECTED!" |
 | Clear | "✅ DÉGAGÉ \| CLEAR" |

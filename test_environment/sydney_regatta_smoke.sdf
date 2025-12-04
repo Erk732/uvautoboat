@@ -463,7 +463,7 @@
       </link>
     </model>
 
-    <!-- Secondary smoke source near open water, offset from buoy cluster -->
+    <!-- Secondary smoke source near open water, offset from buoy cluster (~10m SE of original; clear of marker buoys at -528 186-191) -->
     <model name="smoke_generator_east">
       <pose>-520 175 0.5 0 0 0</pose>
       <static>true</static>
@@ -488,7 +488,7 @@
       </link>
     </model>
 
-    <!-- Tertiary smoke source north-west, spaced away from posts and tents -->
+    <!-- Tertiary smoke source north-west, spaced away from posts and tents (placed ~15m north of buoy line and west of ground stations) -->
     <model name="smoke_generator_north">
       <pose>-545 205 0.5 0 0 0</pose>
       <static>true</static>
