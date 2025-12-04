@@ -97,10 +97,20 @@ uvautoboat/
 │   ├── vostok1/                     # Vostok1 dashboard
 │   └── atlantis/                    # Atlantis dashboard
 ├── test_environment/           # Custom Gazebo worlds and models
+│   ├── sydney_regatta_DEFAULT.sdf  # Original VRX world (reference/template)
+│   ├── sydney_regatta_custom.sdf   # Custom world with obstacles
+│   ├── wamv_3d_lidar.xacro         # Default 3D LIDAR config (backup reference)
+│   └── cardboardbox/                # Custom obstacle model
 ├── images/                     # Documentation images
 ├── Board.md                    # Development progress tracking
 └── README.md                   # This file
 ```
+
+> **Note:** The `test_environment/` folder contains reference copies of VRX default files:
+>
+> 1. **Quick reference** - No need to navigate through VRX package folders
+> 2. **Template base** - Starting point for creating custom worlds with obstacles, buoys, etc.
+> 3. **Parameter backup** - The `wamv_3d_lidar.xacro` contains default LIDAR parameters. If you modify your LIDAR config and need to reset, refer to this file.
 
 ### Additional Documentation
 
