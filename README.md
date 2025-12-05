@@ -499,7 +499,7 @@ Detailed ROS 2 connections for the Atlantis architecture. Note the direct LIDAR 
 │  ├─ /atlantis/replan    ───────────► │  /atlantis/anti_stuck_status ───► DASH   │
 │  └─ /atlantis/start     ───────────► │                                          │
 └──────────────────────────────────────┴──────────────────────────────────────────┘
-
+```
 
 **JSON Message Formats:**
 
