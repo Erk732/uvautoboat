@@ -12,7 +12,7 @@ import time
 import math
 import struct
 
-# Related import (Works when there is __init__.py)
+# Related import
 from .lidar_obstacle_avoidance import (
     LidarObstacleDetector,
     ObstacleClustering,
@@ -116,40 +116,22 @@ class AtlantisPlanner(Node):
             self.lidar_signal_count += 1
             sampling_factor = self.get_parameter('lidar_sampling_factor').value
             
-            # Extract raw pointcloud → includes smoke
+            # Extract raw pointcloud
             self.current_obstacles = self.lidar_detector.process_pointcloud(
                 msg.data, msg.point_step, sampling_factor
             )
 
-            # ---------------------------------------------------------
-            # 🔥 SMOKE FILTERING AREA (ADD THIS BLOCK)
-            # ---------------------------------------------------------
+            # Filter Smoke/Noise
             filtered = []
             for obs in self.current_obstacles:
-
-                # 1. Smoke intensity is extremely low (optional: only if you have intensity)
-                try:
-                    if hasattr(obs, "intensity") and obs.intensity < 5.0:
-                        continue
-                except:
-                    pass
-
-                # 2. Smoke floats → remove high points
-                if abs(obs.z) > 0.5:  
-                    continue
-
-                # 3. Smoke is very close to sensor (0–2 m)
+                if hasattr(obs, "intensity") and obs.intensity < 5.0: continue
+                if abs(obs.z) > 0.5: continue
                 dist = math.sqrt(obs.x**2 + obs.y**2)
-                if dist < 2.0:
-                    continue
-
+                if dist < 2.0: continue
                 filtered.append(obs)
 
-            # Replace obstacles with filtered list
             self.current_obstacles = filtered
-            # ---------------------------------------------------------
 
-            # Detection counts
             if len(self.current_obstacles) > 0:
                 self.lidar_obstacle_detections += 1
             else:
@@ -160,14 +142,12 @@ class AtlantisPlanner(Node):
                     self.lidar_obstacle_detections / self.lidar_signal_count * 100.0
                 )
 
-            # Proceed normally with filtered obstacles
             self.current_clusters = self.clusterer.cluster_obstacles(self.current_obstacles)
             self.monitor.analyze_sectors(self.current_obstacles)
             self.known_obstacles = [(obs.x, obs.y) for obs in self.current_obstacles]
                     
         except Exception as e:
             self.get_logger().error(f"LIDAR callback error: {e}")
-
 
     def is_point_safe(self, x, y):
         safe_dist = self.get_parameter('planner_safe_dist').value
@@ -177,7 +157,6 @@ class AtlantisPlanner(Node):
                 return False, obs_x, obs_y
         return True, None, None
 
-    # --- NEW: SAFETY LINE CHECK ---
     def is_line_safe(self, x1, y1, x2, y2):
         """Walks along the line checking for obstacles every 2m"""
         dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
@@ -194,7 +173,6 @@ class AtlantisPlanner(Node):
             if not is_safe:
                 return False
         return True
-    # -----------------------------
 
     def adjust_point_for_obstacles(self, x, y, target_x=None, target_y=None):
         is_safe, obs_x, obs_y = self.is_point_safe(x, y)
@@ -304,7 +282,6 @@ class AtlantisPlanner(Node):
         self.publish_path()
 
     def publish_lidar_statistics(self):
-        # Kept brief for brevity
         pass
 
     def publish_path(self):
