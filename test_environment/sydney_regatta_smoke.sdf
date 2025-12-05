@@ -785,14 +785,14 @@
       <wind_obj>
         <name>wamv</name>
         <link_name>wamv/base_link</link_name>
-        <coeff_vector>.5 .5 .33</coeff_vector>
+        <coeff_vector>.1 .1 .05</coeff_vector>
       </wind_obj>
       <!-- Wind from SW (240°) - INTENSE -->
       <wind_direction>240</wind_direction>
       <!-- in degrees -->
-      <wind_mean_velocity>10.0</wind_mean_velocity>
+      <wind_mean_velocity>3.0</wind_mean_velocity>
       <var_wind_gain_constants>0</var_wind_gain_constants>
-      <var_wind_time_constants>2</var_wind_time_constants>
+      <var_wind_time_constants>0.02</var_wind_time_constants>
       <random_seed>10</random_seed>
       <!-- set to zero/empty to randomize -->
       <update_rate>10</update_rate>
@@ -822,7 +822,7 @@
           key: "period"
           value {
             type: DOUBLE
-            double_value: 5
+            double_value: 10
           }
         }
         params {

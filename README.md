@@ -90,6 +90,8 @@ uvautoboat/
 │   │   └── lidar_obstacle_avoidance.py
 │   └── launch/
 │       └── vostok1_modular_navigation.launch.py
+├── environment_plugins/        # Gazebo plugins (smoke dead-zone)
+│   └── src/dead_zone_plugin.cc      # Kills wildlife in smoke radius, flips belly-up
 ├── launch/                     # Top-level launch files
 │   ├── vostok1.launch.yaml         # Modular system configuration
 │   └── atlantis.launch.yaml        # Atlantis system configuration
@@ -99,6 +101,7 @@ uvautoboat/
 ├── test_environment/           # Custom Gazebo worlds and models
 │   ├── sydney_regatta_DEFAULT.sdf  # Original VRX world (reference/template)
 │   ├── sydney_regatta_custom.sdf   # Custom world with obstacles
+│   ├── sydney_regatta_smoke_wildlife.sdf # Combined smoke + wildlife with kill-zone plugin
 │   ├── wamv_3d_lidar.xacro         # Default 3D LIDAR config (backup reference)
 │   └── cardboardbox/                # Custom obstacle model
 ├── images/                     # Documentation images
