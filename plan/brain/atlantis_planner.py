@@ -116,25 +116,58 @@ class AtlantisPlanner(Node):
             self.lidar_signal_count += 1
             sampling_factor = self.get_parameter('lidar_sampling_factor').value
             
-            # Use shared module
+            # Extract raw pointcloud → includes smoke
             self.current_obstacles = self.lidar_detector.process_pointcloud(
                 msg.data, msg.point_step, sampling_factor
             )
-            
+
+            # ---------------------------------------------------------
+            # 🔥 SMOKE FILTERING AREA (ADD THIS BLOCK)
+            # ---------------------------------------------------------
+            filtered = []
+            for obs in self.current_obstacles:
+
+                # 1. Smoke intensity is extremely low (optional: only if you have intensity)
+                try:
+                    if hasattr(obs, "intensity") and obs.intensity < 5.0:
+                        continue
+                except:
+                    pass
+
+                # 2. Smoke floats → remove high points
+                if abs(obs.z) > 0.5:  
+                    continue
+
+                # 3. Smoke is very close to sensor (0–2 m)
+                dist = math.sqrt(obs.x**2 + obs.y**2)
+                if dist < 2.0:
+                    continue
+
+                filtered.append(obs)
+
+            # Replace obstacles with filtered list
+            self.current_obstacles = filtered
+            # ---------------------------------------------------------
+
+            # Detection counts
             if len(self.current_obstacles) > 0:
                 self.lidar_obstacle_detections += 1
             else:
                 self.lidar_clear_detections += 1
-            
+
             if self.lidar_signal_count > 0:
-                self.lidar_detection_rate = (self.lidar_obstacle_detections / self.lidar_signal_count * 100.0)
-            
+                self.lidar_detection_rate = (
+                    self.lidar_obstacle_detections / self.lidar_signal_count * 100.0
+                )
+
+            # Proceed normally with filtered obstacles
             self.current_clusters = self.clusterer.cluster_obstacles(self.current_obstacles)
             self.monitor.analyze_sectors(self.current_obstacles)
             self.known_obstacles = [(obs.x, obs.y) for obs in self.current_obstacles]
                     
         except Exception as e:
             self.get_logger().error(f"LIDAR callback error: {e}")
+
 
     def is_point_safe(self, x, y):
         safe_dist = self.get_parameter('planner_safe_dist').value
