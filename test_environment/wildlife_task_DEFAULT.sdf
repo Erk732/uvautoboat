@@ -1,59 +1,7 @@
 <?xml version="1.0" ?>
-<!--
-  ============================================================================
-  Sydney Regatta with Smoke - Custom Test World
-  ============================================================================
-
-  Based on: sydney_regatta_DEFAULT.sdf (VRX Official World)
-
-  Modifications:
-    - Added 3 custom particle emitters for realistic sea pollution/fire smoke
-    - Simulates maritime hazards: ship fires, oil spill fires, emergency scenarios
-    - Optimized smoke (5-7 min lifetime, ~18k max particles) for performance
-    - Wind drift simulation via tilted emitter pose (wind from 240° SW)
-    - Visual debug markers: red (primary), green (east), blue (north)
-
-  Smoke Generator Controls (via Gazebo Transport):
-    Available emitters:
-      - smoke_generator       (primary, central)
-      - smoke_generator_east  (secondary, SE)
-      - smoke_generator_north (tertiary, NW)
-
-    # Stop emitting (replace MODEL_NAME with one of the above):
-    gz topic -t /model/MODEL_NAME/link/smoke_link/particle_emitter/smoke_emitter/cmd \
-      -m gz.msgs.ParticleEmitter -p 'emitting: {data: false}'
-
-    # Resume emitting:
-    gz topic -t /model/MODEL_NAME/link/smoke_link/particle_emitter/smoke_emitter/cmd \
-      -m gz.msgs.ParticleEmitter -p 'emitting: {data: true}'
-
-    # Change density (particles/sec):
-    gz topic -t /model/MODEL_NAME/link/smoke_link/particle_emitter/smoke_emitter/cmd \
-      -m gz.msgs.ParticleEmitter -p 'rate: {data: 50}'
-
-    # Change lifetime dynamically:
-    gz topic -t /model/MODEL_NAME/link/smoke_link/particle_emitter/smoke_emitter/cmd \
-      -m gz.msgs.ParticleEmitter -p 'lifetime: {data: 300}'
-
-    # Example: Stop all emitters
-    gz topic -t /model/smoke_generator/link/smoke_link/particle_emitter/smoke_emitter/cmd \
-      -m gz.msgs.ParticleEmitter -p 'emitting: {data: false}'
-    gz topic -t /model/smoke_generator_east/link/smoke_link/particle_emitter/smoke_emitter/cmd \
-      -m gz.msgs.ParticleEmitter -p 'emitting: {data: false}'
-    gz topic -t /model/smoke_generator_north/link/smoke_link/particle_emitter/smoke_emitter/cmd \
-      -m gz.msgs.ParticleEmitter -p 'emitting: {data: false}'
-
-
-  Sensor Effects:
-    - Camera: Particles visible
-    - Depth Camera: Scattering effect on depth data
-    - GPU Lidar: Scattering effect on range readings
-    - Thermal Camera: No particle detection
-  ============================================================================
--->
 
 <sdf version="1.9">
-  <world name="sydney_regatta_smoke">
+  <world name="wildlife_task">
 
     <physics name="4ms" type="dart">
       <max_step_size>0.004</max_step_size>
@@ -394,7 +342,7 @@
     </light>
 
     <include>
-      <pose>0 0 0.2 0 0 0 </pose>
+      <pose> 0 0 0.2 0 0 0 </pose>
       <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/sydney_regatta</uri>
     </include>
 
@@ -404,158 +352,15 @@
       <uri>coast_waves</uri>
     </include>
 
-    <!-- ========================================
-         SMOKE GENERATOR - Sea Pollution / Fire Accident Simulation
-         ======================================== -->
-    <!--
-      Purpose:
-        Realistically mimic real-world sea pollutants and maritime hazards,
-        such as:
-          - Ship fire accidents (vessel fires, engine room fires)
-          - Oil spill fires on water surface
-          - Industrial vessel smoke emissions
-          - Maritime emergency/distress scenarios
-
-      Use Cases:
-        - Testing autonomous boat navigation in low-visibility conditions
-        - Evaluating sensor performance (camera, lidar, depth) under smoke
-        - Training perception algorithms for maritime hazard detection
-        - Simulating search and rescue scenarios
-
-      No external model needed - fully self-contained particle emitter.
-    -->
-    <!-- All smoke generators clustered in one zone (~120m north of boat spawn) -->
-      <!-- ========================= -->
-<!--  SMOKE SET A (MAIN)      -->
-<!-- ========================= -->
-    <model name="smoke_generator">
-      <pose>-535 280 0.5 0 0 0</pose>
-      <static>true</static>
-
-      <link name="smoke_link">
-        <visual name="marker_visual">
-          <geometry><sphere><radius>0.25</radius></sphere></geometry>
-          <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
-        </visual>
-
-        <particle_emitter name="smoke_emitter" type="box">
-          <emitting>true</emitting>
-
-          <!-- Slightly reduced emission area -->
-          <size>7 7 1</size>
-
-          <!-- Must be > 0.3 for filter -->
-          <particle_size>0.4 0.4 0.4</particle_size>
-
-          <!-- Long enough for visibility -->
-          <lifetime>180</lifetime>
-
-          <min_velocity>0.15</min_velocity>
-          <max_velocity>0.35</max_velocity>
-
-          <!-- Lower density than original -->
-          <rate>8</rate>
-
-          <scale_rate>0.20</scale_rate>
-
-          <!-- Wind tilt -->
-          <pose>0 0 0 0.10 -1.4707 0.10</pose>
-
-          <material>
-            <!-- α must be > 0.20 for smoke filter -->
-            <diffuse>0.5 0.5 0.5 0.30</diffuse>
-            <specular>0.1 0.1 0.1 1.0</specular>
-          </material>
-
-          <particle_scatter_ratio>0.10</particle_scatter_ratio>
-        </particle_emitter>
-      </link>
-    </model>
-
-    <!-- ========================= -->
-    <!--  SMOKE SET B (EAST)      -->
-    <!-- ========================= -->
-    <model name="smoke_generator_east">
-      <pose>-525 275 0.5 0 0 0</pose>
-      <static>true</static>
-
-      <link name="smoke_link">
-        <visual name="marker_visual">
-          <geometry><sphere><radius>0.25</radius></sphere></geometry>
-          <material><ambient>0 1 0 1</ambient><diffuse>0 1 0 1</diffuse></material>
-        </visual>
-
-        <particle_emitter name="smoke_emitter" type="box">
-          <emitting>true</emitting>
-          <size>7 7 1</size>
-
-          <particle_size>0.6 0.6 0.6</particle_size>
-          <lifetime>200</lifetime>
-
-          <min_velocity>0.20</min_velocity>
-          <max_velocity>0.45</max_velocity>
-
-          <rate>10</rate>
-
-          <scale_rate>0.25</scale_rate>
-
-          <pose>0 0 0 0.10 -1.4707 0.10</pose>
-
-          <material>
-            <diffuse>0.55 0.55 0.55 0.28</diffuse>
-            <specular>0.1 0.1 0.1 1.0</specular>
-          </material>
-
-          <particle_scatter_ratio>0.12</particle_scatter_ratio>
-        </particle_emitter>
-      </link>
-    </model>
-
-    <!-- ========================= -->
-    <!--  SMOKE SET C (NORTH)     -->
-    <!-- ========================= -->
-    <model name="smoke_generator_north">
-      <pose>-545 285 0.5 0 0 0</pose>
-      <static>true</static>
-
-      <link name="smoke_link">
-        <visual name="marker_visual">
-          <geometry><sphere><radius>0.25</radius></sphere></geometry>
-          <material><ambient>0 0 1 1</ambient><diffuse>0 0 1 1</diffuse></material>
-        </visual>
-
-        <particle_emitter name="smoke_emitter" type="box">
-          <emitting>true</emitting>
-          <size>7 7 1</size>
-
-          <particle_size>0.8 0.8 0.8</particle_size>
-          <lifetime>220</lifetime>
-
-          <min_velocity>0.15</min_velocity>
-          <max_velocity>0.40</max_velocity>
-
-          <rate>7</rate>
-
-          <scale_rate>0.20</scale_rate>
-
-          <pose>0 0 0 0.12 -1.4707 0.12</pose>
-
-          <material>
-            <diffuse>0.45 0.45 0.45 0.32</diffuse>
-            <specular>0.1 0.1 0.1 1.0</specular>
-          </material>
-
-          <particle_scatter_ratio>0.14</particle_scatter_ratio>
-        </particle_emitter>
-      </link>
-    </model>
-
-
-
     <include>
-      <name>mb_marker_buoy_red</name>
-      <pose>-528 191 0 0 0 0</pose>
-      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/mb_marker_buoy_red</uri>
+      <name>platform</name>
+      <uri>platform</uri>
+    </include>
+
+    <!-- The crocodile buoy -->
+    <include>
+      <pose>-552 170 0 0 0 0</pose>
+      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/crocodile</uri>
 
       <plugin name="vrx::PolyhedraBuoyancyDrag"
               filename="libPolyhedraBuoyancyDrag.so">
@@ -563,120 +368,50 @@
         <fluid_level>0.0</fluid_level>
         <linear_drag>25.0</linear_drag>
         <angular_drag>2.0</angular_drag>
-        <buoyancy name="collision_outer">
-          <link_name>link</link_name>
-          <pose>0 0 -0.3 0 0 0</pose>
-          <geometry>
-            <cylinder>
-              <radius>0.325</radius>
-              <length>0.1</length>
-            </cylinder>
-          </geometry>
-        </buoyancy>
-        <wavefield>
-          <topic>/vrx/wavefield/parameters</topic>
-        </wavefield>
-      </plugin>
-    </include>
-
-    <include>
-      <name>mb_marker_buoy_black</name>
-      <pose>-528 190 0 0 0 0</pose>
-      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/mb_marker_buoy_black</uri>
-
-      <plugin name="vrx::PolyhedraBuoyancyDrag"
-              filename="libPolyhedraBuoyancyDrag.so">
-        <fluid_density>1000</fluid_density>
-        <fluid_level>0.0</fluid_level>
-        <linear_drag>25.0</linear_drag>
-        <angular_drag>2.0</angular_drag>
-        <buoyancy name="collision_outer">
-          <link_name>link</link_name>
-          <pose>0 0 -0.3 0 0 0</pose>
-          <geometry>
-            <cylinder>
-              <radius>0.325</radius>
-              <length>0.1</length>
-            </cylinder>
-          </geometry>
-        </buoyancy>
-        <wavefield>
-          <topic>/vrx/wavefield/parameters</topic>
-        </wavefield>
-      </plugin>
-    </include>
-
-    <include>
-      <name>mb_marker_buoy_green</name>
-      <pose>-528 189 0 0 0 0</pose>
-      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/mb_marker_buoy_green</uri>
-
-      <plugin name="vrx::PolyhedraBuoyancyDrag"
-              filename="libPolyhedraBuoyancyDrag.so">
-        <fluid_density>1000</fluid_density>
-        <fluid_level>0.0</fluid_level>
-        <linear_drag>25.0</linear_drag>
-        <angular_drag>2.0</angular_drag>
-        <buoyancy name="collision_outer">
-          <link_name>link</link_name>
-          <pose>0 0 -0.3 0 0 0</pose>
-          <geometry>
-            <cylinder>
-              <radius>0.325</radius>
-              <length>0.1</length>
-            </cylinder>
-          </geometry>
-        </buoyancy>
-        <wavefield>
-          <topic>/vrx/wavefield/parameters</topic>
-        </wavefield>
-      </plugin>
-    </include>
-
-    <include>
-      <name>mb_marker_buoy_white</name>
-      <pose>-528 188 0 0 0 0</pose>
-      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/mb_marker_buoy_white</uri>
-
-      <plugin name="vrx::PolyhedraBuoyancyDrag"
-              filename="libPolyhedraBuoyancyDrag.so">
-        <fluid_density>1000</fluid_density>
-        <fluid_level>0.0</fluid_level>
-        <linear_drag>25.0</linear_drag>
-        <angular_drag>2.0</angular_drag>
-        <buoyancy name="collision_outer">
-          <link_name>link</link_name>
-          <pose>0 0 -0.3 0 0 0</pose>
-          <geometry>
-            <cylinder>
-              <radius>0.325</radius>
-              <length>0.1</length>
-            </cylinder>
-          </geometry>
-        </buoyancy>
-        <wavefield>
-          <topic>/vrx/wavefield/parameters</topic>
-        </wavefield>
-      </plugin>
-    </include>
-
-    <include>
-      <name>mb_round_buoy_orange</name>
-      <pose>-528 187 0 0 0 0</pose>
-      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/mb_round_buoy_orange</uri>
-
-      <plugin name="vrx::PolyhedraBuoyancyDrag"
-              filename="libPolyhedraBuoyancyDrag.so">
-        <fluid_density>1000</fluid_density>
-        <fluid_level>0.0</fluid_level>
-        <linear_drag>75.0</linear_drag>
-        <angular_drag>2.0</angular_drag>
-        <buoyancy name="collision_outer">
+        <buoyancy name="buoyancy_box">
           <link_name>link</link_name>
           <pose>0 0 0 0 0 0</pose>
           <geometry>
+            <box>
+              <size>0.80 0.40 0.15</size>
+            </box>
+          </geometry>
+        </buoyancy>
+        <wavefield>
+          <topic>/vrx/wavefield/parameters</topic>
+        </wavefield>
+      </plugin>
+
+      <plugin filename="gz-sim-trajectory-follower-system"
+              name="gz::sim::systems::TrajectoryFollower">
+        <link_name>link</link_name>
+        <loop>true</loop>
+        <force>18</force>
+        <torque>1.5</torque>
+        <waypoints>
+          <waypoint>-554 172</waypoint>
+          <waypoint>-552 168</waypoint>
+        </waypoints>
+      </plugin>
+    </include>
+
+    <!-- The turtle buoy -->
+    <include>
+      <pose>-472 170 0 0 0 0</pose>
+      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/turtle</uri>
+
+      <plugin name="vrx::PolyhedraBuoyancyDrag"
+              filename="libPolyhedraBuoyancyDrag.so">
+        <fluid_density>1000</fluid_density>
+        <fluid_level>0.0</fluid_level>
+        <linear_drag>25.0</linear_drag>
+        <angular_drag>2.0</angular_drag>
+        <buoyancy name="buoyancy_sphere">
+          <link_name>link</link_name>
+          <pose>0 0 0.2 0 0 0</pose>
+          <geometry>
             <sphere>
-              <radius>0.21</radius>
+              <radius>0.35</radius>
             </sphere>
           </geometry>
         </buoyancy>
@@ -684,31 +419,55 @@
           <topic>/vrx/wavefield/parameters</topic>
         </wavefield>
       </plugin>
+
+      <plugin filename="gz-sim-trajectory-follower-system"
+              name="gz::sim::systems::TrajectoryFollower">
+        <link_name>link</link_name>
+        <loop>true</loop>
+        <force>6</force>
+        <torque>1</torque>
+        <waypoints>
+          <waypoint>-474 172</waypoint>
+          <waypoint>-472 168</waypoint>
+        </waypoints>
+      </plugin>
     </include>
 
+    <!-- The platypus buoy -->
     <include>
-      <name>mb_round_buoy_black</name>
-      <pose>-528 186 0 0 0 0</pose>
-      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/mb_round_buoy_black</uri>
+      <pose>-512 170 0 0 0 0</pose>
+      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/platypus</uri>
 
       <plugin name="vrx::PolyhedraBuoyancyDrag"
               filename="libPolyhedraBuoyancyDrag.so">
         <fluid_density>1000</fluid_density>
         <fluid_level>0.0</fluid_level>
-        <linear_drag>75.0</linear_drag>
+        <linear_drag>25.0</linear_drag>
         <angular_drag>2.0</angular_drag>
-        <buoyancy name="collision_outer">
+        <buoyancy name="buoyancy_box">
           <link_name>link</link_name>
           <pose>0 0 0 0 0 0</pose>
           <geometry>
-            <sphere>
-              <radius>0.21</radius>
-            </sphere>
+            <box>
+              <size>0.75 0.35 0.16</size>
+            </box>
           </geometry>
         </buoyancy>
         <wavefield>
           <topic>/vrx/wavefield/parameters</topic>
         </wavefield>
+      </plugin>
+
+      <plugin filename="gz-sim-trajectory-follower-system"
+              name="gz::sim::systems::TrajectoryFollower">
+        <link_name>link</link_name>
+        <loop>true</loop>
+        <force>18</force>
+        <torque>1.5</torque>
+        <waypoints>
+          <waypoint>-514 172</waypoint>
+          <waypoint>-512 168</waypoint>
+        </waypoints>
       </plugin>
     </include>
 
@@ -720,12 +479,12 @@
     </include>
     <include>
       <name>post_1</name>
-      <pose>-527.48999 153.854782 0.425844 -0.1365 0 0</pose>
+      <pose>-527.48999 153.854782 0.425844 -0.1365 0  0</pose>
       <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/post</uri>
     </include>
     <include>
       <name>post_2</name>
-      <pose>-544.832825 156.671951 0.499025 -0.162625 0 0</pose>
+      <pose>-544.832825 156.671951 0.499025 -0.162625 0 0 </pose>
       <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/post</uri>
     </include>
 
@@ -778,7 +537,7 @@
       </plugin>
     </include>
 
-    <!-- Load the plugin for the wind -->
+    <!-- Load the plugin for the wind --> 
     <plugin
       filename="libUSVWind.so"
       name="vrx::USVWind">
@@ -787,10 +546,10 @@
         <link_name>wamv/base_link</link_name>
         <coeff_vector>.5 .5 .33</coeff_vector>
       </wind_obj>
-      <!-- Wind from SW (240°) - INTENSE -->
+      <!-- Wind -->
       <wind_direction>240</wind_direction>
       <!-- in degrees -->
-      <wind_mean_velocity>10.0</wind_mean_velocity>
+      <wind_mean_velocity>0.0</wind_mean_velocity>
       <var_wind_gain_constants>0</var_wind_gain_constants>
       <var_wind_time_constants>2</var_wind_time_constants>
       <random_seed>10</random_seed>
@@ -798,6 +557,39 @@
       <update_rate>10</update_rate>
       <topic_wind_speed>/vrx/debug/wind/speed</topic_wind_speed>
       <topic_wind_direction>/vrx/debug/wind/direction</topic_wind_direction>
+     </plugin>
+
+    <!-- The wildlife scoring plugin -->
+    <plugin
+      filename="libWildlifeScoringPlugin.so"
+      name="vrx::WildlifeScoringPlugin">
+
+      <!-- Common parameters -->
+      <vehicle>wamv</vehicle>
+      <task_name>wildlife</task_name>
+      <initial_state_duration>10</initial_state_duration>
+      <ready_state_duration>10</ready_state_duration>
+      <running_state_duration>300</running_state_duration>
+      <collision_buffer>10</collision_buffer>
+
+      <!-- wildlife specific parameters -->
+      <buoys>
+        <buoy>
+          <name>crocodile::link</name>
+          <goal>avoid</goal>
+        </buoy>
+        <buoy>
+          <name>platypus::link</name>
+          <goal>circumnavigate_clockwise</goal>
+        </buoy>
+        <buoy>
+          <name>turtle::link</name>
+          <goal>circumnavigate_counterclockwise</goal>
+        </buoy>
+      </buoys>
+      <engagement_distance>10.0</engagement_distance>
+      <time_bonus>30.0</time_bonus>
+      <topic_prefix>/vrx/wildlife/animal</topic_prefix>
     </plugin>
 
     <!-- The wave field -->
@@ -808,7 +600,7 @@
           key: "direction"
           value {
             type: DOUBLE
-            double_value: 240.0
+            double_value: 0.0
           }
         }
         params {

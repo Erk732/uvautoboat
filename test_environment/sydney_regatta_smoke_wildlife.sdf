@@ -1,0 +1,343 @@
+<?xml version="1.0" ?>
+<!--
+  Sydney Regatta world with both smoke emitters and wildlife task animals.
+  Smoke kill-zone plugin flips wildlife belly-up when they enter a 6m smoke radius.
+-->
+<sdf version="1.9">
+  <world name="sydney_regatta_smoke_wildlife">
+
+    <physics name="4ms" type="dart">
+      <max_step_size>0.004</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <gui fullscreen="0">
+      <plugin filename="MinimalScene" name="3D View">
+        <gz-gui>
+          <title>3D View</title>
+          <property type="bool" key="showTitleBar">false</property>
+          <property type="string" key="state">docked</property>
+        </gz-gui>
+        <engine>ogre2</engine>
+        <scene>scene</scene>
+        <ambient_light>0.4 0.4 0.4</ambient_light>
+        <background_color>0.8 0.8 0.8</background_color>
+        <camera_pose>-478.1 148.2 13.2 0 0.25 2.94</camera_pose>
+        <camera_clip>
+          <near>0.25</near>
+          <far>10000</far>
+        </camera_clip>
+      </plugin>
+      <plugin filename="EntityContextMenuPlugin" name="Entity context menu"/>
+      <plugin filename="GzSceneManager" name="Scene Manager"/>
+      <plugin filename="InteractiveViewControl" name="Interactive view control"/>
+      <plugin filename="CameraTracking" name="Camera Tracking"/>
+      <plugin filename="MarkerManager" name="Marker manager"/>
+      <plugin filename="SelectEntities" name="Select Entities"/>
+      <plugin filename="VisualizationCapabilities" name="Visualization Capabilities"/>
+      <plugin filename="Spawn" name="Spawn Entities"/>
+      <plugin filename="WorldControl" name="World control"/>
+      <plugin filename="WorldStats" name="World stats"/>
+      <plugin filename="Shapes" name="Shapes"/>
+      <plugin filename="Lights" name="Lights"/>
+      <plugin filename="TransformControl" name="Transform control"/>
+      <plugin filename="Screenshot" name="Screenshot"/>
+      <plugin filename="VideoRecorder" name="VideoRecorder"/>
+      <plugin filename="ComponentInspector" name="Component inspector"/>
+      <plugin filename="EntityTree" name="Entity tree"/>
+      <plugin filename="ViewAngle" name="View angle"/>
+    </gui>
+
+    <scene>
+      <sky></sky>
+      <grid>false</grid>
+      <ambient>1.0 1.0 1.0</ambient>
+      <background>0.8 0.8 0.8</background>
+    </scene>
+
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <world_frame_orientation>ENU</world_frame_orientation>
+      <latitude_deg>-33.724223</latitude_deg>
+      <longitude_deg>150.679736</longitude_deg>
+      <elevation>0.0</elevation>
+      <heading_deg>0.0</heading_deg>
+    </spherical_coordinates>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <!-- Base world -->
+    <include>
+      <pose> 0 0 0.2 0 0 0 </pose>
+      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/sydney_regatta</uri>
+    </include>
+    <include>
+      <name>Coast Waves</name>
+      <pose>0 0 0 0 0 0</pose>
+      <uri>coast_waves</uri>
+    </include>
+
+    <!-- Smoke generators -->
+    <model name="smoke_generator">
+      <pose>-535 280 0.5 0 0 0</pose>
+      <static>true</static>
+      <link name="smoke_link">
+        <visual name="marker_visual">
+          <geometry><sphere><radius>0.25</radius></sphere></geometry>
+          <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
+        </visual>
+        <particle_emitter name="smoke_emitter" type="box">
+          <emitting>true</emitting>
+          <size>7 7 1</size>
+          <particle_size>0.4 0.4 0.4</particle_size>
+          <lifetime>180</lifetime>
+          <min_velocity>0.15</min_velocity>
+          <max_velocity>0.35</max_velocity>
+          <rate>8</rate>
+          <scale_rate>0.20</scale_rate>
+          <pose>0 0 0 0.10 -1.4707 0.10</pose>
+          <material>
+            <diffuse>0.5 0.5 0.5 0.30</diffuse>
+            <specular>0.1 0.1 0.1 1.0</specular>
+          </material>
+          <particle_scatter_ratio>0.10</particle_scatter_ratio>
+        </particle_emitter>
+      </link>
+    </model>
+
+    <model name="smoke_generator_east">
+      <pose>-525 275 0.5 0 0 0</pose>
+      <static>true</static>
+      <link name="smoke_link">
+        <visual name="marker_visual">
+          <geometry><sphere><radius>0.25</radius></sphere></geometry>
+          <material><ambient>0 1 0 1</ambient><diffuse>0 1 0 1</diffuse></material>
+        </visual>
+        <particle_emitter name="smoke_emitter" type="box">
+          <emitting>true</emitting>
+          <size>7 7 1</size>
+          <particle_size>0.6 0.6 0.6</particle_size>
+          <lifetime>200</lifetime>
+          <min_velocity>0.20</min_velocity>
+          <max_velocity>0.45</max_velocity>
+          <rate>10</rate>
+          <scale_rate>0.25</scale_rate>
+          <pose>0 0 0 0.10 -1.4707 0.10</pose>
+          <material>
+            <diffuse>0.55 0.55 0.55 0.28</diffuse>
+            <specular>0.1 0.1 0.1 1.0</specular>
+          </material>
+          <particle_scatter_ratio>0.12</particle_scatter_ratio>
+        </particle_emitter>
+      </link>
+    </model>
+
+    <model name="smoke_generator_north">
+      <pose>-545 285 0.5 0 0 0</pose>
+      <static>true</static>
+      <link name="smoke_link">
+        <visual name="marker_visual">
+          <geometry><sphere><radius>0.25</radius></sphere></geometry>
+          <material><ambient>0 0 1 1</ambient><diffuse>0 0 1 1</diffuse></material>
+        </visual>
+        <particle_emitter name="smoke_emitter" type="box">
+          <emitting>true</emitting>
+          <size>7 7 1</size>
+          <particle_size>0.8 0.8 0.8</particle_size>
+          <lifetime>220</lifetime>
+          <min_velocity>0.15</min_velocity>
+          <max_velocity>0.40</max_velocity>
+          <rate>7</rate>
+          <scale_rate>0.20</scale_rate>
+          <pose>0 0 0 0.12 -1.4707 0.12</pose>
+          <material>
+            <diffuse>0.45 0.45 0.45 0.32</diffuse>
+            <specular>0.1 0.1 0.1 1.0</specular>
+          </material>
+          <particle_scatter_ratio>0.14</particle_scatter_ratio>
+        </particle_emitter>
+      </link>
+    </model>
+
+    <!-- Wildlife task animals -->
+    <include>
+      <pose>-552 170 0 0 0 0</pose>
+      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/crocodile</uri>
+      <plugin name="vrx::PolyhedraBuoyancyDrag" filename="libPolyhedraBuoyancyDrag.so">
+        <fluid_density>1000</fluid_density>
+        <fluid_level>0.0</fluid_level>
+        <linear_drag>25.0</linear_drag>
+        <angular_drag>2.0</angular_drag>
+        <buoyancy name="buoyancy_box">
+          <link_name>link</link_name>
+          <pose>0 0 0 0 0 0</pose>
+          <geometry><box><size>0.80 0.40 0.15</size></box></geometry>
+        </buoyancy>
+        <wavefield><topic>/vrx/wavefield/parameters</topic></wavefield>
+      </plugin>
+      <plugin filename="gz-sim-trajectory-follower-system" name="gz::sim::systems::TrajectoryFollower">
+        <link_name>link</link_name>
+        <loop>true</loop>
+        <force>18</force>
+        <torque>1.5</torque>
+        <waypoints>
+          <waypoint>-554 172</waypoint>
+          <waypoint>-552 168</waypoint>
+        </waypoints>
+      </plugin>
+    </include>
+
+    <include>
+      <pose>-472 170 0 0 0 0</pose>
+      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/turtle</uri>
+      <plugin name="vrx::PolyhedraBuoyancyDrag" filename="libPolyhedraBuoyancyDrag.so">
+        <fluid_density>1000</fluid_density>
+        <fluid_level>0.0</fluid_level>
+        <linear_drag>25.0</linear_drag>
+        <angular_drag>2.0</angular_drag>
+        <buoyancy name="buoyancy_sphere">
+          <link_name>link</link_name>
+          <pose>0 0 0.2 0 0 0</pose>
+          <geometry><sphere><radius>0.35</radius></sphere></geometry>
+        </buoyancy>
+        <wavefield><topic>/vrx/wavefield/parameters</topic></wavefield>
+      </plugin>
+      <plugin filename="gz-sim-trajectory-follower-system" name="gz::sim::systems::TrajectoryFollower">
+        <link_name>link</link_name>
+        <loop>true</loop>
+        <force>6</force>
+        <torque>1</torque>
+        <waypoints>
+          <waypoint>-474 172</waypoint>
+          <waypoint>-472 168</waypoint>
+        </waypoints>
+      </plugin>
+    </include>
+
+    <include>
+      <pose>-512 170 0 0 0 0</pose>
+      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/platypus</uri>
+      <plugin name="vrx::PolyhedraBuoyancyDrag" filename="libPolyhedraBuoyancyDrag.so">
+        <fluid_density>1000</fluid_density>
+        <fluid_level>0.0</fluid_level>
+        <linear_drag>25.0</linear_drag>
+        <angular_drag>2.0</angular_drag>
+        <buoyancy name="buoyancy_box">
+          <link_name>link</link_name>
+          <pose>0 0 0 0 0 0</pose>
+          <geometry><box><size>0.75 0.35 0.16</size></box></geometry>
+        </buoyancy>
+        <wavefield><topic>/vrx/wavefield/parameters</topic></wavefield>
+      </plugin>
+      <plugin filename="gz-sim-trajectory-follower-system" name="gz::sim::systems::TrajectoryFollower">
+        <link_name>link</link_name>
+        <loop>true</loop>
+        <force>18</force>
+        <torque>1.5</torque>
+        <waypoints>
+          <waypoint>-514 172</waypoint>
+          <waypoint>-512 168</waypoint>
+        </waypoints>
+      </plugin>
+    </include>
+
+    <!-- Docking posts, antenna, ground stations, projectile -->
+    <include><name>post_0</name><pose>-535.916809 154.362869 0.675884 -0.17182 0.030464 -0.005286</pose><uri>https://fuel.gazebosim.org/1.0/openrobotics/models/post</uri></include>
+    <include><name>post_1</name><pose>-527.48999 153.854782 0.425844 -0.1365 0 0</pose><uri>https://fuel.gazebosim.org/1.0/openrobotics/models/post</uri></include>
+    <include><name>post_2</name><pose>-544.832825 156.671951 0.499025 -0.162625 0 0</pose><uri>https://fuel.gazebosim.org/1.0/openrobotics/models/post</uri></include>
+    <include><pose>-531.063721 147.668579 1.59471 -0.068142 0 -0.1</pose><uri>https://fuel.gazebosim.org/1.0/openrobotics/models/antenna</uri></include>
+    <include><name>ground_station_0</name><pose>-540.796448 146.493744 1.671421 -0.00834 0.01824 1.301726</pose><uri>https://fuel.gazebosim.org/1.0/openrobotics/models/ground_station</uri></include>
+    <include><name>ground_station_1</name><pose>-537.622681 145.827896 1.681931 -0.00603 0.018667 1.301571</pose><uri>https://fuel.gazebosim.org/1.0/openrobotics/models/ground_station</uri></include>
+    <include><name>ground_station_2</name><pose>-534.550537 144.910400 1.720474 -0.004994 0.020798 1.301492</pose><uri>https://fuel.gazebosim.org/1.0/openrobotics/models/ground_station</uri></include>
+    <include>
+      <name>blue_projectile</name>
+      <pose>-545 60 0.03 0 0 0</pose>
+      <uri>blue_projectile</uri>
+      <plugin name="vrx::PolyhedraBuoyancyDrag" filename="libPolyhedraBuoyancyDrag.so">
+        <fluid_density>1000</fluid_density>
+        <fluid_level>0.0</fluid_level>
+        <linear_drag>25.0</linear_drag>
+        <angular_drag>2.0</angular_drag>
+        <buoyancy name="collision_outer">
+          <link_name>link</link_name>
+          <pose>0 0 -0.02 0 0 0</pose>
+          <geometry><sphere><radius>0.0285</radius></sphere></geometry>
+        </buoyancy>
+        <wavefield><topic>/vrx/wavefield/parameters</topic></wavefield>
+      </plugin>
+    </include>
+
+    <!-- Wind (matching smoke world) -->
+    <plugin filename="libUSVWind.so" name="vrx::USVWind">
+      <wind_obj>
+        <name>wamv</name>
+        <link_name>wamv/base_link</link_name>
+        <coeff_vector>.5 .5 .33</coeff_vector>
+      </wind_obj>
+      <wind_direction>240</wind_direction>
+      <wind_mean_velocity>10.0</wind_mean_velocity>
+      <var_wind_gain_constants>0</var_wind_gain_constants>
+      <var_wind_time_constants>2</var_wind_time_constants>
+      <random_seed>10</random_seed>
+      <update_rate>10</update_rate>
+      <topic_wind_speed>/vrx/debug/wind/speed</topic_wind_speed>
+      <topic_wind_direction>/vrx/debug/wind/direction</topic_wind_direction>
+    </plugin>
+
+    <!-- Wildlife scoring -->
+    <plugin filename="libWildlifeScoringPlugin.so" name="vrx::WildlifeScoringPlugin">
+      <vehicle>wamv</vehicle>
+      <task_name>wildlife</task_name>
+      <initial_state_duration>10</initial_state_duration>
+      <ready_state_duration>10</ready_state_duration>
+      <running_state_duration>300</running_state_duration>
+      <collision_buffer>10</collision_buffer>
+      <buoys>
+        <buoy><name>crocodile::link</name><goal>avoid</goal></buoy>
+        <buoy><name>platypus::link</name><goal>circumnavigate_clockwise</goal></buoy>
+        <buoy><name>turtle::link</name><goal>circumnavigate_counterclockwise</goal></buoy>
+      </buoys>
+      <engagement_distance>10.0</engagement_distance>
+      <time_bonus>30.0</time_bonus>
+      <topic_prefix>/vrx/wildlife/animal</topic_prefix>
+    </plugin>
+
+    <!-- Wave field -->
+    <plugin filename="libPublisherPlugin.so" name="vrx::PublisherPlugin">
+      <message type="gz.msgs.Param" topic="/vrx/wavefield/parameters" every="2.0">
+        params { key: "direction" value { type: DOUBLE double_value: 240.0 } }
+        params { key: "gain" value { type: DOUBLE double_value: 0.3 } }
+        params { key: "period" value { type: DOUBLE double_value: 5 } }
+        params { key: "amplitude" value { type: DOUBLE double_value: 0.5 } }
+      </message>
+    </plugin>
+
+    <!-- Smoke dead-zone plugin -->
+    <plugin filename="libdead_zone_plugin.so" name="dead_zone_plugin">
+      <dead_zone_radius>6.0</dead_zone_radius>
+      <smoke_models>
+        <name>smoke_generator</name>
+        <name>smoke_generator_east</name>
+        <name>smoke_generator_north</name>
+      </smoke_models>
+      <wildlife_models>
+        <name>crocodile</name>
+        <name>platypus</name>
+        <name>turtle</name>
+      </wildlife_models>
+    </plugin>
+
+  </world>
+</sdf>
