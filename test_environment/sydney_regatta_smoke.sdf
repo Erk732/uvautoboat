@@ -425,112 +425,131 @@
       No external model needed - fully self-contained particle emitter.
     -->
     <!-- All smoke generators clustered in one zone (~120m north of boat spawn) -->
-   <model name="smoke_generator">
-  <pose>-535 280 0.7 0 0 0</pose> <!-- raise smoke source above z=0.5 -->
-  <static>true</static>
+      <!-- ========================= -->
+<!--  SMOKE SET A (MAIN)      -->
+<!-- ========================= -->
+    <model name="smoke_generator">
+      <pose>-535 280 0.5 0 0 0</pose>
+      <static>true</static>
 
-  <link name="smoke_link">
-    <visual name="marker_visual">
-      <pose>0 0 0 0 0 0</pose>
-      <geometry><sphere><radius>0.2</radius></sphere></geometry>
-      <material>
-        <ambient>0.4 0 0 1</ambient>
-        <diffuse>0.4 0 0 1</diffuse>
-      </material>
-    </visual>
+      <link name="smoke_link">
+        <visual name="marker_visual">
+          <geometry><sphere><radius>0.25</radius></sphere></geometry>
+          <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
+        </visual>
 
-    <particle_emitter name="smoke_emitter" type="box">
-      <emitting>true</emitting>
-      <size>8 8 1</size>
-      <particle_size>0.6 0.6 0.6</particle_size>
-      <lifetime>400</lifetime>
-      <min_velocity>0.2</min_velocity>
-      <max_velocity>0.5</max_velocity>
-      <rate>10</rate>
+        <particle_emitter name="smoke_emitter" type="box">
+          <emitting>true</emitting>
 
-      <!-- raise smoke origin -->
-      <pose>0 0 0.3 0.15 -1.4707 0.15</pose>
+          <!-- Slightly reduced emission area -->
+          <size>7 7 1</size>
 
-      <material>
-        <diffuse>0.5 0.5 0.5 0.25</diffuse> <!-- more transparent -->
-        <specular>0.1 0.1 0.1 1.0</specular>
-      </material>
+          <!-- Must be > 0.3 for filter -->
+          <particle_size>0.4 0.4 0.4</particle_size>
 
-      <particle_scatter_ratio>0.15</particle_scatter_ratio>
-      <scale_rate>0.1</scale_rate>
-    </particle_emitter>
-  </link>
-</model>
+          <!-- Long enough for visibility -->
+          <lifetime>180</lifetime>
 
-<!-- EAST -->
-<model name="smoke_generator_east">
-  <pose>-525 275 0.7 0 0 0</pose>
-  <static>true</static>
+          <min_velocity>0.15</min_velocity>
+          <max_velocity>0.35</max_velocity>
 
-  <link name="smoke_link">
-    <visual name="marker_visual">
-      <pose>0 0 0 0 0 0</pose>
-      <geometry><sphere><radius>0.2</radius></sphere></geometry>
-      <material>
-        <ambient>0 0.6 0 1</ambient>
-        <diffuse>0 0.6 0 1</diffuse>
-      </material>
-    </visual>
+          <!-- Lower density than original -->
+          <rate>8</rate>
 
-    <particle_emitter name="smoke_emitter" type="box">
-      <emitting>true</emitting>
-      <size>8 8 1</size>
-      <particle_size>1.5 1.5 1.5</particle_size>
-      <lifetime>350</lifetime>
-      <min_velocity>0.3</min_velocity>
-      <max_velocity>0.9</max_velocity>
-      <rate>20</rate>
-      <pose>0 0 0.3 0.12 -1.4707 0.12</pose>
+          <scale_rate>0.20</scale_rate>
 
-      <material>
-        <diffuse>0.55 0.55 0.55 0.28</diffuse>
-      </material>
+          <!-- Wind tilt -->
+          <pose>0 0 0 0.10 -1.4707 0.10</pose>
 
-      <particle_scatter_ratio>0.12</particle_scatter_ratio>
-      <scale_rate>0</scale_rate>
-    </particle_emitter>
-  </link>
-</model>
+          <material>
+            <!-- α must be > 0.20 for smoke filter -->
+            <diffuse>0.5 0.5 0.5 0.30</diffuse>
+            <specular>0.1 0.1 0.1 1.0</specular>
+          </material>
 
-<!-- NORTH -->
-<model name="smoke_generator_north">
-  <pose>-545 285 0.7 0 0 0</pose>
-  <static>true</static>
+          <particle_scatter_ratio>0.10</particle_scatter_ratio>
+        </particle_emitter>
+      </link>
+    </model>
 
-  <link name="smoke_link">
-    <visual name="marker_visual">
-      <pose>0 0 0 0 0 0</pose>
-      <geometry><sphere><radius>0.2</radius></sphere></geometry>
-      <material>
-        <ambient>0 0 0.6 1</ambient>
-        <diffuse>0 0 0.6 1</diffuse>
-      </material>
-    </visual>
+    <!-- ========================= -->
+    <!--  SMOKE SET B (EAST)      -->
+    <!-- ========================= -->
+    <model name="smoke_generator_east">
+      <pose>-525 275 0.5 0 0 0</pose>
+      <static>true</static>
 
-    <particle_emitter name="smoke_emitter" type="box">
-      <emitting>true</emitting>
-      <size>8 8 1</size>
-      <particle_size>2.2 2.2 2.2</particle_size>
-      <lifetime>450</lifetime>
-      <min_velocity>0.2</min_velocity>
-      <max_velocity>0.7</max_velocity>
-      <rate>12</rate>
-      <pose>0 0 0.3 0.18 -1.4707 0.18</pose>
+      <link name="smoke_link">
+        <visual name="marker_visual">
+          <geometry><sphere><radius>0.25</radius></sphere></geometry>
+          <material><ambient>0 1 0 1</ambient><diffuse>0 1 0 1</diffuse></material>
+        </visual>
 
-      <material>
-        <diffuse>0.45 0.45 0.45 0.30</diffuse>
-      </material>
+        <particle_emitter name="smoke_emitter" type="box">
+          <emitting>true</emitting>
+          <size>7 7 1</size>
 
-      <particle_scatter_ratio>0.18</particle_scatter_ratio>
-      <scale_rate>0</scale_rate>
-    </particle_emitter>
-  </link>
-</model>
+          <particle_size>0.6 0.6 0.6</particle_size>
+          <lifetime>200</lifetime>
+
+          <min_velocity>0.20</min_velocity>
+          <max_velocity>0.45</max_velocity>
+
+          <rate>10</rate>
+
+          <scale_rate>0.25</scale_rate>
+
+          <pose>0 0 0 0.10 -1.4707 0.10</pose>
+
+          <material>
+            <diffuse>0.55 0.55 0.55 0.28</diffuse>
+            <specular>0.1 0.1 0.1 1.0</specular>
+          </material>
+
+          <particle_scatter_ratio>0.12</particle_scatter_ratio>
+        </particle_emitter>
+      </link>
+    </model>
+
+    <!-- ========================= -->
+    <!--  SMOKE SET C (NORTH)     -->
+    <!-- ========================= -->
+    <model name="smoke_generator_north">
+      <pose>-545 285 0.5 0 0 0</pose>
+      <static>true</static>
+
+      <link name="smoke_link">
+        <visual name="marker_visual">
+          <geometry><sphere><radius>0.25</radius></sphere></geometry>
+          <material><ambient>0 0 1 1</ambient><diffuse>0 0 1 1</diffuse></material>
+        </visual>
+
+        <particle_emitter name="smoke_emitter" type="box">
+          <emitting>true</emitting>
+          <size>7 7 1</size>
+
+          <particle_size>0.8 0.8 0.8</particle_size>
+          <lifetime>220</lifetime>
+
+          <min_velocity>0.15</min_velocity>
+          <max_velocity>0.40</max_velocity>
+
+          <rate>7</rate>
+
+          <scale_rate>0.20</scale_rate>
+
+          <pose>0 0 0 0.12 -1.4707 0.12</pose>
+
+          <material>
+            <diffuse>0.45 0.45 0.45 0.32</diffuse>
+            <specular>0.1 0.1 0.1 1.0</specular>
+          </material>
+
+          <particle_scatter_ratio>0.14</particle_scatter_ratio>
+        </particle_emitter>
+      </link>
+    </model>
+
 
 
     <include>
@@ -790,27 +809,27 @@
           value {
             type: DOUBLE
             double_value: 240.0
-          }gain
+          }
         }
         params {
           key: "gain"
           value {
             type: DOUBLE
-            double_value: 3.0
+            double_value: 0.8
           }
         }
         params {
           key: "period"
           value {
             type: DOUBLE
-            double_value: 3.0
+            double_value: 4
           }
         }
         params {
           key: "steepness"
           value {
             type: DOUBLE
-            double_value: 2.0
+            double_value: 0.4
           }
         }
       </message>
