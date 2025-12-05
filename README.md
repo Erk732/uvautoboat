@@ -427,9 +427,7 @@ The modular system uses below programs to work:
 | **Planner** | `atlantis_planner` | checks between waypoints |
 | **Controller** | `atlantis_controller` | Smart Anti Stuck System|
 
-
-
-
+The additional feauture for Atlantis method is that' unlike distributed architectures, Atlantis embeds the LidarObstacleDetector class directly within the controller loop. This ensures zero-latency obstacle reaction, allowing the boat to make steering decisions in the exact same millisecond that the Lidar scan is received.
 
 ### Modular Topic Flow Diagram
 
@@ -470,6 +468,38 @@ Detailed ROS 2 topic connections between the modular nodes:
 │  └─ /sputnik/mission_command    ◄─────────── CLI: start, pause, stop, go_home  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+### Atlantis Topic Flow Diagram
+
+Detailed ROS 2 connections for the Atlantis architecture. Note the direct LIDAR ingestion by both nodes:
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          ATLANTIS INTEGRATED SYSTEM                             │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│               (Shared Library: lidar_obstacle_avoidance.py)                     │
+│               ┌───────────────────────────────────────────┐                     │
+│               │                                           │                     │
+│  ┌──────────┐ ▼ /wamv/sensors/lidars/lidar_wamv.../points ▼    ┌──────────┐     │
+│  │ PLANNER  │◄───────────────────────┬───────────────────────► │CONTROLLER│     │
+│  │(Atlantis)│                        │                         │(Atlantis)│     │
+│  └──────────┘                        │                         └──────────┘     │
+│       │                              │                              ▲  ▲        │
+│       │ /atlantis/path ──────────────┼──────────────────────────────┘  │        │
+│       │                              │                                 │        │
+│       ▼                              │   /wamv/sensors/gps/gps/fix ────┘        │
+│  /atlantis/waypoints                 │   /wamv/sensors/imu/imu/data ───┐        │
+│  /atlantis/obstacle_map              │                                 │        │
+│       │                              │                                 │        │
+│       ▼                              │                                 │        │
+│  Web Dashboard                       │  /wamv/thrusters/left/thrust ───┼──► GZ  │
+│                                      │  /wamv/thrusters/right/thrust ──┼──► GZ  │
+│                                      │                                 │        │
+│  External Control:                   │  /atlantis/mission_status ──────► DASH   │
+│  ├─ /atlantis/replan    ───────────► │  /atlantis/anti_stuck_status ───► DASH   │
+│  └─ /atlantis/start     ───────────► │                                          │
+└──────────────────────────────────────┴──────────────────────────────────────────┘
+
 
 **JSON Message Formats:**
 
