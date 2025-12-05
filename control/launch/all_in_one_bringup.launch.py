@@ -56,33 +56,58 @@ def generate_launch_description():
             parameters=[{
                 'use_sim_time': True,
                 'pose_topic': '/wamv/pose_filtered',
-                # Obstacle and control parameters
-                'front_angle_deg': 45.0,
-                'side_angle_deg': 80.0,
-                'obstacle_slow_dist': 8.0,
-                'obstacle_stop_dist': 5.0,
-                'avoid_clear_margin': 2.0,
-                'avoid_max_turn_time': 5.0,
-                'avoid_turn_thrust': 100.0,
-                'avoid_diff_gain': 1.5,
-                'diff_bias_alpha': 0.8,
-                'side_change_threshold': 1.0,
-                'side_straight_clearance': 6.0,
-                'plan_avoid_margin': 8.0,
-                'hull_radius': 1.5,
-                'forward_thrust': 2000.0,
-                'kp_yaw': 300.0,
-                'heading_align_thresh_deg': 35.0,
-                'approach_slow_dist': 8.0,
-                'stuck_timeout': 25.0,
-                'stuck_progress_epsilon': 0.5,
-                'recover_reverse_time': 1.0,
-                'recover_turn_time': 3.0,
-                'recover_reverse_thrust': -120.0,
-                'lidar_log_interval': 2.0,
-                'min_range_filter': 1.0,
-                'full_clear_distance': 30.0,
-                'min_range_filter': 0.5,
+                
+                # ==================== Thrust Control ====================
+                'forward_thrust': 400.0,           # Base forward thrust (N)
+                'kp_yaw': 600.0,                   # Heading P gain
+                'control_rate': 20.0,              # Control loop frequency (Hz)
+                
+                # ==================== Waypoint Tracking ====================
+                'waypoint_tolerance': 3.0,         # Intermediate waypoint tolerance (m)
+                'goal_tolerance': 1.0,             # Final goal tolerance (m)
+                'approach_slow_dist': 10.0,        # Start slowdown distance (m)
+                'heading_align_thresh_deg': 20.0,  # Heading alignment threshold (deg)
+                'overshoot_margin': 1.0,           # Overshoot detection boundary (m)
+                
+                # ==================== Obstacle Avoidance ====================
+                'obstacle_slow_dist': 15.0,        # Slowdown trigger distance (m)
+                'obstacle_stop_dist': 8.0,         # Hard avoid trigger distance (m)
+                'avoid_turn_thrust': 350.0,        # Avoidance turn thrust (N)
+                'avoid_diff_gain': 40.0,           # Avoidance steering gain
+                'avoid_clear_margin': 3.0,         # Safety margin to exit avoidance (m)
+                'avoid_max_turn_time': 5.0,        # Maximum turn time (s)
+                'full_clear_distance': 60.0,       # Force avoidance trigger distance (m)
+                'front_angle_deg': 30.0,           # Front sector angle (deg)
+                'side_angle_deg': 60.0,            # Side sector angle (deg)
+                
+                # ==================== Stuck Detection & Recovery ====================
+                'stuck_timeout': 8.0,              # Stuck detection timeout (s)
+                'stuck_progress_epsilon': 0.1,     # Minimum movement distance (m)
+                'recover_reverse_time': 3.0,       # Reverse recovery time (s)
+                'recover_turn_time': 3.0,          # Turn recovery time (s)
+                'recover_reverse_thrust': -200.0,  # Reverse thrust (N)
+                'recover_reverse_time_long': 6.0,  # Extended reverse time (s)
+                
+                # ==================== Lidar Parameters ====================
+                'min_range_filter': 3.0,           # Minimum range filter (m) - Ignore obstacles within 3m
+                'cloud_z_min': -10.0,              # Min height filter (m) - LOWER for deep underwater obstacles
+                'cloud_z_max': 3.0,                # Max height filter (m) - HIGHER for tall obstacles
+                'vfh_enabled': True,               # Enable VFH steering
+                'vfh_bin_deg': 5.0,                # VFH bin angle (deg)
+                'vfh_block_dist': 10.0,            # VFH blocking distance (m)
+                'polar_use_scan': True,            # Use polar histogram
+                'polar_min_range': 0.5,            # Polar histogram min range (m)
+                
+                # ==================== Planning Parameters ====================
+                'plan_avoid_margin': 5.0,          # Planning detour margin (m)
+                'hull_radius': 1.5,                # Hull radius (m)
+                'path_step': 5.0,                  # Path interpolation step (m)
+                
+                # ==================== Data Timeouts ====================
+                'pose_timeout': 1.0,               # Pose data timeout (s)
+                'scan_timeout': 1.0,               # Lidar data timeout (s)
+                'lidar_log_interval': 2.0,         # Lidar log interval (s)
+                
             }, hazard_config],
         ),
     ])

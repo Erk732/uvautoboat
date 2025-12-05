@@ -213,6 +213,7 @@ class AllInOneStack(Node):
         self.min_goal_dist: float = float('inf')
         self.last_progress_time: float = 0.0
         self.last_goal_dist: float = float('inf')
+        self.last_progress_pos: tuple[float, float] | None = None
         self.last_lidar_log_time: float = 0.0
         self.recovering: bool = False
         self.recover_phase: str = ''
@@ -340,6 +341,88 @@ class AllInOneStack(Node):
         # Initial path points (goal)
         path_points = [(goal.x, goal.y)]
 
+        # If goal inside hazard, nudge it outward along start->goal normal
+        if self.in_hazard_zone(goal.x, goal.y):
+            hx = goal.x
+            hy = goal.y
+            offset = max(self.plan_avoid_margin, self.hull_radius * 2.0)
+            # perpendicular unit normal
+            nx = -dy / dist
+            ny = dx / dist
+            # try both sides to exit hazard
+            for side in (1.0, -1.0):
+                gx_new = hx + side * offset * nx
+                gy_new = hy + side * offset * ny
+                if not self.in_hazard_zone(gx_new, gy_new):
+                    path_points = [(gx_new, gy_new)]
+                    self.get_logger().info(
+                        f'Goal inside hazard, nudged to ({gx_new:.1f}, {gy_new:.1f}).'
+                    )
+                    break
+
+        # Hazard-aware detour: shift path if segment intersects any hazard box
+        if self.hazard_enabled and self.hazard_boxes:
+            def _expand_box(box, margin):
+                xmin, ymin, xmax, ymax = box
+                return (xmin - margin, ymin - margin, xmax + margin, ymax + margin)
+
+            def _point_in_box(px, py, box):
+                xmin, ymin, xmax, ymax = box
+                return xmin <= px <= xmax and ymin <= py <= ymax
+
+            def _segments_intersect(p1, p2, p3, p4):
+                def orient(a, b, c):
+                    return (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0])
+                o1 = orient(p1, p2, p3)
+                o2 = orient(p1, p2, p4)
+                o3 = orient(p3, p4, p1)
+                o4 = orient(p3, p4, p2)
+                if o1 == 0 and o2 == 0 and o3 == 0 and o4 == 0:
+                    # colinear
+                    def between(a,b,c):
+                        return min(a,b) <= c <= max(a,b)
+                    return (between(p1[0], p2[0], p3[0]) or between(p1[0], p2[0], p4[0]) or
+                            between(p1[1], p2[1], p3[1]) or between(p1[1], p2[1], p4[1]))
+                return (o1 * o2 <= 0) and (o3 * o4 <= 0)
+
+            def _seg_box_intersect(p1, p2, box):
+                # Check intersection with expanded box edges or inside
+                if _point_in_box(p1[0], p1[1], box) or _point_in_box(p2[0], p2[1], box):
+                    return True
+                xmin, ymin, xmax, ymax = box
+                corners = [(xmin, ymin), (xmax, ymin), (xmax, ymax), (xmin, ymax)]
+                edges = [(corners[i], corners[(i+1) % 4]) for i in range(4)]
+                for e1, e2 in edges:
+                    if _segments_intersect(p1, p2, e1, e2):
+                        return True
+                return False
+
+            def _segment_hits_any(p1, p2, margin):
+                for box in self.hazard_boxes:
+                    if _seg_box_intersect(p1, p2, _expand_box(box, margin)):
+                        return True
+                return False
+
+            base_seg_start = (start.x, start.y)
+            base_seg_goal = (path_points[-1][0], path_points[-1][1])
+            margin = max(self.plan_avoid_margin, self.hull_radius * 2.0)
+            if _segment_hits_any(base_seg_start, base_seg_goal, margin):
+                nx = -dy / dist
+                ny = dx / dist
+                offset = margin
+                chosen = None
+                for side in (1.0, -1.0):
+                    cand1 = (start.x + side * offset * nx, start.y + side * offset * ny)
+                    cand2 = (base_seg_goal[0] + side * offset * nx, base_seg_goal[1] + side * offset * ny)
+                    if not _segment_hits_any(cand1, cand2, margin):
+                        chosen = (cand1, cand2)
+                        break
+                if chosen:
+                    path_points = [chosen[0], chosen[1], base_seg_goal]
+                    self.get_logger().info(
+                        f'Hazard avoided by offset path side={"left" if chosen[0][0]!=start.x else "right"}, '
+                        f'waypoints: ({chosen[0][0]:.1f},{chosen[0][1]:.1f}) -> ({chosen[1][0]:.1f},{chosen[1][1]:.1f}).'
+                    )
         # If obstacle ahead, add a side detour waypoint using current lidar
         front_min, left_min, right_min = self.analyze_lidar()
         if front_min is not None and front_min < self.obstacle_slow_dist and dist > 1e-3:
@@ -397,6 +480,7 @@ class AllInOneStack(Node):
         self.min_goal_dist = float('inf')
         self.last_goal_dist = float('inf')
         self.last_progress_time = self.get_clock().now().nanoseconds / 1e9
+        self.last_progress_pos = (start.x, start.y)
         self.recovering = False
         self.recover_phase = ''
         self.recover_turn_dir = 1.0
@@ -428,48 +512,44 @@ class AllInOneStack(Node):
         left:  [0, +side_angle]
         right: [-side_angle, 0]
         """
-        # Try point cloud first for low obstacles
+        # Try point cloud first for low obstacles (may be partial)
         front_min_cloud, left_min_cloud, right_min_cloud = self._analyze_pointcloud()
-        if front_min_cloud is not None or left_min_cloud is not None or right_min_cloud is not None:
-            return front_min_cloud, left_min_cloud, right_min_cloud
 
-        if self.latest_scan is None:
-            return None, None, None
-
-        scan = self.latest_scan
-        angle = scan.angle_min
-
-        front_min = float('inf')
-        left_min = float('inf')
-        right_min = float('inf')
-
-        for r in scan.ranges:
-            if math.isinf(r) or math.isnan(r) or r <= 0.0:
+        # Also compute from scan for fallback/merge
+        front_min_scan, left_min_scan, right_min_scan = None, None, None
+        if self.latest_scan is not None:
+            scan = self.latest_scan
+            angle = scan.angle_min
+            f = l = r = float('inf')
+            for rng in scan.ranges:
+                if math.isinf(rng) or math.isnan(rng) or rng <= 0.0:
+                    angle += scan.angle_increment
+                    continue
+                if rng < self.min_range_filter:
+                    angle += scan.angle_increment
+                    continue
+                if -self.front_angle <= angle <= self.front_angle:
+                    f = min(f, rng)
+                if 0.0 <= angle <= self.side_angle:
+                    l = min(l, rng)
+                if -self.side_angle <= angle <= 0.0:
+                    r = min(r, rng)
                 angle += scan.angle_increment
-                continue
-            if r < self.min_range_filter:
-                angle += scan.angle_increment
-                continue
 
-            if -self.front_angle <= angle <= self.front_angle:
-                front_min = min(front_min, r)
+            fallback = scan.range_max if not math.isinf(scan.range_max) else 50.0
+            front_min_scan = f if f != float('inf') else fallback
+            left_min_scan = l if l != float('inf') else fallback
+            right_min_scan = r if r != float('inf') else fallback
 
-            if 0.0 <= angle <= self.side_angle:
-                left_min = min(left_min, r)
+        # Merge: prefer cloud value if present, otherwise use scan
+        def choose(cloud_val, scan_val):
+            if cloud_val is not None:
+                return cloud_val
+            return scan_val
 
-            if -self.side_angle <= angle <= 0.0:
-                right_min = min(right_min, r)
-
-            angle += scan.angle_increment
-
-        # If nothing valid, fall back to sensor range_max to avoid None/-1
-        fallback = scan.range_max if not math.isinf(scan.range_max) else 50.0
-        if front_min == float('inf'):
-            front_min = fallback
-        if left_min == float('inf'):
-            left_min = fallback
-        if right_min == float('inf'):
-            right_min = fallback
+        front_min = choose(front_min_cloud, front_min_scan)
+        left_min = choose(left_min_cloud, left_min_scan)
+        right_min = choose(right_min_cloud, right_min_scan)
 
         return front_min, left_min, right_min
 
@@ -763,12 +843,17 @@ class AllInOneStack(Node):
 
         # Stuck detection (hazard zones handled only in planning)
         now_s = self.get_clock().now().nanoseconds / 1e9
-        if dist < self.last_goal_dist - self.stuck_progress_epsilon:
-            self.last_goal_dist = dist
+        # Progress based on position change
+        moved = 0.0
+        if self.last_progress_pos is not None:
+            moved = math.hypot(x - self.last_progress_pos[0], y - self.last_progress_pos[1])
+        if moved > self.stuck_progress_epsilon:
+            self.last_progress_pos = (x, y)
             self.last_progress_time = now_s
         elif (now_s - self.last_progress_time) > self.stuck_timeout and dist > self.goal_tolerance:
             self.get_logger().warning(
-                f'Stuck detected: no progress for {now_s - self.last_progress_time:.1f}s (dist={dist:.2f} m). Starting recovery.'
+                f'Stuck detected: no progress for {now_s - self.last_progress_time:.1f}s '
+                f'(moved={moved:.2f} m, dist={dist:.2f} m). Starting recovery.'
             )
             self.recovering = True
             self.recover_phase = 'reverse'
@@ -866,16 +951,14 @@ class AllInOneStack(Node):
                 else:
                     turn_dir = 1.0   # Default turn left without side info
 
-                self.avoid_mode = 'reverse'
+                # Do not reverse here; simply enter turn-only avoid. Reverse is handled by stuck logic.
+                self.avoid_mode = 'turn'
                 self.avoid_start_time = now_s
                 self.avoid_turn_dir = turn_dir
 
-                left_cmd = self.recover_reverse_thrust
-                right_cmd = self.recover_reverse_thrust
-
                 self.get_logger().info(
                     f'EMERGENCY AVOID: obstacle at {front_min:.1f} m, '
-                    f'reversing then turning {"left" if turn_dir > 0 else "right"}.'
+                    f'turning {"left" if turn_dir > 0 else "right"} in place.'
                 )
 
             # Soft avoidance: slow down, then bias
