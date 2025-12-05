@@ -717,7 +717,7 @@
     <!-- Random water pollution over a large area -->
 <model name="water_pollution_random_area">
   <!-- Center of the polluted area (roughly middle of your x/y range) -->
-  <pose>-510 185 0.8 0 0 0</pose>
+  <pose>-490 185 0.8 0 0 0</pose>
   <static>true</static>
 
   <link name="pollution_random_link">
