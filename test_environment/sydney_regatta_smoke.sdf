@@ -820,27 +820,27 @@
           value {
             type: DOUBLE
             double_value: 240.0
-          }
+          }gain
         }
         params {
           key: "gain"
           value {
             type: DOUBLE
-            double_value: 0.8
+            double_value: 3.0
           }
         }
         params {
           key: "period"
           value {
             type: DOUBLE
-            double_value: 4
+            double_value: 3.0
           }
         }
         params {
           key: "steepness"
           value {
             type: DOUBLE
-            double_value: 0.4
+            double_value: 2.0
           }
         }
       </message>
