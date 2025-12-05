@@ -73,7 +73,7 @@ class AtlantisController(Node):
         
         # Waypoint Timing
         self.waypoint_start_time = None
-        self.blocked_start_time = None # NEW: Tracks how long path is blocked
+        self.blocked_start_time = None # Tracks how long path is blocked
         
         # PID
         self.previous_error = 0.0
@@ -249,7 +249,7 @@ class AtlantisController(Node):
         y = d_lon * R * math.cos(lat0)
         return y, x
 
-    # --- NEW: Helper to check if target line is blocked ---
+    #  Helper to check if target line is blocked 
     def check_waypoint_blocked(self, angle_to_target, dist_to_target):
         # Normalize angle
         while angle_to_target > math.pi: angle_to_target -= 2.0 * math.pi
@@ -299,7 +299,7 @@ class AtlantisController(Node):
         dy = target_y - curr_y
         dist = math.hypot(dx, dy)
         
-        # --- BLOCKED WAYPOINT SKIP LOGIC (NEW) ---
+        # --- BLOCKED WAYPOINT SKIP LOGIC ---
         target_angle_raw = math.atan2(dy, dx)
         angle_to_target_check = target_angle_raw - self.current_yaw
         
@@ -399,7 +399,7 @@ class AtlantisController(Node):
                 self.integral_error = 0.0
             target_angle = math.atan2(dy, dx)
         
-        # --- FIXED: SMART RETURN CHECK ---
+        # ---  SMART RETURN CHECK ---
         # Prevents "Dog Chasing Tail" by locking decision
         if self.avoidance_mode and not is_committed:
             angle_to_target = math.atan2(dy, dx) - self.current_yaw
