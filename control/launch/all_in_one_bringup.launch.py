@@ -4,11 +4,20 @@ Launch gps_imu_pose (local ENU), pose_filter, and all_in_one_stack.
 Pose output is in a local ENU frame with the first GPS fix as origin.
 """
 
+import os
+
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
+    hazard_config = os.path.join(
+        get_package_share_directory('control'),
+        'config',
+        'hazard_world_boxes.yaml',
+    )
+
     return LaunchDescription([
         Node(
             package='control',
@@ -48,24 +57,32 @@ def generate_launch_description():
                 'use_sim_time': True,
                 'pose_topic': '/wamv/pose_filtered',
                 # Obstacle and control parameters
-                'front_angle_deg': 60.0,
+                'front_angle_deg': 45.0,
                 'side_angle_deg': 80.0,
-                'obstacle_slow_dist': 24.0,
-                'obstacle_stop_dist': 14.0,
-                'avoid_clear_margin': 5.0,
-                'avoid_max_turn_time': 8.0,
-                'plan_avoid_margin': 12.0,
+                'obstacle_slow_dist': 8.0,
+                'obstacle_stop_dist': 5.0,
+                'avoid_clear_margin': 2.0,
+                'avoid_max_turn_time': 5.0,
+                'avoid_turn_thrust': 100.0,
+                'avoid_diff_gain': 1.5,
+                'diff_bias_alpha': 0.8,
+                'side_change_threshold': 1.0,
+                'side_straight_clearance': 6.0,
+                'plan_avoid_margin': 8.0,
                 'hull_radius': 1.5,
-                'forward_thrust': 260.0,
-                'kp_yaw': 350.0,
-                'heading_align_thresh_deg': 25.0,
-                'approach_slow_dist': 12.0,
-                'stuck_timeout': 8.0,
-                'stuck_progress_epsilon': 0.1,
-                'recover_reverse_time': 3.0,
+                'forward_thrust': 2000.0,
+                'kp_yaw': 300.0,
+                'heading_align_thresh_deg': 35.0,
+                'approach_slow_dist': 8.0,
+                'stuck_timeout': 25.0,
+                'stuck_progress_epsilon': 0.5,
+                'recover_reverse_time': 1.0,
                 'recover_turn_time': 3.0,
-                'recover_reverse_thrust': -200.0,
+                'recover_reverse_thrust': -120.0,
                 'lidar_log_interval': 2.0,
-            }],
+                'min_range_filter': 1.0,
+                'full_clear_distance': 30.0,
+                'min_range_filter': 0.5,
+            }, hazard_config],
         ),
     ])
