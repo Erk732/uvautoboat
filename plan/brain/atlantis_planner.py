@@ -11,6 +11,10 @@ import sys
 import time
 import math
 import struct
+import cv2
+import numpy as np
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
 
 # Related import
 from .lidar_obstacle_avoidance import (
@@ -89,6 +93,27 @@ class AtlantisPlanner(Node):
         
         self.current_obstacles = []
         self.current_clusters = []
+        #--- SMOKE DETECTION SETUP ---
+        self.bridge = CvBridge()
+        self.smoke_detected = False  # Binary flag
+        self.smoke_regions = []      # Optional: list of region coordinates
+
+         # Subscribe to front cameras
+        self.create_subscription(
+            Image,
+            '/wamv/sensors/cameras/front_left_camera_sensor/image_raw',
+            self.camera_callback,
+            10
+        )
+        self.create_subscription(
+            Image,
+            '/wamv/sensors/cameras/front_right_camera_sensor/image_raw',
+            self.camera_callback,
+            10
+        )
+
+        self.get_logger().info("Atlantis Planner with camera smoke detection initialized")
+
 
         # Auto Start
         threading.Timer(2.0, self.generate_lawnmower_path).start()
@@ -149,6 +174,33 @@ class AtlantisPlanner(Node):
         except Exception as e:
             self.get_logger().error(f"LIDAR callback error: {e}")
 
+    # ---------------- CAMERA CALLBACK ----------------
+    def camera_callback(self, msg):
+        try:
+            # Convert ROS image to OpenCV
+            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+
+            # ---- Simple smoke detection logic (can replace with ML model) ----
+            # Convert to gray
+            gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+
+            # Threshold light gray / whitish regions as smoke
+            _, mask = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
+
+            # Count white pixels
+            white_pixel_count = cv2.countNonZero(mask)
+            total_pixels = gray.shape[0] * gray.shape[1]
+
+            # If proportion of white pixels > threshold, mark smoke detected
+            smoke_ratio = white_pixel_count / total_pixels
+            self.smoke_detected = smoke_ratio > 0.02  # 2% threshold, adjust as needed
+
+            # Optional: store coordinates of detected smoke (for later soft avoidance)
+            self.smoke_regions = np.column_stack(np.where(mask > 0))
+
+        except Exception as e:
+            self.get_logger().error(f"Camera callback error: {e}")
+
     def is_point_safe(self, x, y):
         safe_dist = self.get_parameter('planner_safe_dist').value
         for obs_x, obs_y in self.known_obstacles:
@@ -187,6 +239,12 @@ class AtlantisPlanner(Node):
                     shift_y = (dy / dist) * (safe_dist + 2.0)
                     return obs_x + shift_x, obs_y + shift_y
             return x, y + safe_dist + 2.0
+        
+        # Soft smoke avoidance (binary)
+        if self.smoke_detected:
+            # Slight nudge in y-direction (example)
+            y += 1.0  # adjust magnitude as needed
+        return x, y
         return x, y
 
     def parameter_callback(self, params):
