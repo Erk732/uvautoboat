@@ -404,16 +404,16 @@ AutoBoat provides multiple navigation systems:
 | Aspect | Vostok1 (Integrated) | Modular (TNO) | Atlantis (Control Group) |
 |:-------|:---------------------|:--------------|:-------------------------|
 | **Approach** | Self-contained node | Distributed nodes | Integrated controller |
-| **LIDAR** | 3D PointCloud2 | 3D PointCloud2 | 2D LaserScan |
-| **Detection** | Full 3D volume | Full 3D volume | Horizontal plane |
+| **LIDAR** | 3D PointCloud2 | 3D PointCloud2 | 3D PointCloud2  |
+| **Detection** | Full 3D volume | Full 3D volume | 3D Section Analysis |
 | **Control** | PID heading | PID (configurable) | PID heading |
 | **Monitoring** | Terminal + Web | Terminal (bilingual) | Web Dashboard |
-| **Anti-Stuck** | SASS v2.0 | SASS v2.0 | Basic reverse |
-| **Best For** | Production use | Custom tuning | Control group testing |
+| **Anti-Stuck** | SASS v2.0 | SASS v2.0 | Adaptive Escape with SASS (Work in progress) |
+| **Best For** | Production use | Custom tuning | Robust Path Validation |
 
 ### Modular Architecture (TNO Style)
 
-The modular system uses Soviet/Russian space program naming:
+The modular system uses below program naming:
 
 | Node | Name | Function |
 |:-----|:-----|:---------|
@@ -738,7 +738,7 @@ Runtime parameter tuning:
 
 ## Smart Anti-Stuck System (SASS)
 
-Intelligent recovery system when the boat becomes trapped or immobilized.
+Intelligent recovery system when the boat becomes trapped or immobilized. Both the Vostok1 and Atlantis controllers implement the Smart Anti-Stuck System, features multi phase escape maneuvers (Probe -> Reverse -> Turn -> Forward)
 
 ### SASS Features
 
@@ -786,6 +786,8 @@ R = 0.1                   # Measurement noise (GPS/IMU)
 ---
 
 ## Waypoint Skip Strategy
+
+The Atlantis controller includes a Waypoint Timeout feature (deafult is 60 seconds) that automatically skips a target if the vessel cannot reach it due to currents or persistent obstacles. This was a update for Atlantis Controller.
 
 When obstacles block waypoints, the system uses two strategies to continue the mission:
 
@@ -1063,6 +1065,10 @@ The Kalman filter is Bayes' theorem for continuous states with Gaussian distribu
 **Update:** `K = P/(P+R)`, `x = x + K(z-x)`, `P = (1-K)P` (uncertainty shrinks)
 
 ---
+
+### Atlantis Planner Safety Line Check
+
+Unlike standard waypoints planners, the Atlantis planner verifies the entire path segment between waypoints (every 2 meters) to prevent planning trajectories that intersect with obstacles.
 
 ## Troubleshooting
 
