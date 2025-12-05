@@ -413,13 +413,23 @@ AutoBoat provides multiple navigation systems:
 
 ### Modular Architecture (TNO Style)
 
-The modular system uses below program naming:
+The modular system uses below programs to work:
 
 | Node | Name | Function |
 |:-----|:-----|:---------|
 | **OKO** | `oko_perception` | 3D LIDAR obstacle detection |
 | **SPUTNIK** | `sputnik_planner` | GPS waypoint planning |
 | **BURAN** | `buran_controller` | PID heading control + SASS |
+
+| Component | Script Name | Function |
+|:-----|:-----|:---------|
+| **Perception** | `lidar_obstacle_avoidance.py` | Zero-latency 3D PointCloud2 processing & Sector Analysis |
+| **Planner** | `atlantis_planner` | checks between waypoints |
+| **Controller** | `atlantis_controller` | Smart Anti Stuck System|
+
+
+
+
 
 ### Modular Topic Flow Diagram
 
