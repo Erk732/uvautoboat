@@ -7,32 +7,41 @@
   Based on: sydney_regatta_DEFAULT.sdf (VRX Official World)
 
   Modifications:
-    - Added custom inline particle emitter for realistic sea pollution/fire smoke
+    - Added 3 custom particle emitters for realistic sea pollution/fire smoke
     - Simulates maritime hazards: ship fires, oil spill fires, emergency scenarios
-    - Long-lasting dense smoke (20 min lifetime) for low-visibility testing
+    - Optimized smoke (5-7 min lifetime, ~18k max particles) for performance
+    - Wind drift simulation via tilted emitter pose (wind from 240° SW)
+    - Visual debug markers: red (primary), green (east), blue (north)
 
   Smoke Generator Controls (via Gazebo Transport):
-    # Stop emitting:
-    gz topic -t /model/smoke_generator/link/smoke_link/particle_emitter/smoke_emitter/cmd \
+    Available emitters:
+      - smoke_generator       (primary, central)
+      - smoke_generator_east  (secondary, SE)
+      - smoke_generator_north (tertiary, NW)
+
+    # Stop emitting (replace MODEL_NAME with one of the above):
+    gz topic -t /model/MODEL_NAME/link/smoke_link/particle_emitter/smoke_emitter/cmd \
       -m gz.msgs.ParticleEmitter -p 'emitting: {data: false}'
 
     # Resume emitting:
-    gz topic -t /model/smoke_generator/link/smoke_link/particle_emitter/smoke_emitter/cmd \
+    gz topic -t /model/MODEL_NAME/link/smoke_link/particle_emitter/smoke_emitter/cmd \
       -m gz.msgs.ParticleEmitter -p 'emitting: {data: true}'
 
-
     # Change density (particles/sec):
-    gz topic -t /model/smoke_generator/link/smoke_link/particle_emitter/smoke_emitter/cmd \
+    gz topic -t /model/MODEL_NAME/link/smoke_link/particle_emitter/smoke_emitter/cmd \
       -m gz.msgs.ParticleEmitter -p 'rate: {data: 50}'
 
-    # Change lifetime dynamically (for randomness):
-    # Set to 15 min (900s):
-    gz topic -t /model/smoke_generator/link/smoke_link/particle_emitter/smoke_emitter/cmd \
-      -m gz.msgs.ParticleEmitter -p 'lifetime: {data: 900}'
+    # Change lifetime dynamically:
+    gz topic -t /model/MODEL_NAME/link/smoke_link/particle_emitter/smoke_emitter/cmd \
+      -m gz.msgs.ParticleEmitter -p 'lifetime: {data: 300}'
 
-    # Set to 25 min (1500s):
+    # Example: Stop all emitters
     gz topic -t /model/smoke_generator/link/smoke_link/particle_emitter/smoke_emitter/cmd \
-      -m gz.msgs.ParticleEmitter -p 'lifetime: {data: 1500}'
+      -m gz.msgs.ParticleEmitter -p 'emitting: {data: false}'
+    gz topic -t /model/smoke_generator_east/link/smoke_link/particle_emitter/smoke_emitter/cmd \
+      -m gz.msgs.ParticleEmitter -p 'emitting: {data: false}'
+    gz topic -t /model/smoke_generator_north/link/smoke_link/particle_emitter/smoke_emitter/cmd \
+      -m gz.msgs.ParticleEmitter -p 'emitting: {data: false}'
 
 
   Sensor Effects:
@@ -415,100 +424,140 @@
 
       No external model needed - fully self-contained particle emitter.
     -->
+    <!-- All smoke generators clustered in one zone (~120m north of boat spawn) -->
     <model name="smoke_generator">
-      <pose>-532 189 0.5 0 0 0</pose>
+      <pose>-535 280 0.5 0 0 0</pose>
       <static>true</static>
 
       <link name="smoke_link">
+        <!-- Visual marker for debugging smoke source location -->
+        <visual name="marker_visual">
+          <pose>0 0 0 0 0 0</pose>
+          <geometry>
+            <sphere>
+              <radius>0.3</radius>
+            </sphere>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+          </material>
+        </visual>
+
         <particle_emitter name="smoke_emitter" type="box">
-          <!-- Emit continuously to simulate ongoing fire -->
           <emitting>true</emitting>
 
-          <!-- Emission region: simulates fire source on a vessel (~5m x 5m) -->
-          <size>5 5 0.5</size>
+          <!-- Large emission region for random spawn distribution -->
+          <size>8 8 1</size>
 
-          <!-- Larger particles for dense, realistic fire smoke -->
           <particle_size>2.0 2.0 2.0</particle_size>
 
-          <!-- Very long lifetime (1200s = 20 min average)
-               Note: Gazebo particle emitter doesn't support min/max lifetime range.
-               Combined with velocity variance (0.3-1.0 m/s), particles naturally
-               reach different heights and disperse at different times, creating
-               pseudo-randomness in the 15-25 min effective visibility range. -->
-          <lifetime>1200</lifetime>
+          <lifetime>400</lifetime>
 
-          <!-- Fire smoke rises quickly due to heat convection -->
           <min_velocity>0.3</min_velocity>
           <max_velocity>1.0</max_velocity>
 
-          <!-- Higher emission rate for dense fire smoke -->
-          <rate>30</rate>
+          <rate>15</rate>
 
-          <!-- Smoke expands as it rises and cools -->
-          <scale_rate>0.8</scale_rate>
+          <!-- No scaling - particles stay same size -->
+          <scale_rate>0</scale_rate>
 
-          <!-- Emit upwards (+z) by rotating -90° around Y axis -->
-          <pose>0 0 0 0 -1.5707 0</pose>
+          <!-- Wind drift tilt -->
+          <pose>0 0 0 0.15 -1.4707 0.15</pose>
 
-          <!-- Dark smoke color - realistic ship fire / oil fire smoke -->
+          <!-- Light gray, semi-transparent smoke -->
           <material>
-            <diffuse>0.15 0.15 0.15 0.8</diffuse>
-            <specular>0.05 0.05 0.05 1.0</specular>
+            <diffuse>0.5 0.5 0.5 0.4</diffuse>
+            <specular>0.1 0.1 0.1 1.0</specular>
           </material>
 
-          <!-- Higher scatter ratio - dense smoke significantly affects
-               depth cameras and lidar, simulating real sensor degradation -->
-          <particle_scatter_ratio>0.05</particle_scatter_ratio>
+          <particle_scatter_ratio>0.15</particle_scatter_ratio>
         </particle_emitter>
       </link>
     </model>
 
-    <!-- Secondary smoke source near open water, offset from buoy cluster (~10m SE of original; clear of marker buoys at -528 186-191) -->
+    <!-- Secondary smoke source (same zone, offset SE) -->
     <model name="smoke_generator_east">
-      <pose>-520 175 0.5 0 0 0</pose>
+      <pose>-525 275 0.5 0 0 0</pose>
       <static>true</static>
 
       <link name="smoke_link">
+        <!-- Visual marker for debugging (green = east) -->
+        <visual name="marker_visual">
+          <pose>0 0 0 0 0 0</pose>
+          <geometry>
+            <sphere>
+              <radius>0.3</radius>
+            </sphere>
+          </geometry>
+          <material>
+            <ambient>0 1 0 1</ambient>
+            <diffuse>0 1 0 1</diffuse>
+          </material>
+        </visual>
+
         <particle_emitter name="smoke_emitter" type="box">
           <emitting>true</emitting>
-          <size>5 5 0.5</size>
-          <particle_size>2.0 2.0 2.0</particle_size>
-          <lifetime>1200</lifetime>
-          <min_velocity>0.3</min_velocity>
-          <max_velocity>1.0</max_velocity>
-          <rate>30</rate>
-          <scale_rate>0.8</scale_rate>
-          <pose>0 0 0 0 -1.5707 0</pose>
+          <!-- Large emission region for random spawn distribution -->
+          <size>8 8 1</size>
+          <particle_size>1.8 1.8 1.8</particle_size>
+          <lifetime>350</lifetime>
+          <min_velocity>0.4</min_velocity>
+          <max_velocity>1.2</max_velocity>
+          <rate>20</rate>
+          <!-- No scaling -->
+          <scale_rate>0</scale_rate>
+          <!-- Wind drift tilt -->
+          <pose>0 0 0 0.12 -1.4707 0.12</pose>
+          <!-- Light gray, semi-transparent -->
           <material>
-            <diffuse>0.15 0.15 0.15 0.8</diffuse>
-            <specular>0.05 0.05 0.05 1.0</specular>
+            <diffuse>0.55 0.55 0.55 0.35</diffuse>
+            <specular>0.1 0.1 0.1 1.0</specular>
           </material>
-          <particle_scatter_ratio>0.05</particle_scatter_ratio>
+          <particle_scatter_ratio>0.12</particle_scatter_ratio>
         </particle_emitter>
       </link>
     </model>
 
-    <!-- Tertiary smoke source north-west, spaced away from posts and tents (placed ~15m north of buoy line and west of ground stations) -->
+    <!-- Tertiary smoke source (same zone, offset NW) -->
     <model name="smoke_generator_north">
-      <pose>-545 205 0.5 0 0 0</pose>
+      <pose>-545 285 0.5 0 0 0</pose>
       <static>true</static>
 
       <link name="smoke_link">
+        <!-- Visual marker for debugging (blue = north) -->
+        <visual name="marker_visual">
+          <pose>0 0 0 0 0 0</pose>
+          <geometry>
+            <sphere>
+              <radius>0.3</radius>
+            </sphere>
+          </geometry>
+          <material>
+            <ambient>0 0 1 1</ambient>
+            <diffuse>0 0 1 1</diffuse>
+          </material>
+        </visual>
+
         <particle_emitter name="smoke_emitter" type="box">
           <emitting>true</emitting>
-          <size>5 5 0.5</size>
-          <particle_size>2.0 2.0 2.0</particle_size>
-          <lifetime>1200</lifetime>
-          <min_velocity>0.3</min_velocity>
-          <max_velocity>1.0</max_velocity>
-          <rate>30</rate>
-          <scale_rate>0.8</scale_rate>
-          <pose>0 0 0 0 -1.5707 0</pose>
+          <!-- Large emission region for random spawn distribution -->
+          <size>8 8 1</size>
+          <particle_size>2.5 2.5 2.5</particle_size>
+          <lifetime>450</lifetime>
+          <min_velocity>0.2</min_velocity>
+          <max_velocity>0.8</max_velocity>
+          <rate>12</rate>
+          <!-- No scaling -->
+          <scale_rate>0</scale_rate>
+          <!-- Wind drift tilt -->
+          <pose>0 0 0 0.18 -1.4707 0.18</pose>
+          <!-- Light gray, semi-transparent -->
           <material>
-            <diffuse>0.15 0.15 0.15 0.8</diffuse>
-            <specular>0.05 0.05 0.05 1.0</specular>
+            <diffuse>0.45 0.45 0.45 0.45</diffuse>
+            <specular>0.1 0.1 0.1 1.0</specular>
           </material>
-          <particle_scatter_ratio>0.05</particle_scatter_ratio>
+          <particle_scatter_ratio>0.18</particle_scatter_ratio>
         </particle_emitter>
       </link>
     </model>
@@ -681,12 +730,12 @@
     </include>
     <include>
       <name>post_1</name>
-      <pose>-527.48999 153.854782 0.425844 -0.1365 0  0</pose>
+      <pose>-527.48999 153.854782 0.425844 -0.1365 0 0</pose>
       <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/post</uri>
     </include>
     <include>
       <name>post_2</name>
-      <pose>-544.832825 156.671951 0.499025 -0.162625 0 0 </pose>
+      <pose>-544.832825 156.671951 0.499025 -0.162625 0 0</pose>
       <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/post</uri>
     </include>
 
@@ -748,10 +797,10 @@
         <link_name>wamv/base_link</link_name>
         <coeff_vector>.5 .5 .33</coeff_vector>
       </wind_obj>
-      <!-- Wind -->
+      <!-- Wind from SW (240°) - INTENSE -->
       <wind_direction>240</wind_direction>
       <!-- in degrees -->
-      <wind_mean_velocity>0.0</wind_mean_velocity>
+      <wind_mean_velocity>10.0</wind_mean_velocity>
       <var_wind_gain_constants>0</var_wind_gain_constants>
       <var_wind_time_constants>2</var_wind_time_constants>
       <random_seed>10</random_seed>
@@ -769,28 +818,28 @@
           key: "direction"
           value {
             type: DOUBLE
-            double_value: 0.0
+            double_value: 240.0
           }
         }
         params {
           key: "gain"
           value {
             type: DOUBLE
-            double_value: 0.3
+            double_value: 0.8
           }
         }
         params {
           key: "period"
           value {
             type: DOUBLE
-            double_value: 5
+            double_value: 4
           }
         }
         params {
           key: "steepness"
           value {
             type: DOUBLE
-            double_value: 0
+            double_value: 0.4
           }
         }
       </message>
