@@ -124,6 +124,7 @@ class AtlantisController(Node):
         self.pub_left = self.create_publisher(Float64, '/wamv/thrusters/left/thrust', 10)
         self.pub_right = self.create_publisher(Float64, '/wamv/thrusters/right/thrust', 10)
         self.pub_mission_status = self.create_publisher(String, '/atlantis/mission_status', 10)
+        self.pub_obstacle_status = self.create_publisher(String, '/atlantis/obstacle_status', 10)
         self.pub_anti_stuck = self.create_publisher(String, '/atlantis/anti_stuck_status', 10)
 
         # --- HELPER INIT ---
