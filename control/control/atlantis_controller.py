@@ -28,6 +28,7 @@ class AtlantisController(Node):
         self.declare_parameter('obstacle_slow_factor', 0.08)  
         self.declare_parameter('hysteresis_distance', 2.5)   
         self.declare_parameter('reverse_timeout', 10.0)    
+        self.declare_parameter('probe_angle', 45.0)  # For future escape tuning
 
         # Stuck detection & Waypoint Skipping
         self.declare_parameter('stuck_timeout', 5.0)
@@ -49,6 +50,7 @@ class AtlantisController(Node):
         self.obstacle_slow_factor = self.get_parameter('obstacle_slow_factor').value
         self.hysteresis_distance = self.get_parameter('hysteresis_distance').value
         self.reverse_timeout = self.get_parameter('reverse_timeout').value
+        self.probe_angle = self.get_parameter('probe_angle').value
         self.stuck_timeout = self.get_parameter('stuck_timeout').value
         self.stuck_threshold = self.get_parameter('stuck_threshold').value
         self.waypoint_timeout = self.get_parameter('waypoint_timeout').value
@@ -422,6 +424,7 @@ class AtlantisController(Node):
         
         self.send_thrust(left_thrust, right_thrust)
         self.publish_dashboard_status(curr_x, curr_y, target_x, target_y, dist)
+        self.publish_obstacle_status()
         
         if (now - self._last_log_time).nanoseconds / 1e9 > 2.0:
             self.log_status(curr_x, curr_y, target_x, target_y, dist, angle_error)
@@ -634,10 +637,27 @@ class AtlantisController(Node):
             "yaw_deg": round(math.degrees(self.current_yaw), 1), "mission_enabled": self.mission_enabled
         })
         self.pub_mission_status.publish(msg)
+    
+    def publish_obstacle_status(self):
+        msg = String()
+        msg.data = json.dumps({
+            "min_distance": round(self.min_obstacle_distance if self.min_obstacle_distance != float('inf') else 999.0, 2),
+            "front_clear": self.front_clear >= self.min_safe_distance,
+            "left_clear": self.left_clear >= self.min_safe_distance,
+            "right_clear": self.right_clear >= self.min_safe_distance
+        })
+        self.pub_obstacle_status.publish(msg)
         
     def publish_anti_stuck_status(self):
         msg = String()
-        msg.data = json.dumps({'is_stuck': self.is_stuck, 'escape_mode': self.escape_mode})
+        msg.data = json.dumps({
+            'is_stuck': self.is_stuck,
+            'escape_mode': self.escape_mode,
+            'escape_phase': self.escape_phase,
+            'best_direction': self.best_escape_direction,
+            'consecutive_attempts': self.consecutive_stuck_count,
+            'no_go_zones': len(self.no_go_zones)
+        })
         self.pub_anti_stuck.publish(msg)
 
 def main(args=None):
