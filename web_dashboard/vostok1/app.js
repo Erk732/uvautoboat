@@ -19,6 +19,7 @@ let modularMissionCommandPublisher = null;  // For sputnik planner
 
 // Track which config inputs have been modified by user (prevents ROS from overwriting)
 let dirtyInputs = new Set();
+let navModeDirty = false;
 
 // Camera feed elements
 let cameraImageEl = null;
@@ -915,15 +916,16 @@ setInterval(() => {
 // Initialize configuration panel
 function initConfigPanel() {
     console.log('Initializing config panel...');
-    
+
     // All config input IDs
     const allConfigInputs = [
         'cfg-lanes', 'cfg-scan-length', 'cfg-scan-width',
         'cfg-kp', 'cfg-ki', 'cfg-kd',
         'cfg-base-speed', 'cfg-max-speed', 'cfg-safe-dist',
+        'cfg-astar-resolution', 'cfg-astar-safety', 'cfg-astar-max',
         'wp-lanes', 'wp-length', 'wp-width'
     ];
-    
+
     // Mark input as dirty when user types
     allConfigInputs.forEach(id => {
         const el = document.getElementById(id);
@@ -939,7 +941,23 @@ function initConfigPanel() {
             });
         }
     });
-    
+
+    // Navigation mode radio buttons - show/hide advanced A* params
+    const navModeRadios = document.querySelectorAll('input[name="nav-mode"]');
+    const advancedParams = document.getElementById('astar-advanced-params');
+
+    navModeRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            navModeDirty = true;
+            // Show advanced params if Runtime A* or Hybrid mode selected
+            if (radio.value === 'runtime' || radio.value === 'hybrid') {
+                advancedParams.style.display = 'block';
+            } else {
+                advancedParams.style.display = 'none';
+            }
+        });
+    });
+
     // Apply all config button (applies all parameters including PID, speed, and scan settings)
     document.getElementById('btn-apply-config').addEventListener('click', () => {
         sendConfig(false, false);  // Send ALL parameters (PID, speed, scan settings)
@@ -948,7 +966,7 @@ function initConfigPanel() {
         // For now, just give feedback
         addLog('Config sent - waiting for confirmation...', 'info');
     });
-    
+
     console.log('Config panel initialized');
 }
 
@@ -1010,7 +1028,42 @@ function updateConfigFromROS(data) {
             el.classList.remove('input-dirty');
         }
     }
-    
+
+    // Update navigation mode radio buttons based on A* settings (respect user edits)
+    if (!navModeDirty && (data.astar_hybrid_mode !== undefined || data.astar_enabled !== undefined)) {
+        let navMode = 'simple';
+        if (data.astar_hybrid_mode === true) {
+            navMode = 'hybrid';
+        } else if (data.astar_enabled === true) {
+            navMode = 'runtime';
+        }
+        const rb = document.getElementById(`nav-mode-${navMode}`);
+        if (rb) rb.checked = true;
+        const advancedParams = document.getElementById('astar-advanced-params');
+        if (advancedParams) advancedParams.style.display = (navMode === 'runtime' || navMode === 'hybrid') ? 'block' : 'none';
+    } else if (navModeDirty) {
+        // If incoming matches current selection, clear dirty
+        const current = getSelectedNavMode();
+        const incoming = data.astar_hybrid_mode ? 'hybrid' : (data.astar_enabled ? 'runtime' : 'simple');
+        if (current === incoming) {
+            navModeDirty = false;
+        }
+    }
+
+    // Update A* advanced parameters if present
+    if (data.astar_resolution !== undefined) {
+        const el = document.getElementById('cfg-astar-resolution');
+        if (el) el.value = data.astar_resolution;
+    }
+    if (data.astar_safety_margin !== undefined) {
+        const el = document.getElementById('cfg-astar-safety');
+        if (el) el.value = data.astar_safety_margin;
+    }
+    if (data.astar_max_expansions !== undefined) {
+        const el = document.getElementById('cfg-astar-max');
+        if (el) el.value = data.astar_max_expansions;
+    }
+
     // Update mission control UI
     updateMissionControlUI(data);
 }
@@ -1033,6 +1086,9 @@ function sendConfig(pidOnly = false, restart = false) {
         };
         addLog('Sending PID config... | Envoi configuration PID...', 'info');
     } else {
+        // Get selected navigation mode
+        const navMode = getSelectedNavMode();
+
         // Send all parameters
         config = {
             lanes: parseInt(document.getElementById('cfg-lanes').value),
@@ -1043,7 +1099,14 @@ function sendConfig(pidOnly = false, restart = false) {
             kd: parseFloat(document.getElementById('cfg-kd').value),
             base_speed: parseFloat(document.getElementById('cfg-base-speed').value),
             max_speed: parseFloat(document.getElementById('cfg-max-speed').value),
-            min_safe_distance: parseFloat(document.getElementById('cfg-safe-dist').value)
+            min_safe_distance: parseFloat(document.getElementById('cfg-safe-dist').value),
+            // A* detour options based on selected navigation mode
+            astar_enabled: (navMode === 'runtime' || navMode === 'hybrid'),
+            astar_hybrid_mode: (navMode === 'hybrid'),
+            hazard_enabled: (navMode === 'hybrid'),
+            astar_resolution: parseFloat(document.getElementById('cfg-astar-resolution').value),
+            astar_safety_margin: parseFloat(document.getElementById('cfg-astar-safety').value),
+            astar_max_expansions: parseInt(document.getElementById('cfg-astar-max').value)
         };
         addLog('Sending full config... | Envoi configuration complète...', 'info');
     }
@@ -1064,6 +1127,11 @@ function sendConfig(pidOnly = false, restart = false) {
     }
     addLog('Config sent! | Configuration envoyée!', 'info');
     console.log('Config sent to both vostok1 and sputnik:', config);
+}
+
+function getSelectedNavMode() {
+    const radio = document.querySelector('input[name="nav-mode"]:checked');
+    return radio ? radio.value : 'simple';
 }
 
 // ========== TERMINAL OUTPUT FUNCTIONS ==========
@@ -1162,6 +1230,8 @@ function initMissionControl() {
     
     document.getElementById('btn-stop-mission').addEventListener('click', () => {
         sendMissionCommand('stop_mission');
+        // Send a second stop shortly after to ensure controllers see it (helps during SASS)
+        setTimeout(() => sendMissionCommand('stop_mission'), 200);
     });
     
     document.getElementById('btn-resume-mission').addEventListener('click', () => {
@@ -1214,12 +1284,21 @@ function generateWaypoints() {
     document.getElementById('cfg-scan-width').value = width;
     
     // Don't clear dirty state immediately - wait for ROS confirmation
-    
+
+    const navMode = getSelectedNavMode();
+
     // Send config update first
     const config = {
         lanes: lanes,
         scan_length: length,
-        scan_width: width
+        scan_width: width,
+        // Carry A* settings to Sputnik with waypoint generation
+        astar_enabled: navMode !== 'simple',
+        astar_hybrid_mode: navMode === 'hybrid',
+        hazard_enabled: navMode === 'hybrid',
+        astar_resolution: parseFloat(document.getElementById('cfg-astar-resolution').value),
+        astar_safety_margin: parseFloat(document.getElementById('cfg-astar-safety').value),
+        astar_max_expansions: parseInt(document.getElementById('cfg-astar-max').value)
     };
     
     const configMsg = new ROSLIB.Message({

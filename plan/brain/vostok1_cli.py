@@ -261,9 +261,11 @@ class MissionCLI(Node):
         self.config_pub.publish(msg)
         self.get_logger().info(f"Sent config: {config}")
         
-    def generate_waypoints(self, lanes=8, length=50.0, width=20.0, 
-                            kp=None, ki=None, kd=None, base_speed=None, max_speed=None):
-        """Generate waypoints with specified parameters and optional PID/speed config"""
+    def generate_waypoints(self, lanes=8, length=50.0, width=20.0,
+                            kp=None, ki=None, kd=None, base_speed=None, max_speed=None,
+                            hazard=False, hazard_boxes=None, hazard_origin_x=None, hazard_origin_y=None,
+                            astar=False, astar_hybrid=False, astar_resolution=None, astar_safety=None, astar_max=None):
+        """Generate waypoints with specified parameters and optional PID/speed/hazard/A* config"""
         # Wait for navigation system to be ready
         if not self.wait_for_ready():
             return False
@@ -286,6 +288,26 @@ class MissionCLI(Node):
             config['base_speed'] = base_speed
         if max_speed is not None:
             config['max_speed'] = max_speed
+
+        # Hazard/A* options
+        if hazard:
+            config['hazard_enabled'] = True
+        if hazard_boxes:
+            config['hazard_world_boxes'] = hazard_boxes
+        if hazard_origin_x is not None:
+            config['hazard_origin_world_x'] = hazard_origin_x
+        if hazard_origin_y is not None:
+            config['hazard_origin_world_y'] = hazard_origin_y
+        if astar:
+            config['astar_enabled'] = True
+        if astar_hybrid:
+            config['astar_hybrid_mode'] = True
+        if astar_resolution is not None:
+            config['astar_resolution'] = astar_resolution
+        if astar_safety is not None:
+            config['astar_safety_margin'] = astar_safety
+        if astar_max is not None:
+            config['astar_max_expansions'] = astar_max
             
         self.send_config(config)
         time.sleep(0.2)
@@ -592,7 +614,7 @@ Examples:
     subparsers = parser.add_subparsers(dest='command', help='Command to execute')
     
     # Generate command with optional PID/speed
-    gen_parser = subparsers.add_parser('generate', help='Generate waypoints (with optional PID/speed)')
+    gen_parser = subparsers.add_parser('generate', help='Generate waypoints (with optional PID/speed/hazard/A*)')
     gen_parser.add_argument('--lanes', '-l', type=int, default=8, help='Number of lanes')
     gen_parser.add_argument('--length', '-L', type=float, default=50.0, help='Lane length in meters')
     gen_parser.add_argument('--width', '-w', type=float, default=20.0, help='Lane width in meters')
@@ -601,6 +623,16 @@ Examples:
     gen_parser.add_argument('--kd', type=float, help='PID Derivative gain (optional)')
     gen_parser.add_argument('--base', type=float, help='Base speed in N (optional)')
     gen_parser.add_argument('--max', type=float, help='Max speed in N (optional)')
+    # Hazard/A* options (forwarded to Sputnik)
+    gen_parser.add_argument('--hazard', action='store_true', help='Enable hazard avoidance (Sputnik)')
+    gen_parser.add_argument('--hazard-boxes', type=str, help='Hazard world boxes string \"xmin,ymin,xmax,ymax;...\"')
+    gen_parser.add_argument('--hazard-origin-x', type=float, help='Hazard origin world X')
+    gen_parser.add_argument('--hazard-origin-y', type=float, help='Hazard origin world Y')
+    gen_parser.add_argument('--astar', action='store_true', help='Enable runtime A* detours (Sputnik)')
+    gen_parser.add_argument('--astar-hybrid', action='store_true', help='Enable A* hybrid mode (pre-plan routes)')
+    gen_parser.add_argument('--astar-resolution', type=float, help='A* grid resolution (m)')
+    gen_parser.add_argument('--astar-safety', type=float, help='A* safety margin (m)')
+    gen_parser.add_argument('--astar-max', type=int, help='A* max expansions')
     
     # Simple commands
     subparsers.add_parser('start', help='Start mission')
@@ -637,7 +669,12 @@ Examples:
             cli.generate_waypoints(
                 args.lanes, args.length, args.width,
                 kp=args.kp, ki=args.ki, kd=args.kd,
-                base_speed=args.base, max_speed=args.max
+                base_speed=args.base, max_speed=args.max,
+                hazard=args.hazard, hazard_boxes=args.hazard_boxes,
+                hazard_origin_x=args.hazard_origin_x, hazard_origin_y=args.hazard_origin_y,
+                astar=args.astar, astar_hybrid=args.astar_hybrid,
+                astar_resolution=args.astar_resolution,
+                astar_safety=args.astar_safety, astar_max=args.astar_max
             )
         elif args.command == 'start':
             cli.start_mission()

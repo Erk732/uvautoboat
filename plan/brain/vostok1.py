@@ -20,7 +20,7 @@ import numpy as np
 import struct
 import json
 
-from sensor_msgs.msg import NavSatFix, Imu, PointCloud2
+from sensor_msgs.msg import NavSatFix, Imu
 from std_msgs.msg import Float64, String
 
 
@@ -581,11 +581,13 @@ class Vostok1(Node):
             self.imu_callback,
             10
         )
+        # Use standalone OKO perception node -> subscribe to /perception/obstacle_info
+        # (OKO publishes a JSON String with obstacle fields)
         self.create_subscription(
-            PointCloud2,
-            '/wamv/sensors/lidars/lidar_wamv_sensor/points',
-            self.lidar_callback,
-            rclpy.qos.qos_profile_sensor_data
+            String,
+            '/perception/obstacle_info',
+            self.obstacle_callback,
+            10
         )
 
         # --- PUBLISHERS ---
@@ -668,326 +670,38 @@ class Vostok1(Node):
         cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
         self.current_yaw = math.atan2(siny_cosp, cosy_cosp)
 
-    def lidar_callback(self, msg):
-        """Process 3D LIDAR point cloud for obstacle detection - OKO v2.0 Enhanced"""
-        # Extract points from PointCloud2 using proper iteration
-        points = []
-        
-        # PointCloud2 structure: each point has x, y, z (and possibly intensity)
-        point_step = msg.point_step
-        data = msg.data
-        
-        # Process points - sample every 3rd point for better small obstacle detection
-        for i in range(0, len(data) - point_step, point_step * 3):
-            try:
-                # Extract x, y, z from point cloud data
-                x, y, z = struct.unpack_from('fff', data, i)
-                
-                # Skip invalid points
-                if math.isnan(x) or math.isnan(y) or math.isnan(z):
-                    continue
-                if math.isinf(x) or math.isinf(y) or math.isinf(z):
-                    continue
-                
-                # OKO v2.0: Water/ground plane removal
-                # Skip points below water plane threshold
-                if z < self.water_plane_threshold:
-                    continue
-                
-                # Filter by height - LiDAR mounted ~2-3m above water
-                if z > 10.0:
-                    continue
-                
-                # Calculate horizontal distance
-                dist = math.sqrt(x*x + y*y)
-                
-                # Focus on relevant range: ignore boat/dock itself and very far objects
-                if dist < 5.0 or dist > 100.0:
-                    continue
-                
-                # Only consider points in front of the boat (positive x direction)
-                if x < 0.2:
-                    continue
-                
-                points.append((x, y, z, dist))
-                    
-            except struct.error:
-                continue
-            except Exception:
-                continue
-        
-        if not points:
-            # No valid points - assume clear but be cautious
-            self.min_obstacle_distance = 50.0
-            if not self.obstacle_detected:
-                self.front_clear = 50.0
-                self.left_clear = 50.0
-                self.right_clear = 50.0
-            self.urgency = 0.0
-            self.obstacle_count = 0
-            self.cluster_centroids = []
-            self.best_gap = None
-            return
-        
-        # OKO v2.0: Cluster obstacles using distance-based grouping
-        clusters = self._cluster_obstacles(points)
-        self.obstacle_count = len(clusters)
-        
-        # Calculate cluster centroids for velocity estimation
-        current_centroids = []
-        for cluster in clusters:
-            if cluster:
-                cx = sum(p[0] for p in cluster) / len(cluster)
-                cy = sum(p[1] for p in cluster) / len(cluster)
-                min_dist = min(p[3] for p in cluster)
-                current_centroids.append((cx, cy, min_dist))
-        self.cluster_centroids = current_centroids
-        
-        # OKO v2.0: Velocity estimation for moving obstacles
-        self._estimate_obstacle_velocity(current_centroids)
-        
-        # Get minimum distance from all valid clustered points
-        all_clustered_points = [p for cluster in clusters for p in cluster]
-        if all_clustered_points:
-            distances = [p[3] for p in all_clustered_points]
-            current_min_distance = min(distances)
-        else:
-            current_min_distance = 50.0
-        
-        # OKO v2.0: Temporal filtering - require consistent detection
-        self.obstacle_history.append(current_min_distance < self.min_safe_distance)
-        if len(self.obstacle_history) > self.temporal_history_size:
-            self.obstacle_history.pop(0)
-        
-        detections = sum(self.obstacle_history)
-        temporally_detected = detections >= self.temporal_threshold
-        
-        self.min_obstacle_distance = current_min_distance
-        
-        # OKO v2.0: Distance-weighted urgency (0.0 = far, 1.0 = critical)
-        if self.min_obstacle_distance < self.critical_distance:
-            self.urgency = 1.0
-        elif self.min_obstacle_distance < self.min_safe_distance:
-            # Linear interpolation between critical and safe distance
-            range_span = self.min_safe_distance - self.critical_distance
-            dist_from_critical = self.min_obstacle_distance - self.critical_distance
-            self.urgency = 1.0 - (dist_from_critical / range_span)
-        else:
-            self.urgency = 0.0
+    def obstacle_callback(self, msg):
+        """Receive obstacle info published by standalone OKO node (/perception/obstacle_info).
 
-        # Hysteresis for obstacle detection with temporal confirmation
-        if self.obstacle_detected:
-            exit_threshold = self.min_safe_distance + self.hysteresis_distance
-            self.obstacle_detected = self.min_obstacle_distance < exit_threshold and temporally_detected
-        else:
-            self.obstacle_detected = self.min_obstacle_distance < self.min_safe_distance and temporally_detected
+        The OKO node publishes a JSON string matching the structure used across the system
+        so integrated nodes (Vostok1/Atlantis) can rely on a single perception source.
+        """
+        try:
+            data = json.loads(msg.data)
 
-        # Analyze sectors for navigation and find best gap
-        self.analyze_scan_sectors_3d(all_clustered_points if all_clustered_points else points)
-        
-        # OKO v2.0: Find best navigation gap
-        self._find_best_gap(all_clustered_points if all_clustered_points else points)
-    
-    def _cluster_obstacles(self, points):
-        """OKO v2.0: Distance-based obstacle clustering (no sklearn dependency)"""
-        if not points:
-            return []
-        
-        # Convert to numpy for efficient distance calculation
-        points_array = np.array([(p[0], p[1]) for p in points])
-        n_points = len(points_array)
-        
-        # Track cluster assignments (-1 = unassigned)
-        labels = np.full(n_points, -1, dtype=int)
-        cluster_id = 0
-        
-        for i in range(n_points):
-            if labels[i] != -1:
-                continue
-            
-            # Find all points within cluster_distance
-            distances = np.sqrt(np.sum((points_array - points_array[i])**2, axis=1))
-            neighbors = np.where(distances < self.cluster_distance)[0]
-            
-            if len(neighbors) >= self.min_cluster_size:
-                # Expand cluster with all connected neighbors
-                cluster_points = set(neighbors)
-                to_process = list(neighbors)
-                
-                while to_process:
-                    j = to_process.pop()
-                    if labels[j] != -1:
-                        continue
-                    labels[j] = cluster_id
-                    
-                    dist_j = np.sqrt(np.sum((points_array - points_array[j])**2, axis=1))
-                    new_neighbors = np.where(dist_j < self.cluster_distance)[0]
-                    
-                    for n in new_neighbors:
-                        if n not in cluster_points:
-                            cluster_points.add(n)
-                            to_process.append(n)
-                
-                cluster_id += 1
-        
-        # Group points by cluster
-        clusters = []
-        for cid in range(cluster_id):
-            cluster_indices = np.where(labels == cid)[0]
-            cluster_points = [points[i] for i in cluster_indices]
-            if len(cluster_points) >= self.min_cluster_size:
-                clusters.append(cluster_points)
-        
-        return clusters
-    
-    def _estimate_obstacle_velocity(self, current_centroids):
-        """OKO v2.0: Estimate obstacle velocity from centroid movement"""
-        self.velocity_history.append(current_centroids)
-        if len(self.velocity_history) > self.velocity_history_size:
-            self.velocity_history.pop(0)
-        
-        if len(self.velocity_history) < 2 or not current_centroids:
-            self.obstacle_velocity = (0.0, 0.0)
-            return
-        
-        # Match centroids between frames and compute average velocity
-        prev_centroids = self.velocity_history[-2]
-        if not prev_centroids:
-            self.obstacle_velocity = (0.0, 0.0)
-            return
-        
-        total_vx, total_vy = 0.0, 0.0
-        matches = 0
-        
-        for cx, cy, _ in current_centroids:
-            # Find closest previous centroid
-            min_dist = float('inf')
-            best_match = None
-            for px, py, _ in prev_centroids:
-                d = math.sqrt((cx - px)**2 + (cy - py)**2)
-                if d < min_dist and d < 5.0:  # Max 5m movement between frames
-                    min_dist = d
-                    best_match = (px, py)
-            
-            if best_match:
-                total_vx += cx - best_match[0]
-                total_vy += cy - best_match[1]
-                matches += 1
-        
-        if matches > 0:
-            # Scale by approximate frame rate (~10Hz)
-            self.obstacle_velocity = (total_vx / matches * 10.0, total_vy / matches * 10.0)
-        else:
-            self.obstacle_velocity = (0.0, 0.0)
-    
-    def _find_best_gap(self, points):
-        """OKO v2.0: Find best navigation gap between obstacles"""
-        if not points:
-            self.best_gap = {'direction': 0.0, 'width': 360.0, 'distance': 100.0}
-            return
-        
-        # Create angular histogram (sectors of 10 degrees)
-        n_sectors = 36
-        sector_min_dist = [float('inf')] * n_sectors
-        
-        for x, y, z, dist in points:
-            angle = math.degrees(math.atan2(y, x))  # -180 to 180
-            sector_idx = int((angle + 180) / 10) % n_sectors
-            if dist < sector_min_dist[sector_idx]:
-                sector_min_dist[sector_idx] = dist
-        
-        # Find largest gap (consecutive clear sectors)
-        best_gap_start = 0
-        best_gap_size = 0
-        current_gap_start = 0
-        current_gap_size = 0
-        
-        for i in range(n_sectors * 2):  # Wrap around
-            idx = i % n_sectors
-            if sector_min_dist[idx] > self.min_safe_distance:
-                if current_gap_size == 0:
-                    current_gap_start = idx
-                current_gap_size += 1
+            # Support both min_distance and min_dist keys used in older/newer formats
+            self.obstacle_detected = data.get('obstacle_detected', False)
+            self.min_obstacle_distance = float(data.get('min_distance', data.get('min_dist', float('inf'))))
+            self.front_clear = float(data.get('front_clear', data.get('front', self.front_clear)))
+            self.left_clear = float(data.get('left_clear', data.get('left', self.left_clear)))
+            self.right_clear = float(data.get('right_clear', data.get('right', self.right_clear)))
+            self.is_critical = bool(data.get('is_critical', self.min_obstacle_distance < self.critical_distance))
+            self.urgency = float(data.get('urgency', data.get('front_urgency', 0.0)))
+            self.best_gap = data.get('best_gap', None)
+            # clusters may be either 'clusters' list or count via obstacle_count
+            if 'clusters' in data:
+                self.cluster_centroids = data.get('clusters', [])
+                self.obstacle_count = len(self.cluster_centroids)
             else:
-                if current_gap_size > best_gap_size:
-                    best_gap_size = current_gap_size
-                    best_gap_start = current_gap_start
-                current_gap_size = 0
-        
-        # Check final gap
-        if current_gap_size > best_gap_size:
-            best_gap_size = current_gap_size
-            best_gap_start = current_gap_start
-        
-        if best_gap_size > 0:
-            # Convert sector indices to angle
-            gap_center_idx = (best_gap_start + best_gap_size // 2) % n_sectors
-            gap_direction = gap_center_idx * 10 - 180  # Convert back to degrees
-            gap_width = best_gap_size * 10  # Width in degrees
-            
-            # Get minimum distance in gap direction
-            gap_distance = sector_min_dist[gap_center_idx]
-            if gap_distance == float('inf'):
-                gap_distance = 100.0
-            
-            self.best_gap = {
-                'direction': gap_direction,
-                'width': gap_width,
-                'distance': gap_distance
-            }
-        else:
-            self.best_gap = {'direction': 0.0, 'width': 0.0, 'distance': 0.0}
+                self.obstacle_count = int(data.get('obstacle_count', self.obstacle_count))
 
-    def analyze_scan_sectors_3d(self, points):
-        """Divide 3D point cloud into sectors to determine best direction"""
-        # Divide points into sectors based on angle from boat's perspective
-        # Front: -45° to +45°, Left: +45° to +135°, Right: -135° to -45°
-        front_points = []
-        left_points = []
-        right_points = []
-        
-        for x, y, z, dist in points:
-            angle = math.atan2(y, x)  # Angle in radians from boat's forward axis
-            
-            # Wider front sector for better obstacle detection ahead
-            if -math.pi/4 < angle < math.pi/4:  # Front sector ±45°
-                front_points.append(dist)
-            elif math.pi/4 <= angle <= 3*math.pi/4:  # Left sector 45° to 135°
-                left_points.append(dist)
-            elif -3*math.pi/4 <= angle < -math.pi/4:  # Right sector -135° to -45°
-                right_points.append(dist)
-        
-        # For each sector, find the minimum distance (closest obstacle)
-        # Use 10th percentile for robustness against noise
-        max_range = 100.0  # meters - matches LIDAR max_range
-        
-        if front_points:
-            sorted_front = sorted(front_points)
-            # Use 10th percentile or minimum if few points
-            if len(sorted_front) > 10:
-                self.front_clear = min(max_range, sorted_front[len(sorted_front)//10])
-            else:
-                self.front_clear = min(max_range, sorted_front[0])
-        else:
-            self.front_clear = max_range
-            
-        if left_points:
-            sorted_left = sorted(left_points)
-            if len(sorted_left) > 10:
-                self.left_clear = min(max_range, sorted_left[len(sorted_left)//10])
-            else:
-                self.left_clear = min(max_range, sorted_left[0])
-        else:
-            self.left_clear = max_range
-            
-        if right_points:
-            sorted_right = sorted(right_points)
-            if len(sorted_right) > 10:
-                self.right_clear = min(max_range, sorted_right[len(sorted_right)//10])
-            else:
-                self.right_clear = min(max_range, sorted_right[0])
-        else:
-            self.right_clear = max_range
+        except Exception as e:
+            # Bad message — ignore and keep previous state
+            self.get_logger().warn(f"Invalid perception message: {e}")
+    
+    # NOTE: Perception is handled by the standalone 'oko_perception' node which publishes
+    # /perception/obstacle_info. Vostok1 now subscribes to that topic and does not run
+    # its own PointCloud2 processing here.
 
     def latlon_to_meters(self, lat, lon):
         """Convert GPS coordinates to local meters (Equirectangular projection)"""

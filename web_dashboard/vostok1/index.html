@@ -207,6 +207,47 @@
                         <span id="waypoint-count">Waypoints: 0</span> |
                         <span id="estimated-distance">Distance: 0m</span>
                     </div>
+                    <div class="config-section" style="margin-top: 12px;">
+                        <h4>Navigation Mode | Mode de Navigation</h4>
+                        <div class="config-item">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">Planning Strategy | Stratégie de Planification:</label>
+                            <div style="margin-left: 10px;">
+                                <div style="margin-bottom: 10px;">
+                                    <input type="radio" id="nav-mode-simple" name="nav-mode" value="simple" checked>
+                                    <label for="nav-mode-simple" style="margin-left: 5px; cursor: pointer;">
+                                        <strong>Simple Lawnmower</strong> — Basic zigzag pattern | Motif zigzag de base
+                                    </label>
+                                </div>
+                                <div style="margin-bottom: 10px;">
+                                    <input type="radio" id="nav-mode-runtime" name="nav-mode" value="runtime">
+                                    <label for="nav-mode-runtime" style="margin-left: 5px; cursor: pointer;">
+                                        <strong>⚡ Runtime A*</strong> — Reactive detours when blocked | Détours réactifs si bloqué
+                                    </label>
+                                </div>
+                                <div style="margin-bottom: 10px;">
+                                    <input type="radio" id="nav-mode-hybrid" name="nav-mode" value="hybrid">
+                                    <label for="nav-mode-hybrid" style="margin-left: 5px; cursor: pointer;">
+                                        <strong>🧠 Hybrid Mode</strong> — Pre-planned routes avoiding obstacles | Routes pré-planifiées évitant obstacles
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="astar-advanced-params" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid #444;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">A* Advanced Parameters | Paramètres Avancés A*:</label>
+                            <div class="config-item">
+                                <label for="cfg-astar-resolution">Grid Resolution (m):</label>
+                                <input type="number" id="cfg-astar-resolution" min="0.5" max="10" step="0.5" value="3.0">
+                            </div>
+                            <div class="config-item">
+                                <label for="cfg-astar-safety">Safety Margin (m):</label>
+                                <input type="number" id="cfg-astar-safety" min="1" max="30" step="1" value="12.0">
+                            </div>
+                            <div class="config-item">
+                                <label for="cfg-astar-max">Max Expansions:</label>
+                                <input type="number" id="cfg-astar-max" min="1000" max="50000" step="1000" value="20000">
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Step 2: Confirm or Cancel -->
@@ -403,6 +444,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=4"></script>
+    <script src="app.js?v=5"></script>
 </body>
 </html>

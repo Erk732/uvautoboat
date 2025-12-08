@@ -92,3 +92,23 @@ launch:
       value: 45.0       # Angle for directional probing (degrees)
     - name: detour_distance
       value: 12.0       # Distance for detour maneuvers (m)
+
+# Add standalone OKO perception so Atlantis can use shared perception node
+- node:
+    pkg: plan
+    exec: oko_perception
+    name: oko_perception_node
+    output: screen
+    param:
+    - name: min_safe_distance
+      value: 12.0
+    - name: critical_distance
+      value: 4.0
+    - name: min_height
+      value: -15.0
+    - name: max_height
+      value: 10.0
+    - name: min_range
+      value: 3.0
+    - name: max_range
+      value: 60.0

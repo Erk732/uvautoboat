@@ -46,12 +46,59 @@ def generate_launch_description():
         default_value='10',
         description='Number of lanes in lawnmower pattern'
     )
+
+    astar_enabled_arg = DeclareLaunchArgument(
+        'astar_enabled',
+        default_value='false',
+        description='Enable runtime A* detour planning in Sputnik'
+    )
+    astar_hybrid_arg = DeclareLaunchArgument(
+        'astar_hybrid_mode',
+        default_value='false',
+        description='Enable A* hybrid mode (pre-plan routes between lawnmower points)'
+    )
+    astar_resolution_arg = DeclareLaunchArgument(
+        'astar_resolution',
+        default_value='3.0',
+        description='Grid resolution (m) for A* detours'
+    )
+    astar_safety_margin_arg = DeclareLaunchArgument(
+        'astar_safety_margin',
+        default_value='12.0',
+        description='Safety margin (m) inflated around obstacles for A*'
+    )
+    astar_max_expansions_arg = DeclareLaunchArgument(
+        'astar_max_expansions',
+        default_value='20000',
+        description='Max node expansions for A* search'
+    )
+    # Hazard params (Sputnik)
+    hazard_enabled_arg = DeclareLaunchArgument(
+        'hazard_enabled',
+        default_value='false',
+        description='Enable hazard boxes for Sputnik planner'
+    )
+    hazard_world_boxes_arg = DeclareLaunchArgument(
+        'hazard_world_boxes',
+        default_value='',
+        description='World-frame hazard boxes "xmin,ymin,xmax,ymax;..."'
+    )
+    hazard_origin_world_x_arg = DeclareLaunchArgument(
+        'hazard_origin_world_x',
+        default_value='0.0',
+        description='Hazard origin world X for box conversion'
+    )
+    hazard_origin_world_y_arg = DeclareLaunchArgument(
+        'hazard_origin_world_y',
+        default_value='0.0',
+        description='Hazard origin world Y for box conversion'
+    )
     
     # === OKO Perception Arguments ===
     min_safe_distance_arg = DeclareLaunchArgument(
         'min_safe_distance',
-        default_value='12.0',
-        description='Minimum safe distance to obstacles (meters)'
+        default_value='15.0',
+        description='Minimum safe distance to obstacles (meters) - increased for piers'
     )
     
     # === BURAN Controller - PID Arguments ===
@@ -94,11 +141,11 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'min_safe_distance': LaunchConfiguration('min_safe_distance'),
-            'critical_distance': 4.0,
+            'critical_distance': 12.0,
             'hysteresis_distance': 1.5,
             'min_height': -15.0,     # Catch lake bank, harbour, water-level obstacles
             'max_height': 10.0,      # Catch tall structures
-            'min_range': 3.0,        # Reduced: detect closer obstacles (was 5.0)
+            'min_range': 0.5,        # Detect very close structures (piers)
             'max_range': 60.0,       # Increased: longer detection range (was 50.0)
             'sample_rate': 1,        # Process ALL points for maximum detection
             # Enhanced OKO v2.0 parameters (tuned for faster response)
@@ -106,7 +153,7 @@ def generate_launch_description():
             'temporal_threshold': 2,         # Reduced: 2/3 detections to confirm
             'cluster_distance': 2.0,         # Max distance between cluster points (m)
             'min_cluster_size': 3,           # Reduced: detect smaller obstacles
-            'water_plane_threshold': 0.5,    # Tolerance for water plane removal (m)
+            'water_plane_threshold': 1.0,    # More tolerant water-plane removal to keep piers
             'velocity_history_size': 5,      # Reduced: faster velocity estimate
             # === v2.1: VFH Steering (from AllInOneStack) ===
             'vfh_enabled': True,             # Enable VFH gap-finding
@@ -121,7 +168,7 @@ def generate_launch_description():
             'laserscan_topic': '/wamv/sensors/lidars/lidar_wamv_sensor/scan',
             'laserscan_topic_alt': '/wamv/sensors/lidars/lidar_wamv/scan',
             # === v2.1: Extended Detection Horizon ===
-            'full_clear_distance': 60.0,     # Force avoidance trigger distance (m)
+            'full_clear_distance': 20.0,     # Force avoidance trigger distance (m) - FIXED: was 60.0
         }]
     )
 
@@ -138,13 +185,19 @@ def generate_launch_description():
             'waypoint_tolerance': 1.0,                         # Reduced from 2.0m - stricter tolerance
             'waypoint_skip_timeout': 20.0,                     # Reduced from 45s - faster skip
             # === v2.1: Hazard Zone Planning (from AllInOneStack) ===
-            'hazard_enabled': False,         # Set to True and provide hazard_world_boxes to enable
+            'hazard_enabled': LaunchConfiguration('hazard_enabled'),
             'hazard_boxes': '',              # Local frame boxes: "xmin,ymin,xmax,ymax;..."
-            'hazard_world_boxes': '',        # World frame boxes (see hazard_world_boxes.yaml)
-            'hazard_origin_world_x': 0.0,    # Origin for world->local conversion
-            'hazard_origin_world_y': 0.0,
+            'hazard_world_boxes': LaunchConfiguration('hazard_world_boxes'),
+            'hazard_origin_world_x': LaunchConfiguration('hazard_origin_world_x'),
+            'hazard_origin_world_y': LaunchConfiguration('hazard_origin_world_y'),
             'plan_avoid_margin': 5.0,        # Planning detour margin (m)
             'hull_radius': 1.5,              # Boat hull radius for clearance (m)
+            # === v2.2: A* detour planning ===
+            'astar_enabled': LaunchConfiguration('astar_enabled'),
+            'astar_hybrid_mode': LaunchConfiguration('astar_hybrid_mode'),
+            'astar_resolution': LaunchConfiguration('astar_resolution'),
+            'astar_safety_margin': LaunchConfiguration('astar_safety_margin'),
+            'astar_max_expansions': LaunchConfiguration('astar_max_expansions'),
         }]
     )
 
@@ -162,7 +215,7 @@ def generate_launch_description():
             'max_speed': LaunchConfiguration('max_speed'),
             # === Obstacle Avoidance (v2.1: increased horizon) ===
             'obstacle_slow_factor': 0.3,
-            'critical_distance': 10.0,      # Increased: hard stop distance (v2.1: increased from 5.0)
+            'critical_distance': 12.0,      # Earlier hard-stop to avoid piers
             'reverse_timeout': 5.0,
             # === Smart Anti-Stuck System (SASS) ===
             'stuck_timeout': 3.0,
@@ -182,6 +235,15 @@ def generate_launch_description():
         scan_length_arg,
         scan_width_arg,
         lanes_arg,
+        astar_enabled_arg,
+        astar_hybrid_arg,
+        astar_resolution_arg,
+        astar_safety_margin_arg,
+        astar_max_expansions_arg,
+        hazard_enabled_arg,
+        hazard_world_boxes_arg,
+        hazard_origin_world_x_arg,
+        hazard_origin_world_y_arg,
         # Perception
         min_safe_distance_arg,
         # PID Controller

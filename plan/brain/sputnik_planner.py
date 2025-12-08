@@ -26,9 +26,135 @@ from rclpy.node import Node
 import math
 import json
 import time
+import heapq
 
 from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import String
+
+
+class AStarSolver:
+    """Lightweight 8-connected A* for local detours."""
+    def __init__(self, resolution=3.0, safety_margin=10.0, max_expansions=20000):
+        self.resolution = resolution
+        self.safety_margin = safety_margin
+        self.max_expansions = max_expansions
+
+    def world_to_grid(self, x, y, min_x, min_y):
+        gx = int((x - min_x) / self.resolution)
+        gy = int((y - min_y) / self.resolution)
+        return gx, gy
+
+    def grid_to_world(self, gx, gy, min_x, min_y):
+        wx = (gx * self.resolution) + min_x + (self.resolution / 2.0)
+        wy = (gy * self.resolution) + min_y + (self.resolution / 2.0)
+        return wx, wy
+
+    def _add_blocked_disc(self, blocked, center, radius_steps):
+        cx, cy = center
+        for dx in range(-radius_steps, radius_steps + 1):
+            for dy in range(-radius_steps, radius_steps + 1):
+                if dx * dx + dy * dy <= radius_steps * radius_steps:
+                    blocked.add((cx + dx, cy + dy))
+
+    def _add_blocked_box(self, blocked, box, min_x, min_y):
+        xmin, ymin, xmax, ymax = box
+        gx0, gy0 = self.world_to_grid(xmin, ymin, min_x, min_y)
+        gx1, gy1 = self.world_to_grid(xmax, ymax, min_x, min_y)
+        for gx in range(min(gx0, gx1), max(gx0, gx1) + 1):
+            for gy in range(min(gy0, gy1), max(gy0, gy1) + 1):
+                blocked.add((gx, gy))
+
+    def plan(self, start, goal, obstacles, hazard_boxes, inflate_radius):
+        """
+        Plan from start->goal avoiding circular obstacles and rectangular hazards.
+        obstacles: list of (x, y)
+        hazard_boxes: list of (xmin, ymin, xmax, ymax) in local frame
+        inflate_radius: extra meters to inflate obstacles/hazards
+        """
+        sx, sy = start
+        gx, gy = goal
+
+        # Bounds from start/goal/obstacles/hazards with padding
+        xs = [sx, gx] + [o[0] for o in obstacles]
+        ys = [sy, gy] + [o[1] for o in obstacles]
+        for xmin, ymin, xmax, ymax in hazard_boxes:
+            xs += [xmin, xmax]
+            ys += [ymin, ymax]
+
+        if not xs or not ys:
+            return None
+
+        pad = max(self.safety_margin * 2.0, inflate_radius * 2.0, 30.0)
+        min_x = min(xs) - pad
+        max_x = max(xs) + pad
+        min_y = min(ys) - pad
+        max_y = max(ys) + pad
+
+        grid_w = int((max_x - min_x) / self.resolution) + 1
+        grid_h = int((max_y - min_y) / self.resolution) + 1
+        if grid_w <= 0 or grid_h <= 0:
+            return None
+
+        start_node = self.world_to_grid(sx, sy, min_x, min_y)
+        goal_node = self.world_to_grid(gx, gy, min_x, min_y)
+
+        blocked = set()
+        # Inflate obstacles
+        radius_steps = int((self.safety_margin + inflate_radius) / self.resolution)
+        for ox, oy in obstacles:
+            ogx, ogy = self.world_to_grid(ox, oy, min_x, min_y)
+            self._add_blocked_disc(blocked, (ogx, ogy), radius_steps)
+
+        # Block hazard boxes (already inflated when passed in)
+        for box in hazard_boxes:
+            self._add_blocked_box(blocked, box, min_x, min_y)
+
+        # If start/goal blocked, fail fast
+        if start_node in blocked or goal_node in blocked:
+            return None
+
+        def neighbors(node):
+            x, y = node
+            dirs = [(0, 1), (1, 0), (0, -1), (-1, 0),
+                    (1, 1), (1, -1), (-1, 1), (-1, -1)]
+            for dx, dy in dirs:
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < grid_w and 0 <= ny < grid_h and (nx, ny) not in blocked:
+                    cost = 1.414 if dx != 0 and dy != 0 else 1.0
+                    yield (nx, ny), cost
+
+        open_set = []
+        heapq.heappush(open_set, (0.0, start_node))
+        came_from = {}
+        g_score = {start_node: 0.0}
+        expansions = 0
+
+        while open_set and expansions < self.max_expansions:
+            _, current = heapq.heappop(open_set)
+            expansions += 1
+
+            if current == goal_node:
+                # Reconstruct path
+                path = []
+                n = current
+                while n in came_from:
+                    wx, wy = self.grid_to_world(n[0], n[1], min_x, min_y)
+                    path.append((wx, wy))
+                    n = came_from[n]
+                path.reverse()
+                return path
+
+            for nb, move_cost in neighbors(current):
+                tentative = g_score[current] + move_cost
+                if tentative < g_score.get(nb, float('inf')):
+                    came_from[nb] = current
+                    g_score[nb] = tentative
+                    hx = nb[0] - goal_node[0]
+                    hy = nb[1] - goal_node[1]
+                    h = math.hypot(hx, hy)
+                    heapq.heappush(open_set, (tentative + h, nb))
+
+        return None
 
 
 class SputnikPlanner(Node):
@@ -72,6 +198,20 @@ class SputnikPlanner(Node):
         self.plan_avoid_margin = float(self.get_parameter('plan_avoid_margin').value)
         self.hull_radius = float(self.get_parameter('hull_radius').value)
 
+        # v2.2: Optional A* detour planner (ported from Atlantis)
+        self.declare_parameter('astar_enabled', False)
+        self.declare_parameter('astar_hybrid_mode', False)  # Pre-plan A* between lawnmower waypoints
+        self.declare_parameter('astar_resolution', 3.0)
+        self.declare_parameter('astar_safety_margin', 12.0)
+        self.declare_parameter('astar_max_expansions', 20000)
+        self.astar_enabled = bool(self.get_parameter('astar_enabled').value)
+        self.astar_hybrid_mode = bool(self.get_parameter('astar_hybrid_mode').value)
+        self.astar = AStarSolver(
+            resolution=float(self.get_parameter('astar_resolution').value),
+            safety_margin=float(self.get_parameter('astar_safety_margin').value),
+            max_expansions=int(self.get_parameter('astar_max_expansions').value),
+        )
+
         # --- STATE ---
         self.start_gps = None
         self.current_gps = None
@@ -89,6 +229,7 @@ class SputnikPlanner(Node):
         # Waypoint skip tracking (for obstacles blocking waypoint)
         self.waypoint_start_time = None  # When we started trying to reach current waypoint
         self.obstacle_detected = False
+        self.obstacle_clusters = []  # Latest OKO clusters for A* detours
         self.obstacle_blocking_time = 0.0  # Cumulative time obstacle detected near waypoint
         self.last_obstacle_check = None
         self.go_home_mode = False  # Track if we're in return-home mode
@@ -152,7 +293,7 @@ class SputnikPlanner(Node):
         self.create_timer(0.2, self.publish_mission_status_timer)
 
         self.get_logger().info("=" * 50)
-        self.get_logger().info("SPUTNIK v2.1 - Trajectory Planning System")
+        self.get_logger().info("SPUTNIK v2.2 - Trajectory Planning System")
         self.get_logger().info("=" * 50)
         self.get_logger().info(f"Zone de balayage | Scan Area: {self.scan_length}m × {self.scan_width * self.lanes}m")
         self.get_logger().info(f"Lanes: {self.lanes}, Width: {self.scan_width}m")
@@ -161,6 +302,12 @@ class SputnikPlanner(Node):
             self.get_logger().info(f"Planning Margin: {self.plan_avoid_margin}m, Hull: {self.hull_radius}m")
         else:
             self.get_logger().info("Hazard Zones: Disabled")
+        if self.astar_hybrid_mode:
+            self.get_logger().info(f"A* Hybrid Mode: ENABLED (pre-plan routes between waypoints)")
+        elif self.astar_enabled:
+            self.get_logger().info(f"A* Runtime Detours: ENABLED (res={self.astar.resolution}m, margin={self.astar.safety_margin}m)")
+        else:
+            self.get_logger().info("A* Detours: Disabled")
         self.get_logger().info("Waiting for GPS signal...")
         self.get_logger().info("Commands: ros2 run plan vostok1_cli --help")
         self.get_logger().info("=" * 50)
@@ -335,6 +482,9 @@ class SputnikPlanner(Node):
         try:
             data = json.loads(msg.data)
             self.obstacle_detected = data.get('obstacle_detected', False)
+            # Capture clusters for A* detours
+            clusters = data.get('clusters', [])
+            self.obstacle_clusters = [(c.get('x', 0.0), c.get('y', 0.0)) for c in clusters if 'x' in c and 'y' in c]
         except:
             pass
     
@@ -372,7 +522,41 @@ class SputnikPlanner(Node):
             if 'scan_width' in config:
                 self.scan_width = float(config['scan_width'])
                 regenerate = True
-                
+
+            # v2.2: A* detour planning runtime config
+            if 'astar_enabled' in config:
+                self.astar_enabled = bool(config['astar_enabled'])
+                self.get_logger().info(f"A* runtime detours: {'ENABLED' if self.astar_enabled else 'DISABLED'}")
+            if 'astar_hybrid_mode' in config:
+                self.astar_hybrid_mode = bool(config['astar_hybrid_mode'])
+                self.get_logger().info(f"A* hybrid mode: {'ENABLED' if self.astar_hybrid_mode else 'DISABLED'}")
+            if 'astar_resolution' in config:
+                self.astar.resolution = float(config['astar_resolution'])
+            if 'astar_safety_margin' in config:
+                self.astar.safety_margin = float(config['astar_safety_margin'])
+            if 'astar_max_expansions' in config:
+                self.astar.max_expansions = int(config['astar_max_expansions'])
+
+            # v2.1: Hazard zone runtime config
+            if 'hazard_enabled' in config:
+                self.hazard_enabled = bool(config['hazard_enabled'])
+                self.get_logger().info(f"Hazard zone avoidance: {'ENABLED' if self.hazard_enabled else 'DISABLED'}")
+            if 'hazard_origin_world_x' in config:
+                self.hazard_origin_world_x = float(config['hazard_origin_world_x'])
+            if 'hazard_origin_world_y' in config:
+                self.hazard_origin_world_y = float(config['hazard_origin_world_y'])
+            if 'hazard_world_boxes' in config:
+                try:
+                    hazard_world = self._parse_hazard_boxes(str(config['hazard_world_boxes']))
+                    self.hazard_boxes = self._world_boxes_to_local(
+                        hazard_world,
+                        getattr(self, 'hazard_origin_world_x', 0.0),
+                        getattr(self, 'hazard_origin_world_y', 0.0)
+                    )
+                    self.get_logger().info(f"Loaded {len(self.hazard_boxes)} hazard boxes from config")
+                except Exception as e:
+                    self.get_logger().warn(f"Failed to parse hazard_world_boxes: {e}")
+
             self.get_logger().info(f"Config updated: lanes={self.lanes}, length={self.scan_length}, width={self.scan_width}")
             
         except Exception as e:
@@ -393,7 +577,16 @@ class SputnikPlanner(Node):
             'start_lat': self.start_gps[0] if self.start_gps else None,
             'start_lon': self.start_gps[1] if self.start_gps else None,
             'mission_armed': self.mission_armed,
-            'joystick_override': self.state == "JOYSTICK"
+            'joystick_override': self.state == "JOYSTICK",
+            # v2.1: Hazard zone status
+            'hazard_enabled': self.hazard_enabled,
+            'hazard_boxes_count': len(self.hazard_boxes),
+            # v2.2: A* detour planning status
+            'astar_enabled': self.astar_enabled,
+            'astar_hybrid_mode': self.astar_hybrid_mode,
+            'astar_resolution': self.astar.resolution,
+            'astar_safety_margin': self.astar.safety_margin,
+            'astar_max_expansions': self.astar.max_expansions,
         }
         msg = String()
         msg.data = json.dumps(config)
@@ -415,7 +608,8 @@ class SputnikPlanner(Node):
 
     def generate_lawnmower_path(self):
         """Generate zigzag lawn mower pattern waypoints"""
-        self.waypoints = []
+        # First generate main lawnmower waypoints
+        main_waypoints = []
 
         for i in range(self.lanes):
             if i % 2 == 0:
@@ -424,16 +618,96 @@ class SputnikPlanner(Node):
                 x_end = 0.0
 
             y_pos = i * self.scan_width
-            self.waypoints.append((x_end, y_pos))
+            main_waypoints.append((x_end, y_pos))
 
             if i < self.lanes - 1:
                 next_y = (i + 1) * self.scan_width
-                self.waypoints.append((x_end, next_y))
+                main_waypoints.append((x_end, next_y))
 
-        self.get_logger().info(f"Generated {len(self.waypoints)} waypoints")
-        
+        # If hybrid mode enabled, use A* to find routes between main waypoints
+        if self.astar_hybrid_mode and self.start_gps is not None:
+            self.get_logger().info(f"🧠 Hybrid Mode: Planning A* routes between {len(main_waypoints)} main waypoints...")
+            self.waypoints = self._generate_hybrid_waypoints(main_waypoints)
+            self.get_logger().info(f"✓ Hybrid generation: {len(main_waypoints)} main → {len(self.waypoints)} total waypoints")
+        else:
+            self.waypoints = main_waypoints
+            self.get_logger().info(f"Generated {len(self.waypoints)} waypoints (simple mode)")
+
         # Publish waypoints
         self.publish_waypoints()
+
+    def _generate_hybrid_waypoints(self, main_waypoints):
+        """
+        Generate hybrid waypoints using A* between main lawnmower points.
+        Returns expanded waypoint list with A* intermediate points.
+        """
+        if len(main_waypoints) < 2:
+            return main_waypoints
+
+        # Get current position as start (or use 0,0 if not available)
+        if self.current_gps:
+            start_x, start_y = self.latlon_to_meters(self.current_gps[0], self.current_gps[1])
+        else:
+            start_x, start_y = 0.0, 0.0
+
+        hybrid_path = []
+        inflate = self.plan_avoid_margin + self.hull_radius
+
+        # Inflate hazard boxes for planning
+        hazard_blocks = []
+        for xmin, ymin, xmax, ymax in self.hazard_boxes:
+            hazard_blocks.append((
+                xmin - inflate, ymin - inflate,
+                xmax + inflate, ymax + inflate
+            ))
+
+        # Use obstacle clusters if available (from OKO), otherwise empty
+        obstacles = self.obstacle_clusters if hasattr(self, 'obstacle_clusters') and self.obstacle_clusters else []
+
+        # Plan from start to first waypoint
+        first_wp = main_waypoints[0]
+        path_segment = self.astar.plan(
+            (start_x, start_y),
+            first_wp,
+            obstacles,
+            hazard_blocks,
+            inflate_radius=inflate
+        )
+
+        if path_segment:
+            # Add A* path, excluding start position
+            for pt in path_segment:
+                if math.hypot(pt[0] - start_x, pt[1] - start_y) > 1.0:
+                    hybrid_path.append(pt)
+
+        # Always include first main waypoint
+        hybrid_path.append(first_wp)
+
+        # Plan between consecutive main waypoints
+        for i in range(len(main_waypoints) - 1):
+            wp_start = main_waypoints[i]
+            wp_end = main_waypoints[i + 1]
+
+            # Try A* planning between waypoints
+            path_segment = self.astar.plan(
+                wp_start,
+                wp_end,
+                obstacles,
+                hazard_blocks,
+                inflate_radius=inflate
+            )
+
+            if path_segment and len(path_segment) > 0:
+                # A* found a detour - add intermediate points
+                for pt in path_segment:
+                    # Skip if too close to start waypoint
+                    if math.hypot(pt[0] - wp_start[0], pt[1] - wp_start[1]) > 1.0:
+                        hybrid_path.append(pt)
+
+            # Always add the end main waypoint
+            hybrid_path.append(wp_end)
+
+        return hybrid_path
 
     def planning_loop(self):
         """Main planning loop with Vostok1-style logging"""
@@ -550,6 +824,16 @@ class SputnikPlanner(Node):
             wp_num = self.current_wp_index + 1
             total_wp = len(self.waypoints)
             target_x, target_y = self.waypoints[self.current_wp_index]
+
+            # Try A* detour before skipping
+            if self.astar_enabled:
+                detour_path = self.plan_astar_detour(curr_x, curr_y, target_x, target_y)
+                if detour_path:
+                    self.get_logger().info(
+                        f"🧭 A* DETOUR inserted for WP {wp_num}/{total_wp} ({len(detour_path)} segments)"
+                    )
+                    self.obstacle_blocking_time = 0.0
+                    return
             
             reason = "timeout" if timeout_exceeded else "obstacle_cluster"
             self.get_logger().warn(
@@ -585,6 +869,40 @@ class SputnikPlanner(Node):
         
         # Publish updated waypoints
         self.publish_waypoints()
+
+    def plan_astar_detour(self, curr_x, curr_y, target_x, target_y):
+        """Run A* to replace the current leg with a detour path."""
+        # Inflate hazards by margin+hull to keep clearance
+        inflate = self.plan_avoid_margin + self.hull_radius
+        hazard_blocks = []
+        for xmin, ymin, xmax, ymax in self.hazard_boxes:
+            hazard_blocks.append((
+                xmin - inflate, ymin - inflate,
+                xmax + inflate, ymax + inflate
+            ))
+
+        obstacles = self.obstacle_clusters if self.obstacle_clusters else []
+        path = self.astar.plan(
+            (curr_x, curr_y),
+            (target_x, target_y),
+            obstacles,
+            hazard_blocks,
+            inflate_radius=inflate
+        )
+
+        if not path:
+            return None
+
+        # Replace current waypoint with the planned segments (include goal)
+        # Ensure we don't include the current position as a waypoint
+        filtered = [(x, y) for (x, y) in path if math.hypot(x - curr_x, y - curr_y) > 1.0]
+        if not filtered:
+            return None
+
+        self.waypoints[self.current_wp_index:self.current_wp_index + 1] = filtered
+        self.publish_waypoints()
+        self.detour_waypoint_inserted = True
+        return filtered
 
     def finish_mission(self, final_x, final_y):
         """Complete mission with Vostok1-style summary"""

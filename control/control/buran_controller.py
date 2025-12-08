@@ -161,6 +161,7 @@ class BuranController(Node):
         self.declare_parameter('critical_distance', 5.0)
         self.declare_parameter('min_safe_distance', 12.0)
         self.declare_parameter('reverse_timeout', 5.0)
+        self.declare_parameter('avoid_diff_gain', 40.0)  # VFH/polar differential steering gain
         
         # Smart anti-stuck parameters
         self.declare_parameter('stuck_timeout', 3.0)
@@ -187,6 +188,7 @@ class BuranController(Node):
         self.critical_distance = self.get_parameter('critical_distance').value
         self.min_safe_distance = self.get_parameter('min_safe_distance').value
         self.reverse_timeout = self.get_parameter('reverse_timeout').value
+        self.avoid_diff_gain = float(self.get_parameter('avoid_diff_gain').value)
         
         # Smart anti-stuck parameters
         self.stuck_timeout = self.get_parameter('stuck_timeout').value
@@ -222,6 +224,10 @@ class BuranController(Node):
         self.urgency = 0.0  # Distance-weighted urgency (0.0-1.0)
         self.best_gap = None  # Best navigation gap direction
         self.obstacle_count = 0  # Number of detected clusters
+        # OKO v2.1 VFH/polar state (for differential steering)
+        self.vfh_gap = None  # VFH best direction gap info
+        self.polar_bias = 0.0  # Polar histogram bias [-1, 1]
+        self.force_avoid_active = False  # Global avoidance mode flag
 
         # Avoidance state
         self.avoidance_mode = False
@@ -382,6 +388,10 @@ class BuranController(Node):
             self.urgency = data.get('urgency', 0.0)
             self.best_gap = data.get('best_gap', None)
             self.obstacle_count = data.get('obstacle_count', 0)
+            # OKO v2.1 VFH/polar fields (for fine-tuned steering)
+            self.vfh_gap = data.get('vfh_gap', None)
+            self.polar_bias = data.get('polar_bias', 0.0)
+            self.force_avoid_active = data.get('force_avoid_active', False)
         except (json.JSONDecodeError, KeyError) as e:
             self.get_logger().warn(f"Invalid obstacle message: {e}")
 
@@ -463,6 +473,9 @@ class BuranController(Node):
             if 'critical_distance' in config:
                 self.critical_distance = float(config['critical_distance'])
                 updated.append(f"critical_dist={self.critical_distance}")
+            if 'avoid_diff_gain' in config:
+                self.avoid_diff_gain = float(config['avoid_diff_gain'])
+                updated.append(f"diff_gain={self.avoid_diff_gain}")
             if 'min_safe_distance' in config:
                 self.min_safe_distance = float(config['min_safe_distance'])
                 updated.append(f"safe_dist={self.min_safe_distance}")
@@ -623,6 +636,33 @@ class BuranController(Node):
         # Differential thrust
         left_thrust = speed - turn_power
         right_thrust = speed + turn_power
+
+        # v2.1: Apply VFH/polar bias for fine-tuned steering (from AllInOneStack)
+        # Only apply when avoiding obstacles or force_avoid_active
+        if self.obstacle_detected or self.force_avoid_active:
+            diff_bias = 0.0
+
+            # 1. Left/right clearance bias (steer toward clearer side)
+            if self.left_clear < float('inf') and self.right_clear < float('inf'):
+                norm = max(self.left_clear + self.right_clear, 1.0)
+                diff_bias += (self.right_clear - self.left_clear) / norm * self.avoid_diff_gain
+
+            # 2. VFH steering bias (toward best gap direction)
+            if self.vfh_gap is not None:
+                vfh_direction_deg = self.vfh_gap.get('direction', 0.0)
+                # Normalize VFH direction to [-1, 1] range (positive = turn left)
+                # Assuming VFH direction is relative to forward (0 = straight)
+                vfh_normalized = max(-1.0, min(1.0, vfh_direction_deg / 45.0))
+                diff_bias += vfh_normalized * self.avoid_diff_gain
+
+            # 3. Polar histogram bias (free space comparison)
+            # polar_bias: +1 = left wide open, -1 = right wide open
+            if self.force_avoid_active:
+                diff_bias += self.polar_bias * self.avoid_diff_gain
+
+            # Apply differential bias: positive bias = turn left
+            left_thrust -= diff_bias
+            right_thrust += diff_bias
 
         # Clamp to safe limits
         left_thrust = max(-SAFE_THRUST, min(SAFE_THRUST, left_thrust))

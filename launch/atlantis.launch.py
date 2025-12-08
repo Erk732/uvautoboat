@@ -182,6 +182,21 @@ def generate_launch_description():
             'frame_id': LaunchConfiguration('frame_id'),
         }],
     )
+    # Standalone OKO perception (allow Atlantis to rely on shared perception)
+    oko_perception_node = Node(
+        package='plan',
+        executable='oko_perception',
+        name='oko_perception_node',
+        output='screen',
+        parameters=[{
+            'min_safe_distance': 12.0,
+            'critical_distance': 4.0,
+            'min_height': -15.0,
+            'max_height': 10.0,
+            'min_range': 3.0,
+            'max_range': 60.0,
+        }]
+    )
     
     # Atlantis Controller Node (from control package)
     atlantis_controller_node = Node(
@@ -241,5 +256,6 @@ def generate_launch_description():
         detour_distance_arg,
         # Nodes
         atlantis_planner_node,
+        oko_perception_node,
         atlantis_controller_node,
     ])
