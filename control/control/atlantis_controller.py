@@ -20,12 +20,12 @@ class AtlantisController(Node):
         self.declare_parameter('waypoint_tolerance', 3.0)
         self.declare_parameter('kp', 450.0) # Increased slightly for better heading hold
         self.declare_parameter('ki', 20.0)
-        self.declare_parameter('kd', 120.0)
+        self.declare_parameter('kd', 150.0) # Increased for more responsive turning
         
         # --- OBSTACLE PARAMETERS ---
         self.declare_parameter('min_safe_distance', 6.0)
         self.declare_parameter('critical_distance', 3.0)
-        self.declare_parameter('obstacle_slow_factor', 0.2) # Increased speed during avoidance
+        self.declare_parameter('obstacle_slow_factor', 0.2) # Speed of the boat during avoidance can be changed for faster/slower movement
         self.declare_parameter('hysteresis_distance', 2.0)   
         self.declare_parameter('reverse_timeout', 10.0)    
 
@@ -538,6 +538,8 @@ class AtlantisController(Node):
         self.get_logger().info(f"WP {wp} | Pos:({curr_x:.1f},{curr_y:.1f}) | Dist:{dist:.1f}m | {obs} {blocked}")
 
     def finish_mission(self, final_x, final_y):
+        if self.state == "FINISHED": # prints only once
+            return
         self.state = "FINISHED"
         self.stop_boat()
         self.get_logger().info("MISSION COMPLETE!")
