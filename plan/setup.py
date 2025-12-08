@@ -43,6 +43,7 @@ setup(
             # Atlantis - separated control and planning
             'atlantis_planner = brain.atlantis_planner:main',
             'pollutant_planner = brain.pollutant_planner:main',
+            'atlantis_a_planner = plan.brain.atlantis_a_planner:main',
         ],
     },
 )
