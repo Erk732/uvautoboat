@@ -52,7 +52,7 @@ SENSOR_TIMEOUT = 2.0         # seconds
 # ┌─────────────────────────────────────────────────────────────────────────────┐
 # │                        BAYES' THEOREM                                       │
 # │                                                                             │
-# │   P(State | Data) = P(Data | State) × P(State) / P(Data)                   │
+# │   P(State | Data) = P(Data | State) × P(State) / P(Data)                    │
 # │                                                                             │
 # │   In robotics terms:                                                        │
 # │     Posterior   = Likelihood × Prior / Evidence                             │
@@ -71,12 +71,12 @@ SENSOR_TIMEOUT = 2.0         # seconds
 # │                                                                             │
 # │   For continuous states with Gaussian (bell curve) distributions:           │
 # │     - State described by mean μ (best estimate) and variance σ² (uncertainty)│
-# │     - Multiplying two Gaussians → another Gaussian (closed-form solution)  │
+# │     - Multiplying two Gaussians → another Gaussian (closed-form solution)   │
 # │                                                                             │
 # │   Predict-Update Cycle:                                                     │
 # │     PREDICT: x̂⁻ = F×x̂, P⁻ = F×P×Fᵀ+Q   (uncertainty grows)                │
-# │     UPDATE:  K = P⁻Hᵀ(HP⁻Hᵀ+R)⁻¹        (Kalman Gain)                      │
-# │              x̂ = x̂⁻ + K(z-Hx̂⁻)          (correct with measurement)         │
+# │     UPDATE:  K = P⁻Hᵀ(HP⁻Hᵀ+R)⁻¹        (Kalman Gain)                       │
+# │              x̂ = x̂⁻ + K(z-Hx̂⁻)          (correct with measurement)       │
 # │              P = (I-KH)P⁻                (uncertainty shrinks)              │
 # │                                                                             │
 # │   Kalman Gain K: How much to trust the measurement vs prediction            │
@@ -136,7 +136,6 @@ class KalmanDriftEstimator:
 class BuranController(Node):
     """
     BURAN - Boat controller with PID navigation
-    (Named after the Soviet space shuttle program)
     Enhanced with Smart Anti-Stuck System (SASS)
     """
     def __init__(self):
@@ -154,6 +153,9 @@ class BuranController(Node):
         # Approach slowdown near waypoint
         self.declare_parameter('approach_slow_distance', 5.0)
         self.declare_parameter('approach_slow_factor', 0.7)
+        # Smoothness controls
+        self.declare_parameter('slew_rate_limit', 80.0)       # Max thrust change per cycle (N)
+        self.declare_parameter('turn_deadband_deg', 2.0)      # Ignore tiny heading errors
 
         # Obstacle avoidance
         self.declare_parameter('critical_distance', 5.0)
@@ -179,6 +181,8 @@ class BuranController(Node):
         self.obstacle_slow_factor = self.get_parameter('obstacle_slow_factor').value
         self.approach_slow_distance = float(self.get_parameter('approach_slow_distance').value)
         self.approach_slow_factor = float(self.get_parameter('approach_slow_factor').value)
+        self.slew_rate_limit = float(self.get_parameter('slew_rate_limit').value)
+        self.turn_deadband_deg = float(self.get_parameter('turn_deadband_deg').value)
         self.critical_distance = self.get_parameter('critical_distance').value
         self.reverse_timeout = self.get_parameter('reverse_timeout').value
         
@@ -220,6 +224,8 @@ class BuranController(Node):
         # Avoidance state
         self.avoidance_mode = False
         self.reverse_start_time = None
+        self.prev_left_thrust = 0.0
+        self.prev_right_thrust = 0.0
 
         # GPS for local coordinate conversion
         self.start_gps = None
@@ -575,6 +581,11 @@ class BuranController(Node):
 
         # --- SPEED CALCULATION ---
         angle_error_deg = abs(math.degrees(angle_error))
+        # Small-angle deadband to reduce chatter
+        if angle_error_deg < self.turn_deadband_deg:
+            turn_power = 0.0
+            angle_error_deg = 0.0
+
         if angle_error_deg > 45:
             speed = self.base_speed * 0.5
         elif angle_error_deg > 20:
@@ -582,9 +593,10 @@ class BuranController(Node):
         else:
             speed = self.base_speed
 
-        # Distance-based slowdown (precision near waypoint)
-        if self.distance_to_target < self.approach_slow_distance:
-            speed *= self.approach_slow_factor
+        # Distance-based slowdown (precision near waypoint) - linear ramp
+        if math.isfinite(self.distance_to_target) and self.distance_to_target < self.approach_slow_distance:
+            frac = max(0.0, min(1.0, self.distance_to_target / self.approach_slow_distance))
+            speed *= (self.approach_slow_factor + (1.0 - self.approach_slow_factor) * frac)
 
         # Obstacle-based slowdown using OKO v2.0 urgency for smoother control
         if self.obstacle_detected:
@@ -604,6 +616,12 @@ class BuranController(Node):
         left_thrust = max(-SAFE_THRUST, min(SAFE_THRUST, left_thrust))
         right_thrust = max(-SAFE_THRUST, min(SAFE_THRUST, right_thrust))
 
+        # Slew-rate limit to avoid sudden reversals/jerk
+        left_thrust = self._slew_limit(self.prev_left_thrust, left_thrust)
+        right_thrust = self._slew_limit(self.prev_right_thrust, right_thrust)
+        self.prev_left_thrust = left_thrust
+        self.prev_right_thrust = right_thrust
+
         self.send_thrust(left_thrust, right_thrust)
         
         # Publish status
@@ -617,6 +635,14 @@ class BuranController(Node):
         while angle < -math.pi:
             angle += 2.0 * math.pi
         return angle
+
+    def _slew_limit(self, previous: float, target: float) -> float:
+        """
+        Limit thrust change per cycle to avoid abrupt reversals and jerk.
+        """
+        delta = target - previous
+        delta = max(-self.slew_rate_limit, min(self.slew_rate_limit, delta))
+        return previous + delta
 
     def send_thrust(self, left, right):
         """Publish thruster commands - with mission safety check"""

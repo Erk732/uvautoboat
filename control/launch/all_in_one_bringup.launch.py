@@ -72,8 +72,8 @@ def generate_launch_description():
                 'overshoot_margin': 1.0,           # Overshoot detection boundary (m)
                 
                 # ==================== Obstacle Avoidance ====================
-                'obstacle_slow_dist': 15.0,        # Slowdown trigger distance (m)
-                'obstacle_stop_dist': 8.0,         # Hard avoid trigger distance (m)
+                'obstacle_slow_dist': 12.0,        # Slowdown trigger distance (m)
+                'obstacle_stop_dist': 6.0,         # Hard avoid trigger distance (m)
                 'avoid_turn_thrust': 350.0,        # Avoidance turn thrust (N)
                 'avoid_diff_gain': 40.0,           # Avoidance steering gain
                 'avoid_clear_margin': 3.0,         # Safety margin to exit avoidance (m)

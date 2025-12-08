@@ -43,8 +43,7 @@ from std_msgs.msg import String, Bool
 
 class OkoPerception(Node):
     """
-    OKO - Obstacle detection and perception system
-    (Named after the Soviet early warning satellite system)
+    OKO - Obstacle detection and perception system (Enhanced version v2.1)
 
     Enhanced with temporal filtering, clustering, and velocity estimation.
     """
