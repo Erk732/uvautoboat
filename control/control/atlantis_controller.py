@@ -28,7 +28,7 @@ class AtlantisController(Node):
         self.declare_parameter('obstacle_slow_factor', 0.08)  
         self.declare_parameter('hysteresis_distance', 2.5)   
         self.declare_parameter('reverse_timeout', 10.0)    
-        self.declare_parameter('probe_angle', 45.0)  # For future escape tuning
+        self.declare_parameter('probe_angle', 45.0)
 
         # Stuck detection & Waypoint Skipping
         self.declare_parameter('stuck_timeout', 5.0)
@@ -38,7 +38,7 @@ class AtlantisController(Node):
         self.declare_parameter('drift_compensation_gain', 0.3)
         self.declare_parameter('detour_distance', 12.0)
         self.declare_parameter('path_return_timeout', 10.0)
-        self.declare_parameter('blocked_skip_time', 15.0) # NEW: Time before skipping blocked WP
+        self.declare_parameter('blocked_skip_time', 15.0) # Default for distant obstacles
 
         # Get params
         self.base_speed = self.get_parameter('base_speed').value
@@ -73,7 +73,7 @@ class AtlantisController(Node):
         
         # Waypoint Timing
         self.waypoint_start_time = None
-        self.blocked_start_time = None # Tracks how long path is blocked
+        self.blocked_start_time = None 
         
         # PID
         self.previous_error = 0.0
@@ -300,7 +300,7 @@ class AtlantisController(Node):
         dy = target_y - curr_y
         dist = math.hypot(dx, dy)
         
-        # --- BLOCKED WAYPOINT SKIP LOGIC ---
+        # --- BLOCKED WAYPOINT SKIP LOGIC (SMART) ---
         target_angle_raw = math.atan2(dy, dx)
         angle_to_target_check = target_angle_raw - self.current_yaw
         
@@ -309,14 +309,25 @@ class AtlantisController(Node):
                 self.blocked_start_time = now
             
             elapsed_blocked = (now - self.blocked_start_time).nanoseconds / 1e9
-            if elapsed_blocked > self.blocked_skip_time:
-                self.get_logger().warn(f"⚠️ WP {self.current_wp_index + 1} BLOCKED by object for {elapsed_blocked:.1f}s - SKIPPING!")
+            
+            # [NEW] Smart Threshold: Skip fast if obstacle is close!
+            # If obstacle is closer than 8m, we assume it's a solid blockage (Pier).
+            is_critical_block = self.min_obstacle_distance < 8.0 
+            
+            # Use 2.0s for critical blocks, otherwise use the standard 15.0s
+            current_threshold = 2.0 if is_critical_block else self.blocked_skip_time
+            
+            if elapsed_blocked > current_threshold:
+                reason = "CRITICAL BLOCK (Pier)" if is_critical_block else "BLOCK TIMEOUT"
+                self.get_logger().warn(f"⏭️ SKIP WP {self.current_wp_index + 1}: {reason} after {elapsed_blocked:.1f}s")
+                
                 self.current_wp_index += 1
                 self.blocked_start_time = None
                 self.waypoint_start_time = now 
                 self.integral_error = 0.0
-                return # Skip this loop
+                return # Skip this loop immediately
         else:
+            # Reset if we get a glimpse of the target
             self.blocked_start_time = None
         # -------------------------------------------
         
