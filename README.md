@@ -148,6 +148,8 @@ uvautoboat/
 | **Go Home** | One-click return to spawn point |
 | **Web Dashboard** | Real-time monitoring with interactive map |
 | **Bilingual Interface** | French/English terminal output |
+| **Path Priority Logic** | Feature that prioritizes GPS trajectory over obstacle panic when the direct path is clear |
+| **Z-Node Interpolation** | Feature that prioritizes GPS trajectory over obstacle panic when the direct path is clear |
 
 ---
 
