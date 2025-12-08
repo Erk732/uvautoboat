@@ -151,6 +151,9 @@ class BuranController(Node):
         self.declare_parameter('base_speed', 500.0)
         self.declare_parameter('max_speed', 800.0)
         self.declare_parameter('obstacle_slow_factor', 0.3)
+        # Approach slowdown near waypoint
+        self.declare_parameter('approach_slow_distance', 5.0)
+        self.declare_parameter('approach_slow_factor', 0.7)
 
         # Obstacle avoidance
         self.declare_parameter('critical_distance', 5.0)
@@ -174,6 +177,8 @@ class BuranController(Node):
         self.base_speed = self.get_parameter('base_speed').value
         self.max_speed = self.get_parameter('max_speed').value
         self.obstacle_slow_factor = self.get_parameter('obstacle_slow_factor').value
+        self.approach_slow_distance = float(self.get_parameter('approach_slow_distance').value)
+        self.approach_slow_factor = float(self.get_parameter('approach_slow_factor').value)
         self.critical_distance = self.get_parameter('critical_distance').value
         self.reverse_timeout = self.get_parameter('reverse_timeout').value
         
@@ -577,9 +582,9 @@ class BuranController(Node):
         else:
             speed = self.base_speed
 
-        # Distance-based slowdown
-        if self.distance_to_target < 5.0:
-            speed *= 0.7
+        # Distance-based slowdown (precision near waypoint)
+        if self.distance_to_target < self.approach_slow_distance:
+            speed *= self.approach_slow_factor
 
         # Obstacle-based slowdown using OKO v2.0 urgency for smoother control
         if self.obstacle_detected:

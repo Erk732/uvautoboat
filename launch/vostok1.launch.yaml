@@ -128,7 +128,7 @@ launch:
     - name: lanes
       value: 10
     - name: waypoint_tolerance
-      value: 2.0        # Balanced tolerance (was 1.0)
+      value: 1.0        # Stricter tolerance for waypoint completion
     - name: waypoint_skip_timeout
       value: 45.0       # Allow more time to clear obstacles before skipping
     # Hazard Zone Avoidance (v2.1)
@@ -156,14 +156,14 @@ launch:
     param:
     # PID Gains
     - name: kp
-      value: 400.0
+      value: 500.0       # Tighter heading control
     - name: ki
       value: 20.0
     - name: kd
-      value: 100.0
+      value: 150.0       # More damping to reduce overshoot
     # Speed Settings
     - name: base_speed
-      value: 500.0      # Proven stable thrust for VRX
+      value: 400.0      # Slower base for tighter waypoint tracking
     - name: max_speed
       value: 800.0      # Proven stable thrust for VRX
     # Obstacle Avoidance
@@ -173,6 +173,11 @@ launch:
       value: 8.0        # Earlier hard-stop without over-triggering
     - name: reverse_timeout
       value: 5.0
+    # Approach slowdown (precision near waypoints)
+    - name: approach_slow_distance
+      value: 6.0        # Begin slowing within 6m of waypoint
+    - name: approach_slow_factor
+      value: 0.5        # Scale speed when inside slow distance
     # Smart Anti-Stuck System (SASS)
     - name: stuck_timeout
       value: 3.0          # Seconds without movement to detect stuck

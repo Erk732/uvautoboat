@@ -54,10 +54,8 @@ cleanup() {
     pkill -9 -f "gz sim" || true
     pkill -9 -f "gzserver" || true
     pkill -9 -f "gzclient" || true
-    pkill -9 -f "rosbridge_websocket_launch.xml" || true
-    pkill -9 -f "9090" || true
+    pkill -9 -f "rosbridge_websocket" || true
     pkill -9 -f "web_video_server" || true
-    pkill -9 -f "8080" || true
     pkill -9 -f "vostok1.launch.yaml" || true
     pkill -9 -f "plan/vostok1" || true
     pkill -9 -f "rviz" || true
