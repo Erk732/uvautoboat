@@ -3,6 +3,8 @@
 Launch gps_imu_pose (local ENU), pose_filter, and all_in_one_stack.
 Pose output is in a local ENU frame with the first GPS fix as origin.
 """
+# Quick test for beginners: launch this file, then publish a goal (frame=world) to start moving:
+# ros2 topic pub /planning/goal geometry_msgs/PoseStamped "{header: {frame_id: 'world'}, pose: {position: {x: 100.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}" --once
 
 import os
 
