@@ -20,6 +20,7 @@ let modularMissionCommandPublisher = null;  // For sputnik planner
 // Track which config inputs have been modified by user (prevents ROS from overwriting)
 let dirtyInputs = new Set();
 let navModeDirty = false;
+let pollutantMarkers = [];
 
 // Camera feed elements
 let cameraImageEl = null;
@@ -453,6 +454,20 @@ function subscribeToTopics() {
         const data = JSON.parse(message.data);
         console.log('Modular control status:', data);
         // Can be used for additional status display if needed
+    });
+
+    // Pollutant sources (smoke generators) for minimap markers
+    const pollutantTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/perception/pollutant_sources',
+        messageType: 'std_msgs/String'
+    });
+
+    pollutantTopic.subscribe((message) => {
+        const data = JSON.parse(message.data);
+        if (data.sources) {
+            updatePollutantSources(data.sources);
+        }
     });
 
     console.log('Subscribed to all topics (integrated + modular)');
@@ -1604,6 +1619,44 @@ function clearWaypointPreview() {
         map.removeLayer(waypointPath);
         waypointPath = null;
     }
+}
+
+function clearPollutantMarkers() {
+    pollutantMarkers.forEach(marker => map.removeLayer(marker));
+    pollutantMarkers = [];
+}
+
+function updatePollutantSources(sources) {
+    clearPollutantMarkers();
+    if (!sources || sources.length === 0) return;
+
+    // Need a reference GPS to convert local->GPS
+    let refLat = missionState.startLat || currentState.gps.lat;
+    let refLon = missionState.startLon || currentState.gps.lon;
+    if (!refLat || !refLon || refLat === 0) return;
+
+    sources.forEach(src => {
+        const lx = src.local ? src.local[0] : 0.0;
+        const ly = src.local ? src.local[1] : 0.0;
+        const latLng = localToGPS(lx, ly, refLat, refLon);
+        const icon = L.divIcon({
+            className: 'pollutant-marker',
+            html: `<div style="
+                background: radial-gradient(circle, rgba(200,50,50,0.9) 0%, rgba(120,0,0,0.8) 60%);
+                width: 14px; height: 14px; border-radius: 50%; border: 2px solid white;
+                box-shadow: 0 0 6px rgba(0,0,0,0.6);
+            "></div>`,
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+        });
+        const marker = L.marker([latLng[0], latLng[1]], { icon: icon })
+            .bindTooltip(
+                `<strong>Pollutant</strong><br>${src.name || 'smoke'}<br>Local: (${lx.toFixed(1)}, ${ly.toFixed(1)})`,
+                { direction: 'top', offset: [0, -8], permanent: false, sticky: true }
+            )
+            .addTo(map);
+        pollutantMarkers.push(marker);
+    });
 }
 
 // Clear stored waypoints + UI affordances

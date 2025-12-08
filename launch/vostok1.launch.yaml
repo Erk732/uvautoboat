@@ -62,9 +62,9 @@ launch:
     output: screen
     param:
     - name: min_safe_distance
-      value: 12.0       # Safer but not overly conservative
+      value: 10.0       # Moderate safety distance
     - name: critical_distance
-      value: 8.0        # Distance to trigger critical avoidance (m) - v2.1 increased from 5.0
+      value: 6.0        # Distance to trigger critical avoidance (m)
     - name: hysteresis_distance
       value: 1.5
     - name: min_height
@@ -72,7 +72,7 @@ launch:
     - name: max_height
       value: 10.0       # Catch tall structures
     - name: min_range
-      value: 3.0        # Detect closer obstacles to avoid late reactions
+      value: 1.0        # Allow close returns without over-filtering
     - name: max_range
       value: 60.0       # Match v2.1 extended horizon
     - name: sample_rate
@@ -87,7 +87,7 @@ launch:
     - name: min_cluster_size
       value: 3          # Reduced: detect smaller obstacles like buoys
     - name: water_plane_threshold
-      value: 0.5        # Tolerance for water plane removal (m)
+      value: 0.8        # More tolerant water plane removal
     - name: velocity_history_size
       value: 10         # Frames for velocity estimation
     # OKO v2.1 Enhanced Perception (VFH, Polar Histogram, LaserScan Fusion)
@@ -181,7 +181,7 @@ launch:
     - name: obstacle_slow_factor
       value: 0.3
     - name: critical_distance
-      value: 8.0        # Earlier hard-stop without over-triggering
+      value: 7.0        # Slightly less aggressive hard-stop
     - name: reverse_timeout
       value: 5.0
     # Approach slowdown (precision near waypoints)

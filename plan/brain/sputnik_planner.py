@@ -27,6 +27,9 @@ import math
 import json
 import time
 import heapq
+import glob
+import xml.etree.ElementTree as ET
+from pathlib import Path
 
 from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import String
@@ -204,6 +207,9 @@ class SputnikPlanner(Node):
         self.declare_parameter('astar_resolution', 3.0)
         self.declare_parameter('astar_safety_margin', 12.0)
         self.declare_parameter('astar_max_expansions', 20000)
+        # Pollutant source scanning (smoke generators in SDF)
+        self.declare_parameter('pollutant_scan_enabled', True)
+        self.declare_parameter('pollutant_sdf_glob', 'test_environment/*smoke*.sdf')
         self.astar_enabled = bool(self.get_parameter('astar_enabled').value)
         self.astar_hybrid_mode = bool(self.get_parameter('astar_hybrid_mode').value)
         self.astar = AStarSolver(
@@ -211,6 +217,8 @@ class SputnikPlanner(Node):
             safety_margin=float(self.get_parameter('astar_safety_margin').value),
             max_expansions=int(self.get_parameter('astar_max_expansions').value),
         )
+        self.pollutant_scan_enabled = bool(self.get_parameter('pollutant_scan_enabled').value)
+        self.pollutant_sdf_glob = str(self.get_parameter('pollutant_sdf_glob').value)
 
         # --- STATE ---
         self.start_gps = None
@@ -236,6 +244,7 @@ class SputnikPlanner(Node):
         self.home_detour_timeout = 15.0  # Insert detour after this many seconds in home mode
         self.detour_waypoint_inserted = False
         self.detour_distance = 12.0  # Distance for detour waypoints
+        self.pollutant_sources = []  # {name, world:[x,y,z], local:[x,y]}
 
         # --- SUBSCRIBERS ---
         self.create_subscription(
@@ -282,6 +291,7 @@ class SputnikPlanner(Node):
         self.pub_current_target = self.create_publisher(String, '/planning/current_target', 10)
         self.pub_mission_status = self.create_publisher(String, '/planning/mission_status', 10)
         self.pub_config = self.create_publisher(String, '/sputnik/config', 10)
+        self.pub_pollutants = self.create_publisher(String, '/perception/pollutant_sources', 10)
 
         # Control loop at 10Hz
         self.create_timer(0.1, self.planning_loop)
@@ -311,6 +321,11 @@ class SputnikPlanner(Node):
         self.get_logger().info("Waiting for GPS signal...")
         self.get_logger().info("Commands: ros2 run plan vostok1_cli --help")
         self.get_logger().info("=" * 50)
+
+        # Scan for pollutant sources (smoke generators) and publish
+        if self.pollutant_scan_enabled:
+            self.scan_pollutant_sources()
+            self.publish_pollutant_sources()
 
     def gps_callback(self, msg):
         """Handle GPS updates"""
@@ -587,6 +602,8 @@ class SputnikPlanner(Node):
             'astar_resolution': self.astar.resolution,
             'astar_safety_margin': self.astar.safety_margin,
             'astar_max_expansions': self.astar.max_expansions,
+            # Pollutant sources
+            'pollutant_sources': self.pollutant_sources,
         }
         msg = String()
         msg.data = json.dumps(config)
@@ -1071,6 +1088,68 @@ class SputnikPlanner(Node):
             if xmin <= x <= xmax and ymin <= y <= ymax:
                 return True
         return False
+
+    # ==================== POLLUTANT SOURCE SCAN (SMOKE GENERATORS) ====================
+    def scan_pollutant_sources(self):
+        """Parse SDF files to find smoke generators and cache their positions."""
+        sources = []
+        # Locate repo root containing test_environment
+        base = Path(__file__).resolve()
+        root = None
+        for _ in range(6):
+            if (base / 'test_environment').exists():
+                root = base
+                break
+            base = base.parent
+        if root is None:
+            self.get_logger().warn("Cannot locate test_environment folder for pollutant scan.")
+            self.pollutant_sources = []
+            return
+
+        patterns = [p.strip() for p in self.pollutant_sdf_glob.split(';') if p.strip()]
+        sdf_files = []
+        for pat in patterns:
+            sdf_files.extend(glob.glob(str(root / pat)))
+
+        for sdf in sdf_files:
+            try:
+                tree = ET.parse(sdf)
+                root_elem = tree.getroot()
+                for model in root_elem.findall('.//model'):
+                    name = model.get('name', '')
+                    if 'smoke' not in name.lower():
+                        continue
+                    pose_elem = model.find('pose')
+                    if pose_elem is None or pose_elem.text is None:
+                        continue
+                    pose_vals = [float(x) for x in pose_elem.text.strip().split()]
+                    wx, wy = pose_vals[0], pose_vals[1]
+                    wz = pose_vals[2] if len(pose_vals) > 2 else 0.0
+                    lx = wx - float(self.get_parameter('hazard_origin_world_x').value)
+                    ly = wy - float(self.get_parameter('hazard_origin_world_y').value)
+                    sources.append({
+                        'name': name,
+                        'world': [round(wx, 2), round(wy, 2), round(wz, 2)],
+                        'local': [round(lx, 2), round(ly, 2)]
+                    })
+            except Exception as e:
+                self.get_logger().warn(f"Pollutant scan failed for {sdf}: {e}")
+
+        self.pollutant_sources = sources
+        if sources:
+            self.get_logger().info(f"Pollutant sources detected: {len(sources)}")
+            for s in sources:
+                self.get_logger().info(
+                    f"  - {s['name']}: world=({s['world'][0]}, {s['world'][1]}), local=({s['local'][0]}, {s['local'][1]})"
+                )
+
+    def publish_pollutant_sources(self):
+        """Publish pollutant sources for dashboard/minimap."""
+        if not self.pollutant_sources:
+            return
+        msg = String()
+        msg.data = json.dumps({'sources': self.pollutant_sources})
+        self.pub_pollutants.publish(msg)
 
     def _segment_intersects_hazard(self, x1, y1, x2, y2, margin=0.0) -> bool:
         """Check if a line segment intersects any hazard zone (with optional margin)."""

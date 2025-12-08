@@ -97,8 +97,8 @@ def generate_launch_description():
     # === OKO Perception Arguments ===
     min_safe_distance_arg = DeclareLaunchArgument(
         'min_safe_distance',
-        default_value='15.0',
-        description='Minimum safe distance to obstacles (meters) - increased for piers'
+        default_value='12.0',
+        description='Minimum safe distance to obstacles (meters) - tuned for balanced sensitivity'
     )
     
     # === BURAN Controller - PID Arguments ===
@@ -141,11 +141,11 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'min_safe_distance': LaunchConfiguration('min_safe_distance'),
-            'critical_distance': 12.0,
+            'critical_distance': 8.0,
             'hysteresis_distance': 1.5,
             'min_height': -15.0,     # Catch lake bank, harbour, water-level obstacles
             'max_height': 10.0,      # Catch tall structures
-            'min_range': 0.5,        # Detect very close structures (piers)
+            'min_range': 1.0,        # Reduce noise from self-returns while keeping near obstacles
             'max_range': 60.0,       # Increased: longer detection range (was 50.0)
             'sample_rate': 1,        # Process ALL points for maximum detection
             # Enhanced OKO v2.0 parameters (tuned for faster response)
@@ -153,7 +153,7 @@ def generate_launch_description():
             'temporal_threshold': 2,         # Reduced: 2/3 detections to confirm
             'cluster_distance': 2.0,         # Max distance between cluster points (m)
             'min_cluster_size': 3,           # Reduced: detect smaller obstacles
-            'water_plane_threshold': 1.0,    # More tolerant water-plane removal to keep piers
+            'water_plane_threshold': 0.6,    # Moderate water-plane removal to avoid over-triggering
             'velocity_history_size': 5,      # Reduced: faster velocity estimate
             # === v2.1: VFH Steering (from AllInOneStack) ===
             'vfh_enabled': True,             # Enable VFH gap-finding
@@ -215,7 +215,7 @@ def generate_launch_description():
             'max_speed': LaunchConfiguration('max_speed'),
             # === Obstacle Avoidance (v2.1: increased horizon) ===
             'obstacle_slow_factor': 0.3,
-            'critical_distance': 12.0,      # Earlier hard-stop to avoid piers
+            'critical_distance': 10.0,      # Balance sensitivity for hard-stop
             'reverse_timeout': 5.0,
             # === Smart Anti-Stuck System (SASS) ===
             'stuck_timeout': 3.0,
