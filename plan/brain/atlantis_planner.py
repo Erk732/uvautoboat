@@ -37,6 +37,7 @@ class AtlantisPlanner(Node):
         self.declare_parameter('geo_max_x', 200.0)
         self.declare_parameter('geo_min_y', -100.0)
         self.declare_parameter('geo_max_y', 100.0)
+        self.declare_parameter('waypoint_spacing', 10.0) # NEW: "Z Node" spacing
         
         # --- OBSTACLE AVOIDANCE PARAMETERS ---
         self.declare_parameter('planner_safe_dist', 10.0)
@@ -95,32 +96,20 @@ class AtlantisPlanner(Node):
         self.current_clusters = []
         #--- SMOKE DETECTION SETUP ---
         self.bridge = CvBridge()
-        self.smoke_detected = False  # Binary flag
-        self.smoke_regions = []      # Optional: list of region coordinates
+        self.smoke_detected = False
+        self.smoke_regions = []
 
          # Subscribe to front cameras
-        self.create_subscription(
-            Image,
-            '/wamv/sensors/cameras/front_left_camera_sensor/image_raw',
-            self.camera_callback,
-            10
-        )
-        self.create_subscription(
-            Image,
-            '/wamv/sensors/cameras/front_right_camera_sensor/image_raw',
-            self.camera_callback,
-            10
-        )
+        self.create_subscription(Image, '/wamv/sensors/cameras/front_left_camera_sensor/image_raw', self.camera_callback, 10)
+        self.create_subscription(Image, '/wamv/sensors/cameras/front_right_camera_sensor/image_raw', self.camera_callback, 10)
 
-        self.get_logger().info("Atlantis Planner with camera smoke detection initialized")
-
-
-        # --- FIX: DISABLED AUTO-START ---
+        self.get_logger().info("Atlantis Planner Initialized")
+        
+        # FIX: Disabled Auto-Start so it waits for 'r'
         # threading.Timer(2.0, self.generate_lawnmower_path).start()
         
         self.input_thread = threading.Thread(target=self.input_loop, daemon=True)
         self.input_thread.start()
-        
         self.get_logger().info("Atlantis Planner Started (Waiting for 'r' command)")
 
     def input_loop(self):
@@ -141,11 +130,7 @@ class AtlantisPlanner(Node):
         try:
             self.lidar_signal_count += 1
             sampling_factor = self.get_parameter('lidar_sampling_factor').value
-            
-            # Extract raw pointcloud
-            self.current_obstacles = self.lidar_detector.process_pointcloud(
-                msg.data, msg.point_step, sampling_factor
-            )
+            self.current_obstacles = self.lidar_detector.process_pointcloud(msg.data, msg.point_step, sampling_factor)
 
             # Filter Smoke/Noise
             filtered = []
@@ -157,48 +142,24 @@ class AtlantisPlanner(Node):
                 filtered.append(obs)
 
             self.current_obstacles = filtered
-
-            if len(self.current_obstacles) > 0:
-                self.lidar_obstacle_detections += 1
-            else:
-                self.lidar_clear_detections += 1
-
-            if self.lidar_signal_count > 0:
-                self.lidar_detection_rate = (
-                    self.lidar_obstacle_detections / self.lidar_signal_count * 100.0
-                )
+            if len(self.current_obstacles) > 0: self.lidar_obstacle_detections += 1
+            else: self.lidar_clear_detections += 1
 
             self.current_clusters = self.clusterer.cluster_obstacles(self.current_obstacles)
             self.monitor.analyze_sectors(self.current_obstacles)
             self.known_obstacles = [(obs.x, obs.y) for obs in self.current_obstacles]
-                    
         except Exception as e:
             self.get_logger().error(f"LIDAR callback error: {e}")
 
-    # ---------------- CAMERA CALLBACK ----------------
     def camera_callback(self, msg):
         try:
-            # Convert ROS image to OpenCV
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-
-            # ---- Simple smoke detection logic (can replace with ML model) ----
-            # Convert to gray
             gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
-
-            # Threshold light gray / whitish regions as smoke
             _, mask = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
-
-            # Count white pixels
             white_pixel_count = cv2.countNonZero(mask)
             total_pixels = gray.shape[0] * gray.shape[1]
-
-            # If proportion of white pixels > threshold, mark smoke detected
             smoke_ratio = white_pixel_count / total_pixels
-            self.smoke_detected = smoke_ratio > 0.02  # 2% threshold, adjust as needed
-
-            # Optional: store coordinates of detected smoke (for later soft avoidance)
-            self.smoke_regions = np.column_stack(np.where(mask > 0))
-
+            self.smoke_detected = smoke_ratio > 0.02
         except Exception as e:
             self.get_logger().error(f"Camera callback error: {e}")
 
@@ -206,25 +167,19 @@ class AtlantisPlanner(Node):
         safe_dist = self.get_parameter('planner_safe_dist').value
         for obs_x, obs_y in self.known_obstacles:
             dist = math.sqrt((x - obs_x)**2 + (y - obs_y)**2)
-            if dist < safe_dist:
-                return False, obs_x, obs_y
+            if dist < safe_dist: return False, obs_x, obs_y
         return True, None, None
 
     def is_line_safe(self, x1, y1, x2, y2):
-        """Walks along the line checking for obstacles every 2m"""
         dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
         steps = int(dist / 2.0)
-        
         if steps == 0: return True
-
         for i in range(steps + 1):
             t = i / steps
             check_x = x1 + (x2 - x1) * t
             check_y = y1 + (y2 - y1) * t
-            
             is_safe, _, _ = self.is_point_safe(check_x, check_y)
-            if not is_safe:
-                return False
+            if not is_safe: return False
         return True
 
     def adjust_point_for_obstacles(self, x, y, target_x=None, target_y=None):
@@ -240,18 +195,32 @@ class AtlantisPlanner(Node):
                     shift_y = (dy / dist) * (safe_dist + 2.0)
                     return obs_x + shift_x, obs_y + shift_y
             return x, y + safe_dist + 2.0
-        
-        # Soft smoke avoidance (binary)
-        if self.smoke_detected:
-            # Slight nudge in y-direction (example)
-            y += 1.0  # adjust magnitude as needed
-        return x, y
+        if self.smoke_detected: y += 1.0
         return x, y
 
+    # --- NEW: Helper to break lines into small segments ---
+    def interpolate_segment(self, start_x, start_y, end_x, end_y):
+        spacing = self.get_parameter('waypoint_spacing').value
+        dist = math.hypot(end_x - start_x, end_y - start_y)
+        
+        # If segment is short, just return end point
+        if dist <= spacing:
+            return [(end_x, end_y)]
+            
+        points = []
+        num_points = int(math.ceil(dist / spacing))
+        
+        # Generate intermediate points
+        for i in range(1, num_points + 1):
+            t = i / float(num_points)
+            px = start_x + (end_x - start_x) * t
+            py = start_y + (end_y - start_y) * t
+            points.append((px, py))
+            
+        return points
+
     def parameter_callback(self, params):
-        if self.mission_enabled:
-            return SetParametersResult(successful=False)
-        return SetParametersResult(successful=True)
+        return SetParametersResult(successful=not self.mission_enabled)
 
     def replan_callback(self, msg):
         self.generate_lawnmower_path()
@@ -268,7 +237,6 @@ class AtlantisPlanner(Node):
         self.path_msg.header.frame_id = self.get_parameter('frame_id').value
         self.path_msg.header.stamp = self.get_clock().now().to_msg()
         self.waypoints = []
-        
         pose = PoseStamped()
         pose.header = self.path_msg.header
         pose.pose.position.x = 0.0
@@ -288,60 +256,51 @@ class AtlantisPlanner(Node):
         self.waypoints = [] 
 
         for i in range(lanes):
-            if i % 2 == 0:
-                x_start, x_end = 0.0, scan_length
-            else:
-                x_start, x_end = scan_length, 0.0
+            if i % 2 == 0: x_start, x_end = 0.0, scan_length
+            else: x_start, x_end = scan_length, 0.0
             y_pos = i * scan_width
 
             # 1. Geofence
             safe_start_x, safe_start_y = self.apply_geofence(x_start, y_pos)
             safe_end_x, safe_end_y = self.apply_geofence(x_end, y_pos)
             
-            # 2. Adjust Endpoints for Obstacles
+            # 2. Adjust for static obstacles
             safe_start_x, safe_start_y = self.adjust_point_for_obstacles(safe_start_x, safe_start_y, safe_end_x, safe_end_y)
             safe_end_x, safe_end_y = self.adjust_point_for_obstacles(safe_end_x, safe_end_y, safe_start_x, safe_start_y)
 
-            # 3. CRITICAL: Check the line between them!
+            # 3. Line Safety Check
             if not self.is_line_safe(safe_start_x, safe_start_y, safe_end_x, safe_end_y):
                 self.get_logger().warn(f"Skipping lane {i}: Path intersects obstacles!")
                 continue
 
-            # Add Start
-            pose_start = PoseStamped()
-            pose_start.header = self.path_msg.header
-            pose_start.pose.position.x = safe_start_x
-            pose_start.pose.position.y = safe_start_y
-            self.path_msg.poses.append(pose_start)
-            
-            # Add End
-            pose_end = PoseStamped()
-            pose_end.header = self.path_msg.header
-            pose_end.pose.position.x = safe_end_x
-            pose_end.pose.position.y = safe_end_y
-            self.path_msg.poses.append(pose_end)
-            
-            self.waypoints.append((safe_start_x, safe_start_y))
-            self.waypoints.append((safe_end_x, safe_end_y))
+            # --- ADD START POINT ---
+            if i == 0: # Only add explicit start for first lane to avoid dupe
+                self.add_waypoint(safe_start_x, safe_start_y)
 
-            # Add Transition
+            # --- ADD INTERPOLATED POINTS (Z Nodes) ---
+            segment_points = self.interpolate_segment(safe_start_x, safe_start_y, safe_end_x, safe_end_y)
+            for px, py in segment_points:
+                self.add_waypoint(px, py)
+
+            # --- ADD TRANSITION (Start of next lane) ---
             if i < lanes - 1:
                 next_y = (i + 1) * scan_width
                 safe_next_x, safe_next_y = self.apply_geofence(x_end, next_y)
                 safe_next_x, safe_next_y = self.adjust_point_for_obstacles(safe_next_x, safe_next_y, safe_start_x, safe_start_y)
-                
-                pose_trans = PoseStamped()
-                pose_trans.header = self.path_msg.header
-                pose_trans.pose.position.x = safe_next_x
-                pose_trans.pose.position.y = safe_next_y
-                self.path_msg.poses.append(pose_trans)
-                self.waypoints.append((safe_next_x, safe_next_y))
+                self.add_waypoint(safe_next_x, safe_next_y)
 
         self.get_logger().info(f"GENERATED: Mission Path ({len(self.waypoints)} points)")
         self.publish_path()
 
-    def publish_lidar_statistics(self):
-        pass
+    def add_waypoint(self, x, y):
+        pose = PoseStamped()
+        pose.header = self.path_msg.header
+        pose.pose.position.x = x
+        pose.pose.position.y = y
+        self.path_msg.poses.append(pose)
+        self.waypoints.append((x, y))
+
+    def publish_lidar_statistics(self): pass
 
     def publish_path(self):
         self.path_msg.header.stamp = self.get_clock().now().to_msg()

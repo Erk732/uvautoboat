@@ -17,7 +17,7 @@ class AtlantisController(Node):
         # --- PARAMETERS ---
         self.declare_parameter('base_speed', 500.0)
         self.declare_parameter('max_speed', 800.0)
-        self.declare_parameter('waypoint_tolerance', 2.0)
+        self.declare_parameter('waypoint_tolerance', 3.0) # Increased tolerance slightly
         self.declare_parameter('kp', 400.0)
         self.declare_parameter('ki', 20.0)
         self.declare_parameter('kd', 100.0)
@@ -28,7 +28,6 @@ class AtlantisController(Node):
         self.declare_parameter('obstacle_slow_factor', 0.08)  
         self.declare_parameter('hysteresis_distance', 2.5)   
         self.declare_parameter('reverse_timeout', 10.0)    
-        self.declare_parameter('probe_angle', 45.0)
 
         # Stuck detection & Waypoint Skipping
         self.declare_parameter('stuck_timeout', 5.0)
@@ -51,7 +50,6 @@ class AtlantisController(Node):
         self.obstacle_slow_factor = self.get_parameter('obstacle_slow_factor').value
         self.hysteresis_distance = self.get_parameter('hysteresis_distance').value
         self.reverse_timeout = self.get_parameter('reverse_timeout').value
-        self.probe_angle = self.get_parameter('probe_angle').value
         self.stuck_timeout = self.get_parameter('stuck_timeout').value
         self.stuck_threshold = self.get_parameter('stuck_threshold').value
         self.waypoint_timeout = self.get_parameter('waypoint_timeout').value
