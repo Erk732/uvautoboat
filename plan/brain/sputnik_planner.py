@@ -592,20 +592,31 @@ class SputnikPlanner(Node):
         if self.mission_start_time:
             elapsed = (self.get_clock().now() - self.mission_start_time).nanoseconds / 1e9
         elapsed_min = elapsed / 60.0
-        
+
         was_going_home = self.go_home_mode
         self.go_home_mode = False  # Reset home mode
-        
+
         self.get_logger().info("=" * 60)
         if was_going_home:
-            self.get_logger().info("ARRIVED HOME!")
+            self.get_logger().info("🏠 ARRIVED HOME!")
+            self.get_logger().info("=" * 60)
+            self.get_logger().info(f"Final Position: ({final_x:.1f}m, {final_y:.1f}m)")
+            self.get_logger().info(f"Mission Time: {elapsed_min:.1f} minutes")
+            self.get_logger().info("=" * 60)
+            # Clear waypoints after go_home so user knows to regenerate
+            self.waypoints = []
+            self.current_wp_index = 0
+            self.state = "INIT"
+            self.get_logger().info("Waypoints cleared. Run 'generate' for new waypoints.")
         else:
-            self.get_logger().info("MISSION COMPLETE!")
-        self.get_logger().info("=" * 60)
-        self.get_logger().info(f"Final Position: ({final_x:.1f}m, {final_y:.1f}m)")
-        self.get_logger().info(f"Waypoints: {len(self.waypoints)}")
-        self.get_logger().info(f"Mission Time: {elapsed_min:.1f} minutes")
-        self.get_logger().info("=" * 60)
+            self.get_logger().info("✅ MISSION COMPLETE!")
+            self.get_logger().info("=" * 60)
+            self.get_logger().info(f"Final Position: ({final_x:.1f}m, {final_y:.1f}m)")
+            self.get_logger().info(f"Waypoints: {len(self.waypoints)}")
+            self.get_logger().info(f"Mission Time: {elapsed_min:.1f} minutes")
+            self.get_logger().info("=" * 60)
+            # Keep waypoints for potential restart
+            self.get_logger().info("Run 'start' to repeat mission or 'generate' for new waypoints.")
 
     def publish_waypoints(self):
         """Publish all waypoints"""
@@ -698,12 +709,14 @@ class SputnikPlanner(Node):
         if not spec:
             return boxes
         parts = spec.split(';')
-        for p in parts:
+        skipped = 0
+        for i, p in enumerate(parts):
             p = p.strip()
             if not p:
                 continue
             vals = p.split(',')
             if len(vals) != 4:
+                skipped += 1
                 continue
             try:
                 xmin, ymin, xmax, ymax = map(float, vals)
@@ -712,8 +725,12 @@ class SputnikPlanner(Node):
                 if ymin > ymax:
                     ymin, ymax = ymax, ymin
                 boxes.append((xmin, ymin, xmax, ymax))
-            except ValueError:
+            except ValueError as e:
+                self.get_logger().warn(f"Invalid hazard box #{i}: '{p}' - {e}")
+                skipped += 1
                 continue
+        if skipped > 0:
+            self.get_logger().warn(f"Skipped {skipped} invalid hazard box entries")
         return boxes
 
     def _world_boxes_to_local(self, boxes, origin_x: float, origin_y: float):

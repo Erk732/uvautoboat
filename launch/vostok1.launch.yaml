@@ -64,7 +64,7 @@ launch:
     - name: min_safe_distance
       value: 12.0       # Safer but not overly conservative
     - name: critical_distance
-      value: 5.0        # Distance to trigger critical avoidance (m)
+      value: 8.0        # Distance to trigger critical avoidance (m) - v2.1 increased from 5.0
     - name: hysteresis_distance
       value: 1.5
     - name: min_height

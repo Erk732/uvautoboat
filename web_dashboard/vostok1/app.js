@@ -411,7 +411,7 @@ function subscribeToTopics() {
     modularObstacleTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
         console.log('Modular obstacle status:', data);
-        // Convert modular format to vostok1 format with OKO v2.0 enhancements
+        // Convert modular format to vostok1 format with OKO v2.0/v2.1 enhancements
         // OKO v2.0: front_clear, left_clear, right_clear ARE the distances in meters
         const CLEAR_THRESHOLD = 10.0;  // Distance threshold for "clear" status
         updateObstacleStatus({
@@ -423,15 +423,21 @@ function subscribeToTopics() {
             front_distance: data.front_clear,  // OKO v2.0: front_clear IS the distance
             left_distance: data.left_clear,    // OKO v2.0: left_clear IS the distance
             right_distance: data.right_clear,  // OKO v2.0: right_clear IS the distance
-            status: data.is_critical ? '🚨 CRITIQUE' : 
-                    data.obstacle_detected ? '⚠️ OBSTACLE' : 
-                    '✅ DÉGAGÉ',
+            status: data.force_avoid_active ? '🔴 FORCE AVOID | Évitement forcé' :
+                    data.is_critical ? '🚨 CRITICAL | Critique' :
+                    data.obstacle_detected ? '⚠️ OBSTACLE | Détecté' :
+                    '✅ CLEAR | Dégagé',
             // OKO v2.0 enhanced fields
             urgency: data.urgency || 0.0,
             obstacle_count: data.obstacle_count || 0,
             best_gap: data.best_gap || null,
             clusters: data.clusters || [],
-            moving_obstacles: data.moving_obstacles || []  // OKO v2.0: array of {id, vx, vy, speed}
+            moving_obstacles: data.moving_obstacles || [],  // OKO v2.0: array of {id, vx, vy, speed}
+            // OKO v2.1 enhanced fields
+            vfh_gap: data.vfh_gap || null,           // VFH best direction
+            polar_bias: data.polar_bias || 0.0,      // Steering bias [-1, 1]
+            force_avoid_active: data.force_avoid_active || false,
+            laserscan_fused: data.laserscan_fused || false
         });
     });
     

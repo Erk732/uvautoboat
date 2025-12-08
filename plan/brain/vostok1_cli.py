@@ -159,13 +159,23 @@ class MissionCLI(Node):
                 count = max(count, int(self.config_status.get('waypoint_count') or 0))
         return count, state or 'UNKNOWN'
 
-    def _auto_confirm_if_needed(self) -> bool:
+    def _auto_confirm_if_needed(self, for_command='start') -> bool:
         """
         Ensure waypoints are confirmed before starting/resuming.
         Returns True if we can proceed with start/resume.
         """
         self._spin_for_status()
         count, state = self._waypoint_info()
+
+        # Special handling for FINISHED state
+        if state == "FINISHED":
+            if count <= 1:
+                # After go_home, only 1 waypoint (home location) - need to regenerate
+                print("⚠️ Mission finished. Run 'generate' to create new waypoints.")
+                return False
+            # Normal FINISHED - can restart with existing waypoints
+            print(f"ℹ️ Restarting from FINISHED state with {count} waypoints...")
+            return True
 
         if count == 0:
             print("⚠️ No waypoints defined. Run 'generate' first.")
@@ -178,11 +188,24 @@ class MissionCLI(Node):
         elif self.mission_status and 'mission_armed' in self.mission_status:
             armed = bool(self.mission_status.get('mission_armed'))
 
-        if state in ["RUNNING", "DRIVING"] or armed:
+        if state in ["RUNNING", "DRIVING"]:
+            if for_command == 'start':
+                print("ℹ️ Mission already running.")
+            return armed  # Only proceed if actually armed
+
+        # READY state - good to go
+        if state == "READY":
+            return True
+
+        # PAUSED state - only allow resume, not start
+        if state == "PAUSED":
+            if for_command == 'start':
+                print("ℹ️ Mission is PAUSED. Use 'resume' to continue or 'reset' to restart.")
+                return False
             return True
 
         # States that still need confirmation
-        needs_confirm = state in ["WAITING_CONFIRM", "WAYPOINTS_PREVIEW", "INIT", "IDLE", None]
+        needs_confirm = state in ["WAITING_CONFIRM", "WAYPOINTS_PREVIEW", "INIT", "IDLE", None, "UNKNOWN"]
         if needs_confirm:
             print("✅ Auto-confirming waypoints before start...")
             self.confirm_waypoints()
@@ -293,21 +316,40 @@ class MissionCLI(Node):
         
     def start_mission(self):
         """Start the mission"""
-        if not self._auto_confirm_if_needed():
+        if not self._auto_confirm_if_needed(for_command='start'):
             return
         self.send_command('start_mission')
+        time.sleep(0.2)
+        rclpy.spin_once(self, timeout_sec=0.1)
         print("\n🚀 Mission START command sent!")
         
     def stop_mission(self):
-        """Stop the mission"""
-        self.send_command('stop_mission')
-        print("\n🛑 Mission STOP command sent!")
+        """Stop the mission - send multiple times to ensure delivery"""
+        print("\n🛑 Stopping mission...")
+        # Send stop command multiple times to ensure delivery
+        for i in range(3):
+            self.send_command('stop_mission')
+            time.sleep(0.1)
+            rclpy.spin_once(self, timeout_sec=0.1)
+
+        # Wait and verify state changed
+        time.sleep(0.3)
+        self._spin_for_status(timeout=1.0)
+        count, state = self._waypoint_info()
+
+        if state == "PAUSED":
+            print("✅ Mission STOPPED successfully! State: PAUSED")
+        else:
+            print(f"⚠️ Stop command sent. Current state: {state}")
+            print("   If boat is still moving, try 'stop' again or 'reset'")
         
     def resume_mission(self):
         """Resume the mission"""
-        if not self._auto_confirm_if_needed():
+        if not self._auto_confirm_if_needed(for_command='resume'):
             return
         self.send_command('resume_mission')
+        time.sleep(0.2)
+        rclpy.spin_once(self, timeout_sec=0.1)
         print("\n▶️ Mission RESUME command sent!")
         
     def reset_mission(self):
@@ -317,10 +359,20 @@ class MissionCLI(Node):
     
     def go_home(self):
         """Navigate back to spawn point"""
-        if not self._auto_confirm_if_needed():
+        # go_home sets its own waypoints, so just check if GPS is ready
+        self._spin_for_status()
+        gps_ready = False
+        if self.config_status:
+            gps_ready = self.config_status.get('gps_ready', False)
+        if not gps_ready:
+            print("⚠️ GPS not ready yet. Wait for GPS signal.")
             return
+
         self.send_command('go_home')
+        time.sleep(0.2)
+        rclpy.spin_once(self, timeout_sec=0.1)
         print("\n🏠 GO HOME command sent - Returning to spawn point!")
+        print("   Note: After arriving home, run 'generate' to create new waypoints.")
         
     def confirm_waypoints(self):
         """Confirm waypoints"""
@@ -608,9 +660,10 @@ Examples:
         elif args.command == 'speed':
             cli.set_speed(args.base, args.max)
             
-        # Keep alive briefly to ensure messages are sent
-        time.sleep(0.3)
-        
+        # Keep alive longer to ensure messages are sent and processed
+        time.sleep(0.5)
+        rclpy.spin_once(cli, timeout_sec=0.2)
+
     finally:
         cli.destroy_node()
         rclpy.shutdown()
