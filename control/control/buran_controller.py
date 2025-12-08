@@ -159,6 +159,7 @@ class BuranController(Node):
 
         # Obstacle avoidance
         self.declare_parameter('critical_distance', 5.0)
+        self.declare_parameter('min_safe_distance', 12.0)
         self.declare_parameter('reverse_timeout', 5.0)
         
         # Smart anti-stuck parameters
@@ -184,6 +185,7 @@ class BuranController(Node):
         self.slew_rate_limit = float(self.get_parameter('slew_rate_limit').value)
         self.turn_deadband_deg = float(self.get_parameter('turn_deadband_deg').value)
         self.critical_distance = self.get_parameter('critical_distance').value
+        self.min_safe_distance = self.get_parameter('min_safe_distance').value
         self.reverse_timeout = self.get_parameter('reverse_timeout').value
         
         # Smart anti-stuck parameters
@@ -320,6 +322,12 @@ class BuranController(Node):
         
         # Request detour waypoint publisher
         self.pub_detour_request = self.create_publisher(String, '/planning/detour_request', 10)
+        
+        # Request replan from planner (when path is blocked)
+        self.pub_replan_request = self.create_publisher(String, '/control/replan_request', 10)
+        
+        # Request waypoint skip (after multiple stuck attempts)
+        self.pub_skip_request = self.create_publisher(String, '/planning/skip_waypoint', 10)
 
         # Control loop at 20Hz
         self.create_timer(self.dt, self.control_loop)
@@ -522,6 +530,10 @@ class BuranController(Node):
                 self.previous_error = 0.0
                 self.avoidance_mode = True
                 self.get_logger().info("Avoidance mode - PID reset")
+                
+                # Request A* replan if obstacle is blocking and urgency is high
+                if self.urgency > 0.5 and self.front_clear < self.min_safe_distance:
+                    self.request_replan(reason="path_blocked")
 
             # OKO v2.0: Use best_gap for smarter navigation if available
             if self.best_gap and self.best_gap.get('width', 0) > 20:
@@ -730,9 +742,14 @@ class BuranController(Node):
                     if self.consecutive_stuck_count == 2:
                         self.request_detour_waypoint()
                     
-                    # Skip after 4 attempts
+                    # Request A* replan on 3rd attempt
+                    if self.consecutive_stuck_count == 3:
+                        self.request_replan(reason="stuck_multiple_times")
+                    
+                    # Skip waypoint after 4 attempts
                     if self.consecutive_stuck_count >= 4:
                         self.get_logger().error(f"Stuck {self.consecutive_stuck_count} times - requesting waypoint skip")
+                        self.request_waypoint_skip()
                         self.consecutive_stuck_count = 0
                         self.is_stuck = False
                         self.escape_mode = False
@@ -958,6 +975,31 @@ class BuranController(Node):
         self.pub_detour_request.publish(msg)
         
         self.get_logger().warn(f"Detour waypoint requested at ({detour_x:.1f}, {detour_y:.1f})")
+    
+    def request_replan(self, reason="obstacle"):
+        """Request A* replan from the planner"""
+        msg = String()
+        msg.data = json.dumps({
+            'type': 'replan',
+            'reason': reason,
+            'current_position': [round(self.current_x, 2), round(self.current_y, 2)],
+            'obstacle_distance': round(self.min_obstacle_distance, 2),
+            'no_go_zones': [(round(z[0], 1), round(z[1], 1), round(z[2], 1)) for z in self.no_go_zones[-5:]]  # Send last 5 zones
+        })
+        self.pub_replan_request.publish(msg)
+        self.get_logger().info(f"🔄 Replan requested: {reason}")
+    
+    def request_waypoint_skip(self):
+        """Request planner to skip current waypoint after too many stuck attempts"""
+        msg = String()
+        msg.data = json.dumps({
+            'type': 'skip',
+            'current_position': [round(self.current_x, 2), round(self.current_y, 2)],
+            'reason': f'stuck_{self.consecutive_stuck_count}_times',
+            'no_go_zones': [(round(z[0], 1), round(z[1], 1), round(z[2], 1)) for z in self.no_go_zones]
+        })
+        self.pub_skip_request.publish(msg)
+        self.get_logger().warn(f"⏭️ Waypoint skip requested after {self.consecutive_stuck_count} stuck attempts")
     
     def record_escape_result(self, success):
         """Record escape result for learning"""
