@@ -78,7 +78,7 @@ def generate_launch_description():
                 'avoid_diff_gain': 40.0,           # Avoidance steering gain
                 'avoid_clear_margin': 3.0,         # Safety margin to exit avoidance (m)
                 'avoid_max_turn_time': 5.0,        # Maximum turn time (s)
-                'full_clear_distance': 20.0,       # Force avoidance trigger distance (m) - REDUCED from 60m for faster recovery
+                'full_clear_distance': 60.0,       # Force avoidance trigger distance (m)
                 'front_angle_deg': 30.0,           # Front sector angle (deg)
                 'side_angle_deg': 60.0,            # Side sector angle (deg)
                 
