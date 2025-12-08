@@ -12,7 +12,8 @@ import time
 import math
 import heapq
 
-# AStarSolver for local path planning around obstacles
+# A* SOLVER CLASS
+
 class AStarSolver:
     def __init__(self, resolution=2.0, safety_margin=5.0):
         self.resolution = resolution
@@ -40,7 +41,8 @@ class AStarSolver:
         return neighbors
 
     def plan(self, start, goal, obstacles, boundary_min, boundary_max):
-        padding = 30.0 
+        # Local Search Area (Dynamic window around ship)
+        padding = 40.0 
         min_x = min(start[0], goal[0]) - padding
         max_x = max(start[0], goal[0]) + padding
         min_y = min(start[1], goal[1]) - padding
@@ -59,8 +61,9 @@ class AStarSolver:
         goal_node = self.world_to_grid(goal[0], goal[1], min_x, min_y)
         
         blocked_nodes = set()
+        # Optimization: Only map obstacles within the search window
         for ox, oy in obstacles:
-            if min_x - 10 < ox < max_x + 10 and min_y - 10 < oy < max_y + 10:
+            if min_x - 5 < ox < max_x + 5 and min_y - 5 < oy < max_y + 5:
                 ogx, ogy = self.world_to_grid(ox, oy, min_x, min_y)
                 radius_steps = int(self.safety_margin / self.resolution)
                 for dx in range(-radius_steps, radius_steps + 1):
@@ -96,7 +99,7 @@ class AStarSolver:
         return []
 
 
-# ATLANTIS PLANNER (MAPPING PROVBLEM FIXED)
+# ATLANTIS PLANNER with DYNAMIC REPLANNING
 
 class AtlantisPlanner(Node):
     def __init__(self):
@@ -111,14 +114,13 @@ class AtlantisPlanner(Node):
         self.declare_parameter('geo_max_y', 100.0)
         self.declare_parameter('waypoint_spacing', 10.0)
         self.declare_parameter('waypoint_tolerance', 4.0)
-        self.declare_parameter('planner_safe_dist', 10.0)
+        self.declare_parameter('planner_safe_dist', 12.0) # Increased for safety
 
         self.pub_current_target = self.create_publisher(String, '/planning/current_target', 10)
         self.pub_mission_status = self.create_publisher(String, '/planning/mission_status', 10)
         self.path_pub = self.create_publisher(Path, '/atlantis/path', 10)
         
         self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, 10)
-        # IMU required for rotation
         self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_callback, 10)
         self.create_subscription(String, '/perception/obstacle_info', self.obstacle_callback, 10)
         self.create_subscription(String, '/planning/detour_request', self.detour_callback, 10)
@@ -129,17 +131,18 @@ class AtlantisPlanner(Node):
         self.start_gps = None
         self.current_gps = None
         self.current_local_pos = (0.0, 0.0)
-        self.current_yaw = 0.0  # Track heading
+        self.current_yaw = 0.0 
         self.mission_state = "IDLE" 
         self.known_obstacles = [] 
+        self.last_replan_time = self.get_clock().now()
         
-        self.astar = AStarSolver(resolution=3.0, safety_margin=12.0)
+        self.astar = AStarSolver(resolution=3.0, safety_margin=15.0) # Wider margin for replanning
         
         self.create_timer(0.1, self.mission_manager_loop)
         self.input_thread = threading.Thread(target=self.input_loop, daemon=True)
         self.input_thread.start()
         
-        self.get_logger().info("Atlantis Planner (Global Mapping Fixed) Ready.")
+        self.get_logger().info("Atlantis Dynamic Planner Ready.")
 
     def input_loop(self):
         time.sleep(1.0)
@@ -178,42 +181,28 @@ class AtlantisPlanner(Node):
         y = d_lon * R * math.cos(lat0)
         return x, y 
 
-    # IMU Callback for Heading ---
     def imu_callback(self, msg):
         q = msg.orientation
         siny_cosp = 2 * (q.w * q.z + q.x * q.y)
         cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
         self.current_yaw = math.atan2(siny_cosp, cosy_cosp)
 
-    # Transform Local Obstacles to Global Map ---
     def obstacle_callback(self, msg):
-        """Parse OKO Perception JSON and transform to GLOBAL MAP coordinates"""
         try:
             data = json.loads(msg.data)
             if 'clusters' in data:
-                if len(data['clusters']) > 0:
-                    self.get_logger().info(f"Planner received {len(data['clusters'])} obstacles from OKO", throttle_duration_sec=2.0)
                 self.known_obstacles = []
-                
                 boat_x, boat_y = self.current_local_pos
                 yaw = self.current_yaw
                 cos_yaw = math.cos(yaw)
                 sin_yaw = math.sin(yaw)
 
                 for c in data['clusters']:
-                    # 1. Get Local Coordinates (Relative to Boat)
                     local_x = c['x']
                     local_y = c['y']
-                    
-                    # 2. Rotate to align with Map Frame
                     rotated_x = local_x * cos_yaw - local_y * sin_yaw
                     rotated_y = local_x * sin_yaw + local_y * cos_yaw
-                    
-                    # 3. Translate to Global Position
-                    global_x = boat_x + rotated_x
-                    global_y = boat_y + rotated_y
-                    
-                    self.known_obstacles.append((global_x, global_y))
+                    self.known_obstacles.append((boat_x + rotated_x, boat_y + rotated_y))
         except: pass
 
     def detour_callback(self, msg):
@@ -221,10 +210,10 @@ class AtlantisPlanner(Node):
             data = json.loads(msg.data)
             if data.get('type') == 'detour':
                 dx, dy = data['x'], data['y']
-                self.get_logger().warn(f"↩ Inserting DETOUR at ({dx:.1f}, {dy:.1f})")
                 self.waypoints.insert(self.current_wp_index, (dx, dy))
         except: pass
 
+    # --- MAIN LOOP WITH DYNAMIC REPLANNING ---
     def mission_manager_loop(self):
         status_msg = String()
         status_msg.data = json.dumps({
@@ -244,6 +233,19 @@ class AtlantisPlanner(Node):
         curr_x, curr_y = self.current_local_pos
         dist = math.hypot(target_x - curr_x, target_y - curr_y)
         
+        # --- DYNAMIC CHECK: Is the path BLOCKED? ---
+        # Only check every 1.0s to save CPU
+        now = self.get_clock().now()
+        if (now - self.last_replan_time).nanoseconds / 1e9 > 1.0:
+            if not self.is_line_safe(curr_x, curr_y, target_x, target_y):
+                self.get_logger().warn(f"Path to WP{self.current_wp_index+1} BLOCKED by new obstacle! Replanning...")
+                self.replan_current_segment(curr_x, curr_y, target_x, target_y)
+                self.last_replan_time = now
+                # Refresh target after replan
+                target_x, target_y = self.waypoints[self.current_wp_index]
+                dist = math.hypot(target_x - curr_x, target_y - curr_y)
+
+        # Feed Buran
         target_msg = String()
         target_msg.data = json.dumps({
             "current_position": [curr_x, curr_y],
@@ -258,14 +260,30 @@ class AtlantisPlanner(Node):
             self.get_logger().info(f"Reached WP {self.current_wp_index+1} -> Next")
             self.current_wp_index += 1
 
+    def replan_current_segment(self, start_x, start_y, goal_x, goal_y):
+        """Generates A* path to the current goal and inserts it"""
+        geo_min = (self.get_parameter('geo_min_x').value, self.get_parameter('geo_min_y').value)
+        geo_max = (self.get_parameter('geo_max_x').value, self.get_parameter('geo_max_y').value)
+        
+        path = self.astar.plan((start_x, start_y), (goal_x, goal_y), self.known_obstacles, geo_min, geo_max)
+        
+        if path:
+            self.get_logger().info(f"Replan successful: Found {len(path)} new nodes.")
+            # Remove the blocked target (we will replace it with the new path ending at the same spot)
+            self.waypoints.pop(self.current_wp_index)
+            
+            # Insert new path points (skipping start point as we are there)
+            for i, (px, py) in enumerate(path):
+                self.waypoints.insert(self.current_wp_index + i, (px, py))
+        else:
+            self.get_logger().error("Replan FAILED: No path found. Buran will attempt local avoidance.")
+
     def generate_lawnmower_path(self):
+        # (Standard generation code - same as before)
         scan_length = self.get_parameter('scan_length').value
         scan_width = self.get_parameter('scan_width').value
         lanes = self.get_parameter('lanes').value
         self.waypoints = [] 
-        
-        viz_msg = Path()
-        viz_msg.header.frame_id = "map"
         
         geo_min = (self.get_parameter('geo_min_x').value, self.get_parameter('geo_min_y').value)
         geo_max = (self.get_parameter('geo_max_x').value, self.get_parameter('geo_max_y').value)
@@ -280,32 +298,23 @@ class AtlantisPlanner(Node):
             
             if self.is_line_safe(start[0], start[1], end[0], end[1]):
                 points = self.interpolate_segment(start[0], start[1], end[0], end[1])
-                if i == 0: self._add_wp(start[0], start[1], viz_msg)
-                for px, py in points: self._add_wp(px, py, viz_msg)
+                if i == 0: self._add_wp(start[0], start[1])
+                for px, py in points: self._add_wp(px, py)
             else:
-                self.get_logger().warn(f"Lane {i} BLOCKED - Running A*...")
                 path = self.astar.plan(start, end, self.known_obstacles, geo_min, geo_max)
                 if path:
-                    if i == 0: self._add_wp(start[0], start[1], viz_msg)
-                    for px, py in path: self._add_wp(px, py, viz_msg)
-                else:
-                    self.get_logger().error(f"Lane {i} Unreachable - Skipping")
+                    if i == 0: self._add_wp(start[0], start[1])
+                    for px, py in path: self._add_wp(px, py)
 
             if i < lanes - 1:
                 next_y = (i + 1) * scan_width
                 trans = self.apply_geofence(x_end, next_y)
-                self._add_wp(trans[0], trans[1], viz_msg)
+                self._add_wp(trans[0], trans[1])
 
-        self.path_pub.publish(viz_msg)
-        self.get_logger().info(f"Generated {len(self.waypoints)} waypoints (Hybrid A*).")
+        self.get_logger().info(f"Generated {len(self.waypoints)} waypoints.")
 
-    def _add_wp(self, x, y, viz_path):
+    def _add_wp(self, x, y):
         self.waypoints.append((x, y))
-        pose = PoseStamped()
-        pose.header.frame_id = "map"
-        pose.pose.position.x = x
-        pose.pose.position.y = y
-        viz_path.poses.append(pose)
 
     def apply_geofence(self, x, y):
         min_x = self.get_parameter('geo_min_x').value
