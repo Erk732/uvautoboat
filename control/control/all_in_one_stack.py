@@ -114,6 +114,11 @@ class AllInOneStack(Node):
         self.declare_parameter('avoid_max_turn_time', 5.0) # Max time to stay in hard avoid
         # Treat any lidar sector below this as obstacle present; resume only when all are above
         self.declare_parameter('full_clear_distance', 60.0)
+        # Channel safety check: minimum clearance required to pass without avoidance
+        # If (front > safe_channel_dist) AND (left >= safe_channel_width) AND (right >= safe_channel_width)
+        # then continue straight without avoidance
+        self.declare_parameter('safe_channel_dist', 15.0)     # Min obstacle distance (m) - reduced to allow earlier turns
+        self.declare_parameter('safe_channel_width', 5.0)     # Min width on each side (m) - increased to avoid dead ends
         # Polar histogram settings (simple left/right balance)
         self.declare_parameter('polar_use_scan', True)
         self.declare_parameter('polar_min_range', 0.5)
@@ -172,6 +177,8 @@ class AllInOneStack(Node):
         self.avoid_clear_margin = float(self.get_parameter('avoid_clear_margin').value)
         self.avoid_max_turn_time = float(self.get_parameter('avoid_max_turn_time').value)
         self.full_clear_distance = float(self.get_parameter('full_clear_distance').value)
+        self.safe_channel_dist = float(self.get_parameter('safe_channel_dist').value)
+        self.safe_channel_width = float(self.get_parameter('safe_channel_width').value)
         self.polar_use_scan = bool(self.get_parameter('polar_use_scan').value)
         self.polar_min_range = float(self.get_parameter('polar_min_range').value)
         self.polar_weight_power = float(self.get_parameter('polar_weight_power').value)
@@ -432,8 +439,29 @@ class AllInOneStack(Node):
             elif left_min is None and right_min is not None:
                 prefer_left = False
 
+            # Narrow channel detection: check if channel is too narrow
+            min_required_width = 3.0 * self.hull_radius  # Need at least 3x hull width
+            available_width = float('inf')
+            channel_too_narrow = False
+            
+            if left_min is not None and right_min is not None:
+                available_width = left_min + right_min
+                if available_width < min_required_width:
+                    channel_too_narrow = True
+                    self.get_logger().warning(
+                        f'Narrow channel detected: available_width={available_width:.1f}m < '
+                        f'required={min_required_width:.1f}m. Using large detour offset.'
+                    )
+            
+            # Determine detour offset based on channel width
+            if channel_too_narrow:
+                # For narrow channels, use larger offset to avoid cul-de-sac trap
+                offset = max(self.obstacle_stop_dist + self.plan_avoid_margin * 3.0, 10.0)
+            else:
+                # Normal detour offset
+                offset = max(self.obstacle_stop_dist + self.plan_avoid_margin, self.waypoint_tolerance * 2.0)
+            
             side = 1.0 if prefer_left else -1.0
-            offset = max(self.obstacle_stop_dist + self.plan_avoid_margin, self.waypoint_tolerance * 2.0)
             # Lateral offset perpendicular to goal direction
             nx = -dy / dist
             ny = dx / dist
@@ -443,7 +471,7 @@ class AllInOneStack(Node):
 
             self.get_logger().info(
                 f'Obstacle detected at {front_min:.1f} m, adding detour waypoint '
-                f'({detour_x:.1f}, {detour_y:.1f}) to avoid.'
+                f'({detour_x:.1f}, {detour_y:.1f}) with offset {offset:.1f}m.'
             )
 
         # Interpolate path segment by segment
@@ -822,11 +850,9 @@ class AllInOneStack(Node):
         # Recovery behavior (stuck) or hard-avoid behavior (cul-de-sac handling)
         if self.recovering:
             now_s = self.get_clock().now().nanoseconds / 1e9
+            # Skip reverse phase; go directly to turning to avoid turning around
             if self.recover_phase == 'reverse':
-                if (now_s - self.recover_start_time) < self.recover_reverse_time_active:
-                    self.publish_thrust(self.recover_reverse_thrust, self.recover_reverse_thrust)
-                    return
-                # switch to turn phase
+                # Convert to turn phase immediately (no reverse movement)
                 self.recover_phase = 'turn'
                 self.recover_start_time = now_s
             if self.recover_phase == 'turn':
@@ -931,83 +957,100 @@ class AllInOneStack(Node):
             left_min_eff = max(0.0, left_min - self.hull_radius) if left_min is not None else None
             right_min_eff = max(0.0, right_min - self.hull_radius) if right_min is not None else None
 
-            # If force-avoid is active but front otherwise far, clamp to trigger soft avoidance
-            if self.force_avoid_active and front_min_eff >= self.obstacle_slow_dist:
-                front_min_eff = self.obstacle_slow_dist - 0.01
+            # Safe channel detection: check if we can safely pass without avoidance
+            # If passage is safe (enough clearance on all sides), skip avoidance
+            safe_passage = False
+            if (front_min is not None and front_min > self.safe_channel_dist and
+                left_min is not None and left_min >= self.safe_channel_width and
+                right_min is not None and right_min >= self.safe_channel_width):
+                safe_passage = True
+                # Continue with normal steering, no avoidance needed
+                if self.avoid_mode != '':
+                    self.get_logger().info(
+                        f'Safe passage detected: front={front_min:.1f}m, '
+                        f'left={left_min:.1f}m, right={right_min:.1f}m. Resuming normal navigation.'
+                    )
+                    self.avoid_mode = ''
 
-                # When obstacle ahead and heading error large, prioritize turning by reducing forward thrust
-                if self.heading_align_thresh > 0.0 and abs(e_yaw) > self.heading_align_thresh:
-                    left_cmd *= 0.2
-                    right_cmd *= 0.2
+            # If not in safe passage, apply normal avoidance logic
+            if not safe_passage:
+                # If force-avoid is active but front otherwise far, clamp to trigger soft avoidance
+                if self.force_avoid_active and front_min_eff >= self.obstacle_slow_dist:
+                    front_min_eff = self.obstacle_slow_dist - 0.01
 
-            # Hard avoidance: too close, turn in place
-            if front_min_eff < self.obstacle_stop_dist:
-                if left_min_eff is not None and right_min_eff is not None:
-                    turn_dir = 1.0 if left_min_eff > right_min_eff else -1.0
-                elif left_min_eff is not None:
-                    turn_dir = 1.0
-                elif right_min_eff is not None:
-                    turn_dir = -1.0
-                else:
-                    turn_dir = 1.0   # Default turn left without side info
+                    # When obstacle ahead and heading error large, prioritize turning by reducing forward thrust
+                    if self.heading_align_thresh > 0.0 and abs(e_yaw) > self.heading_align_thresh:
+                        left_cmd *= 0.2
+                        right_cmd *= 0.2
 
-                # Do not reverse here; simply enter turn-only avoid. Reverse is handled by stuck logic.
-                self.avoid_mode = 'turn'
-                self.avoid_start_time = now_s
-                self.avoid_turn_dir = turn_dir
-
-                self.get_logger().info(
-                    f'EMERGENCY AVOID: obstacle at {front_min:.1f} m, '
-                    f'turning {"left" if turn_dir > 0 else "right"} in place.'
-                )
-
-            # Soft avoidance: slow down, then bias
-            elif front_min_eff < self.obstacle_slow_dist:
-                denom = max(self.obstacle_slow_dist - self.obstacle_stop_dist, 0.1)
-                scale = (front_min_eff - self.obstacle_stop_dist) / denom
-                scale = max(0.2, min(1.0, scale))
-
-                left_cmd *= scale
-                right_cmd *= scale
-
-                # Base diff bias from side distances
-                diff_bias = 0.0
-                if left_min_eff is not None and right_min_eff is not None:
-                    norm = max(max(left_min_eff, right_min_eff), 1e-3)
-                    diff_bias = (right_min_eff - left_min_eff) / norm * self.avoid_diff_gain
-                elif left_min_eff is not None:
-                    diff_bias = 0.5 * self.avoid_diff_gain
-                elif right_min_eff is not None:
-                    diff_bias = -0.5 * self.avoid_diff_gain
-
-                # Blend VFH steering toward desired heading if available
-                vfh_angle = self._vfh_steer(desired_yaw)
-                if vfh_angle is not None:
-                    rel = normalize_angle(vfh_angle)
-                    diff_bias += max(-1.0, min(1.0, rel / max(self.front_angle, 1e-3))) * self.avoid_diff_gain
-
-                # If forced avoid or soft avoid active, blend polar histogram bias
-                if self.force_avoid_active or front_min_eff < self.obstacle_slow_dist:
-                    polar_bias = self._polar_bias_from_scan()
-                    diff_bias += polar_bias * self.avoid_diff_gain
-
-                # If forced避障且左右都看不出差别，主动选一侧转
-                if self.force_avoid_active and abs(diff_bias) < 1e-6:
-                    turn_dir_force = 1.0  # 默认为向右转
+                # Hard avoidance: too close, turn in place
+                if front_min_eff < self.obstacle_stop_dist:
                     if left_min_eff is not None and right_min_eff is not None:
-                        turn_dir_force = 1.0 if right_min_eff >= left_min_eff else -1.0
+                        turn_dir = 1.0 if left_min_eff > right_min_eff else -1.0
                     elif left_min_eff is not None:
-                        turn_dir_force = 1.0
+                        turn_dir = 1.0
                     elif right_min_eff is not None:
-                        turn_dir_force = -1.0
-                    diff_bias = 0.5 * self.avoid_diff_gain * turn_dir_force
+                        turn_dir = -1.0
+                    else:
+                        turn_dir = 1.0   # Default turn left without side info
 
-                left_cmd -= diff_bias
-                right_cmd += diff_bias
+                    # Do not reverse here; simply enter turn-only avoid. Reverse is handled by stuck logic.
+                    self.avoid_mode = 'turn'
+                    self.avoid_start_time = now_s
+                    self.avoid_turn_dir = turn_dir
 
-                self.get_logger().info(
-                    f'Obstacle ahead at {front_min:.1f} m: slowing (scale={scale:.2f}).'
-                )
+                    self.get_logger().info(
+                        f'EMERGENCY AVOID: obstacle at {front_min:.1f} m, '
+                        f'turning {"left" if turn_dir > 0 else "right"} in place.'
+                    )
+
+                # Soft avoidance: slow down, then bias
+                elif front_min_eff < self.obstacle_slow_dist:
+                    denom = max(self.obstacle_slow_dist - self.obstacle_stop_dist, 0.1)
+                    scale = (front_min_eff - self.obstacle_stop_dist) / denom
+                    scale = max(0.2, min(1.0, scale))
+
+                    left_cmd *= scale
+                    right_cmd *= scale
+
+                    # Base diff bias from side distances
+                    diff_bias = 0.0
+                    if left_min_eff is not None and right_min_eff is not None:
+                        norm = max(max(left_min_eff, right_min_eff), 1e-3)
+                        diff_bias = (right_min_eff - left_min_eff) / norm * self.avoid_diff_gain
+                    elif left_min_eff is not None:
+                        diff_bias = 0.5 * self.avoid_diff_gain
+                    elif right_min_eff is not None:
+                        diff_bias = -0.5 * self.avoid_diff_gain
+
+                    # Blend VFH steering toward desired heading if available
+                    vfh_angle = self._vfh_steer(desired_yaw)
+                    if vfh_angle is not None:
+                        rel = normalize_angle(vfh_angle)
+                        diff_bias += max(-1.0, min(1.0, rel / max(self.front_angle, 1e-3))) * self.avoid_diff_gain
+
+                    # If forced avoid or soft avoid active, blend polar histogram bias
+                    if self.force_avoid_active or front_min_eff < self.obstacle_slow_dist:
+                        polar_bias = self._polar_bias_from_scan()
+                        diff_bias += polar_bias * self.avoid_diff_gain
+
+                    # If forced避障且左右都看不出差别，主动选一侧转
+                    if self.force_avoid_active and abs(diff_bias) < 1e-6:
+                        turn_dir_force = 1.0  # 默认为向右转
+                        if left_min_eff is not None and right_min_eff is not None:
+                            turn_dir_force = 1.0 if right_min_eff >= left_min_eff else -1.0
+                        elif left_min_eff is not None:
+                            turn_dir_force = 1.0
+                        elif right_min_eff is not None:
+                            turn_dir_force = -1.0
+                        diff_bias = 0.5 * self.avoid_diff_gain * turn_dir_force
+
+                    left_cmd -= diff_bias
+                    right_cmd += diff_bias
+
+                    self.get_logger().info(
+                        f'Obstacle ahead at {front_min:.1f} m: slowing (scale={scale:.2f}).'
+                    )
 
         # Reset avoidance bias/state when fully clear and not forced-avoid
         if (not self.force_avoid_active) and front_min is not None and front_min > (self.obstacle_stop_dist + 2.0 * self.avoid_clear_margin):
