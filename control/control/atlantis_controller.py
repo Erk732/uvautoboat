@@ -7,7 +7,7 @@ import math
 import json
 import time
 
-# Relative Import (Ensure lidar_obstacle_avoidance.py is in the same folder)
+# Relative Import
 from .lidar_obstacle_avoidance import LidarObstacleDetector
 
 class AtlantisController(Node):
@@ -38,7 +38,7 @@ class AtlantisController(Node):
         self.declare_parameter('drift_compensation_gain', 0.3)
         self.declare_parameter('detour_distance', 12.0)
         self.declare_parameter('path_return_timeout', 10.0)
-        self.declare_parameter('blocked_skip_time', 15.0) # Default for distant obstacles
+        self.declare_parameter('blocked_skip_time', 15.0) 
 
         # Get params
         self.base_speed = self.get_parameter('base_speed').value
@@ -219,9 +219,10 @@ class AtlantisController(Node):
 
             self.analyze_scan_sectors_3d(points)
         else:
-            self.min_obstacle_distance = 50.0
+            # --- CRITICAL FIX: Default to 100m (Clear), NOT 50m ---
+            self.min_obstacle_distance = 100.0
             if not self.obstacle_detected:
-                self.front_clear = 50.0; self.left_clear = 50.0; self.right_clear = 50.0
+                self.front_clear = 100.0; self.left_clear = 100.0; self.right_clear = 100.0
 
     def analyze_scan_sectors_3d(self, points):
         front_points = []
@@ -261,7 +262,6 @@ class AtlantisController(Node):
         if check_dist < 1.0: return False 
 
         # SENSOR LIMIT: Don't check for obstacles beyond 95m
-        # If the target is 150m away, we only care if there is an obstacle < 95m
         sensor_limit = 95.0 
         
         sector_clearance = 100.0 # Default clear
@@ -273,8 +273,7 @@ class AtlantisController(Node):
         elif angle_to_target <= -0.7:       # Right
             sector_clearance = self.right_clear
             
-        # We are blocked ONLY if the sector sees a REAL obstacle (clearance < sensor_limit)
-        # AND that obstacle is closer than the target
+        # We are blocked ONLY if the sector sees a REAL obstacle
         if sector_clearance < sensor_limit and sector_clearance < check_dist:
             is_blocked = True
             
@@ -320,7 +319,7 @@ class AtlantisController(Node):
             
             elapsed_blocked = (now - self.blocked_start_time).nanoseconds / 1e9
             
-            # [NEW] Smart Threshold: Skip fast if obstacle is close (Pier/Wall)!
+            # [NEW] Smart Threshold: Skip fast if obstacle is close!
             is_critical_block = self.min_obstacle_distance < 8.0 
             
             # Use 2.0s for critical blocks, otherwise use the standard 15.0s
@@ -420,7 +419,6 @@ class AtlantisController(Node):
             target_angle = math.atan2(dy, dx)
         
         # ---  SMART RETURN CHECK ---
-        # Prevents "Dog Chasing Tail" by locking decision
         if self.avoidance_mode and not is_committed:
             angle_to_target = math.atan2(dy, dx) - self.current_yaw
             while angle_to_target > math.pi: angle_to_target -= 2.0*math.pi
@@ -436,8 +434,6 @@ class AtlantisController(Node):
                 
             if is_blocked:
                 self.obstacle_detected = True 
-                
-                # FIX: Lock this decision for 3 seconds to force driving away from pier
                 self.avoidance_commit_time = now
                 self.avoidance_direction = "LEFT" if self.left_clear > self.right_clear else "RIGHT"
 
