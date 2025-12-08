@@ -98,9 +98,9 @@ class AStarSolver:
                     heapq.heappush(open_set, (f_score, neighbor))
         return []
 
-# ==========================================
-# ATLANTIS PLANNER (MODULAR / BURAN MODE)
-# ==========================================
+
+# ATLANTIS PLANNER 
+
 class AtlantisPlanner(Node):
     def __init__(self):
         super().__init__('atlantis_planner') # Naming it consistent with file
@@ -171,10 +171,10 @@ class AtlantisPlanner(Node):
                     self.generate_lawnmower_path()
                     self.mission_state = "DRIVING"
                     self.current_wp_index = 0
-                    self.get_logger().info("🚀 Mission STARTED! Targets sending to Buran...")
+                    self.get_logger().info("Mission STARTED! Targets sending to Buran...")
                 elif user_input == 's':
                     self.mission_state = "IDLE"
-                    self.get_logger().info("🛑 Mission STOPPED.")
+                    self.get_logger().info(" Mission STOPPED.")
             except: pass
 
     # --- SENSOR CALLBACKS ---
@@ -214,7 +214,7 @@ class AtlantisPlanner(Node):
             data = json.loads(msg.data)
             if data.get('type') == 'detour':
                 dx, dy = data['x'], data['y']
-                self.get_logger().warn(f"↩️ Inserting DETOUR at ({dx:.1f}, {dy:.1f})")
+                self.get_logger().warn(f"Inserting DETOUR at ({dx:.1f}, {dy:.1f})")
                 # Insert strictly at current index to force immediate deviation
                 self.waypoints.insert(self.current_wp_index, (dx, dy))
         except: pass
@@ -238,7 +238,7 @@ class AtlantisPlanner(Node):
         # 2. Check Mission Complete
         if self.current_wp_index >= len(self.waypoints):
             self.mission_state = "FINISHED"
-            self.get_logger().info("🏁 MISSION COMPLETE")
+            self.get_logger().info("MISSION COMPLETE")
             return
 
         # 3. Calculate Geometry
@@ -259,7 +259,7 @@ class AtlantisPlanner(Node):
         # 5. Waypoint Switching Logic
         tolerance = self.get_parameter('waypoint_tolerance').value
         if dist < tolerance:
-            self.get_logger().info(f"✅ Reached WP {self.current_wp_index+1}/{len(self.waypoints)} -> Next")
+            self.get_logger().info(f"Reached WP {self.current_wp_index+1}/{len(self.waypoints)} -> Next")
             self.current_wp_index += 1
 
     # --- A* PATH GENERATION LOGIC ---
