@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Mission CLI - Terminal-based mission control for Vostok1 / Sputnik
-Mission CLI - Contrôle de mission via terminal
 
 Use this when the web dashboard is unavailable.
 
@@ -69,6 +68,7 @@ import json
 import sys
 import argparse
 import time
+from typing import Optional, Tuple
 
 
 class MissionCLI(Node):
@@ -125,6 +125,70 @@ class MissionCLI(Node):
         
         # Wait for connection
         time.sleep(0.5)
+
+    def _spin_for_status(self, timeout: float = 1.5) -> Tuple[Optional[dict], Optional[dict]]:
+        """
+        Spin briefly to refresh mission/config status.
+        Returns (mission_status, config_status).
+        """
+        start = time.time()
+        while time.time() - start < timeout:
+            rclpy.spin_once(self, timeout_sec=0.1)
+            if self.mission_status or self.config_status:
+                break
+        return self.mission_status, self.config_status
+
+    def _waypoint_info(self) -> Tuple[int, str]:
+        """
+        Best-effort extraction of waypoint count and state across modes.
+        Returns (count, state_string)
+        """
+        state = None
+        count = 0
+        if self.mission_status:
+            state = self.mission_status.get('state', None)
+            count = int(self.mission_status.get('total_waypoints', 0) or 0)
+            # Sputnik exposes current_waypoint instead of waypoint index
+            if count == 0 and 'current_waypoint' in self.mission_status:
+                count = int(self.mission_status.get('current_waypoint') or 0)
+        if self.config_status:
+            state = self.config_status.get('state', state)
+            if 'total_waypoints' in self.config_status:
+                count = max(count, int(self.config_status.get('total_waypoints') or 0))
+            if 'waypoint_count' in self.config_status:
+                count = max(count, int(self.config_status.get('waypoint_count') or 0))
+        return count, state or 'UNKNOWN'
+
+    def _auto_confirm_if_needed(self) -> bool:
+        """
+        Ensure waypoints are confirmed before starting/resuming.
+        Returns True if we can proceed with start/resume.
+        """
+        self._spin_for_status()
+        count, state = self._waypoint_info()
+
+        if count == 0:
+            print("⚠️ No waypoints defined. Run 'generate' first.")
+            return False
+
+        # If already armed/running, nothing to do
+        armed = False
+        if self.config_status and 'mission_armed' in self.config_status:
+            armed = bool(self.config_status.get('mission_armed'))
+        elif self.mission_status and 'mission_armed' in self.mission_status:
+            armed = bool(self.mission_status.get('mission_armed'))
+
+        if state in ["RUNNING", "DRIVING"] or armed:
+            return True
+
+        # States that still need confirmation
+        needs_confirm = state in ["WAITING_CONFIRM", "WAYPOINTS_PREVIEW", "INIT", "IDLE", None]
+        if needs_confirm:
+            print("✅ Auto-confirming waypoints before start...")
+            self.confirm_waypoints()
+            # Give time for the nav stack to process confirmation
+            self._spin_for_status(timeout=1.0)
+        return True
         
     def mission_status_callback(self, msg):
         try:
@@ -229,6 +293,8 @@ class MissionCLI(Node):
         
     def start_mission(self):
         """Start the mission"""
+        if not self._auto_confirm_if_needed():
+            return
         self.send_command('start_mission')
         print("\n🚀 Mission START command sent!")
         
@@ -239,6 +305,8 @@ class MissionCLI(Node):
         
     def resume_mission(self):
         """Resume the mission"""
+        if not self._auto_confirm_if_needed():
+            return
         self.send_command('resume_mission')
         print("\n▶️ Mission RESUME command sent!")
         
@@ -249,6 +317,8 @@ class MissionCLI(Node):
     
     def go_home(self):
         """Navigate back to spawn point"""
+        if not self._auto_confirm_if_needed():
+            return
         self.send_command('go_home')
         print("\n🏠 GO HOME command sent - Returning to spawn point!")
         

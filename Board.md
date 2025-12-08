@@ -8,8 +8,8 @@
 |---|---|
 | **Project** | AutoBoat Navigation System |
 | **Repository** | [Erk732/uvautoboat](https://github.com/Erk732/uvautoboat) |
-| **Last Updated** | 04/12/2025 |
-| **Status** | 🟢 Vostok1 Production Ready |
+| **Last Updated** | 08/12/2025 |
+| **Status** | 🟢 Vostok1 Production Ready (dashboard camera stream + waypoint persistence) |
 
 ---
 
@@ -26,8 +26,8 @@
 
 | System | Architecture | Sensors | Features |
 |--------|--------------|---------|----------|
-| **Vostok1** | Integrated | 3D PointCloud | PID control, SASS v2.0, waypoint skip, web dashboard |
-| **Modular** | Distributed | 3D PointCloud | ОКО + СПУТНИК + БУРАН, runtime config |
+| **Vostok1** | Integrated | 3D PointCloud | PID control, SASS v2.0, waypoint skip, web dashboard + camera panel, waypoint persistence |
+| **Modular** | Distributed | 3D PointCloud | ОКО + СПУТНИК + БУРАН, runtime config, dashboard camera panel, waypoint persistence |
 
 ---
 
@@ -99,7 +99,7 @@
 | Stuck detection/recovery | ✅ | ✅ |
 | Waypoint skip strategy | ✅ | ✅ |
 | Runtime config updates | ✅ | ✅ |
-| Web dashboard | ✅ | ✅ |
+| Web dashboard (map, mission, camera) | ✅ | ✅ |
 | Terminal CLI | ✅ | ✅ |
 | Min-range spawn fix (5m) | ✅ | ✅ |
 

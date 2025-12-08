@@ -12,54 +12,22 @@ A real-time web-based monitoring dashboard for the Vostok1 autonomous boat syste
 - **SASS v2.0 Anti-Stuck Status** with visual escalation indicators
 - **System logs** with color-coded severity levels
 - **Dual-mode support**: Works with both integrated Vostok1 and modular navigation
-- **4 Style modes**: Normal, Bureau (TNO), Terminal (CRT), **MilSpec (Warsaw Pact)**
 - **Configuration panel**: Adjust mission parameters in real-time
 - **Mission control buttons**: Generate, Confirm, Start, Stop, Resume, Go Home
+- **Emergency stop with safety checks**: Stop button properly disarms and resets escape state
+- **Resume and Go Home**: Immediate response with instant status publishing
 - **Responsive design** works on desktop and mobile devices
+- **Embedded camera feed** via web_video_server (MJPEG) in the dashboard
 
-## 🎨 Visual Themes
+## 🎨 Visual Design
 
-The dashboard includes 4 distinct visual themes, cycled via the toggle button:
+The dashboard uses a clean, modern design with:
 
-### 1. Normal Mode (Default)
-
-Modern gradient design with purple/blue accents, clean white panels, Roboto font.
-
-### 2. Bureau Mode (TNO Soviet)
-
-The New Order-inspired Cold War aesthetic with CRT effects, scanlines, socialist longtermism emblem, industrial Soviet bureaucracy colors.
-
-### 3. Terminal Mode (CRT)
-
-Classic green-phosphor computer terminal aesthetic, heavy scanlines, monospace fonts, retro command-line feel.
-
-### 4. MilSpec Mode (ВМФ СССР / Warsaw Pact)
-
-**New!** Authentic 1980s Soviet Navy military specification styling:
-
-- **Phosphor green** primary display color
-- **Soviet Red & Navy Gold** accent colors
-- **☭ Hammer & Sickle** emblem in header
-- **ВМФ СССР** (Soviet Navy) designation badge
-- **Military grid overlay** for tactical feel
-- **MIL-STD-1553** inspired data presentation
-- **Russian labels** for mode switching (БЮРО, ТЕРМИНАЛ, ВМФ СССР, ОБЫЧНЫЙ)
-- **Alert animations** for critical status indicators
-- **Radar sweep** effect on Soviet emblem
-
-### Theme Cycling Order
-
-```bash
-Normal → БЮРО TNO → ТЕРМИНАЛ → ВМФ СССР → Normal (repeat)
-```
-
-Click the theme toggle button in the header to cycle through modes. Each mode has:
-
-- Unique color palette
-- Custom animations and effects
-- Styled panels, buttons, and inputs
-- Map filter adjustments
-- Custom scrollbar styling
+- **Purple/blue gradient** accents
+- **Clean white panels** with subtle shadows
+- **Roboto font** for readability
+- **Responsive layout** for desktop and mobile
+- **Single unified theme** - consistent professional appearance
 
 ## Prerequisites
 
@@ -75,11 +43,21 @@ Click the theme toggle button in the header to cycle through modes. Each mode ha
    sudo apt install ros-humble-rosbridge-suite
    ```
 
-3. **Vostok1 node** running (`vostok1.py`)
+3. **web_video_server** for the camera panel (MJPEG stream on port 8080):
+
+   ```bash
+   # Jazzy (24.04)
+   sudo apt install ros-jazzy-web-video-server
+
+   # Humble (22.04)
+   sudo apt install ros-humble-web-video-server
+   ```
+
+4. **Vostok1 nodes** running (`vostok1.launch.yaml` recommended for modular usage) or integrated `vostok1` node.
 
 ### Troubleshooting Port 9090
 
-If the dashboard shows "Déconnecté" or can't connect to rosbridge:
+If the dashboard shows "Disconnected" or can't connect to rosbridge:
 
 1. **Check if rosbridge is running:**
 
@@ -122,7 +100,7 @@ source install/setup.bash
 ```bash
 cd ~/seal_ws
 source install/setup.bash
-ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_custom
+ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_DEFAULT
 ```
 
 Wait for Gazebo to fully load with the WAM-V boat spawned.
@@ -141,9 +119,21 @@ ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messag
 
 This starts a WebSocket server on `ws://localhost:9090`.
 
+### 4. Start web_video_server (Camera Stream)
+
+**Terminal 3:**
+
+```bash
+cd ~/seal_ws
+source install/setup.bash
+ros2 run web_video_server web_video_server  # serves MJPEG on http://<host>:8080
+```
+
+> The dashboard camera panel defaults to `/wamv/sensors/cameras/front_left_camera_sensor/image_raw`. Use the input box + “Refresh | Actualiser” to change topics if needed.
+
 ### 4. Launch Navigation System
 
-**Terminal 3 — Choose ONE option:**
+**Terminal 4 — Choose ONE option:**
 
 #### Option A: Modular Navigation (Recommended)
 
@@ -177,7 +167,7 @@ ros2 launch plan vostok1_modular_navigation.launch.py kp:=500.0 ki:=30.0 kd:=150
 
 ### 5. Open Dashboard
 
-**Terminal 4:**
+**Terminal 5:**
 
 ```bash
 cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1
@@ -206,6 +196,8 @@ The dashboard will automatically connect to rosbridge on port 9090 and display r
 - Current state (INIT, MOVING_TO_WAYPOINT, STUCK_ESCAPING, MISSION_COMPLETE)
 - Active waypoint number
 - Distance to current waypoint
+- **Mission Armed**: Boolean flag indicating if mission is armed/running
+- **Joystick Override**: Boolean flag for manual joystick control mode
 
 ### GPS Position
 
@@ -259,7 +251,7 @@ The dashboard will automatically connect to rosbridge on port 9090 and display r
 
 | Topic | Message Type | Data |
 |-------|-------------|------|
-| `/vostok1/mission_status` | `std_msgs/String` | Mission state, waypoint, distance |
+| `/vostok1/mission_status` | `std_msgs/String` | Mission state, waypoint, distance, mission_armed, joystick_override |
 | `/vostok1/obstacle_status` | `std_msgs/String` | Obstacle distances and clearance |
 | `/vostok1/anti_stuck_status` | `std_msgs/String` | SASS v2.0 escalation status |
 | `/vostok1/config` | `std_msgs/String` | Current configuration values |
@@ -269,7 +261,8 @@ The dashboard will automatically connect to rosbridge on port 9090 and display r
 
 | Topic | Message Type | Data |
 |-------|-------------|------|
-| `/planning/mission_status` | `std_msgs/String` | Sputnik planner status |
+| `/planning/mission_status` | `std_msgs/String` | Sputnik planner status, mission_armed, joystick_override |
+| `/planning/waypoints` | `nav_msgs/Path` | Generated waypoints (for RViz visualization) |
 | `/perception/obstacle_info` | `std_msgs/String` | OKO v2.0 enhanced perception (see below) |
 | `/control/status` | `std_msgs/String` | Buran controller status |
 | `/control/anti_stuck_status` | `std_msgs/String` | Buran anti-stuck status |
@@ -422,10 +415,13 @@ ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
 # T2: Rosbridge WebSocket server
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
 
-# T3: Modular navigation (recommended)
+# T3: web_video_server (camera stream for dashboard)
+ros2 run web_video_server web_video_server
+
+# T4: Modular navigation (recommended)
 ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml
 
-# T4: Web dashboard
+# T5: Web dashboard
 cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1 && python3 -m http.server 8000
 ```
 
@@ -581,37 +577,36 @@ ros2 run plan vostok1_cli interactive
 
 | Problem | Solution |
 |---------|----------|
-| Stop button doesn't work | Ensure latest code is built (`colcon build --packages-select plan control`) |
-| Boat stuck in escape mode after stop | Fixed in latest version - escape state resets on stop/resume |
-| Go Home doesn't respond | Check GPS is available, ensure state is not INIT |
+| Stop button doesn't work | **FIXED** - Latest version forces zero thrust even in escape mode |
+| Boat stuck in escape mode after stop | **FIXED** - Escape state now properly resets on stop/resume |
+| Go Home doesn't respond | **FIXED** - Now publishes target immediately for instant BURAN response |
+| Resume doesn't work | **FIXED** - Mission status published immediately on resume command |
 | Waypoints don't appear on map | Wait for GPS fix, check browser console for errors |
 | Mission state stuck | Try Reset button, then Generate new waypoints |
+| Modular mode waypoints not visualized in RViz | waypoint_visualizer now supports `/planning/waypoints` and `/planning/mission_status` topics |
 
 ---
 
 ## Files
 
 - `index.html` - Main dashboard structure
-- `style_merged.css` - Unified stylesheet with 3 style modes
-- `app.js` - ROS connection and data handling logic
+- `style_merged.css` - Unified stylesheet with clean modern design
+- `app.js` - ROS connection and data handling logic, supports both integrated and modular modes
 - `README_vostok1_dashboard.md` - This file
 
-### Style Modes
+## Implemented Features
 
-The dashboard supports 4 visual styles (click the toggle button to cycle):
-
-| Mode | Description |
-|------|-------------|
-| **Normal** | Clean purple gradient, modern look |
-| **Bureau** | TNO Soviet industrial aesthetic with CRT effects |
-| **Terminal** | Green phosphor CRT retro computer style |
-| **MilSpec** | Warsaw Pact military specification (ВМФ СССР) |
+- [x] ✅ Parameter configuration panel
+- [x] ✅ Emergency stop button with safety checks
+- [x] ✅ Mission control buttons (Generate, Confirm, Start, Stop, Resume, Go Home)
+- [x] ✅ Stop/Resume/Go Home with immediate response
+- [x] ✅ Mission armed flag and joystick override status
+- [x] ✅ Dual-mode support (integrated + modular)
+- [x] ✅ waypoint_visualizer RViz integration for modular mode
 
 ## Future Enhancements
 
-- [x] ~~Add parameter configuration panel~~ ✅ Implemented
-- [x] ~~Implement emergency stop button~~ ✅ Mission control buttons added
-- [ ] Add waypoint editing/planning interface
+- [x] Add waypoint editing/planning interface
 - [ ] Display LIDAR point cloud visualization
 - [ ] Display OKO v2.0 cluster/gap visualization on map
 - [ ] Mission recording and playback

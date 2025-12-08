@@ -123,6 +123,8 @@ uvautoboat/
 | [MISSION_CONTROL_GUIDE.md](MISSION_CONTROL_GUIDE.md) | Mission control interface usage |
 | [LAUNCH_YAML_GUIDE.md](LAUNCH_YAML_GUIDE.md) | YAML launch file configuration |
 | [CODE_REVIEW.md](CODE_REVIEW.md) | Code review notes and standards |
+| [Vostok1 Dashboard Guide](web_dashboard/vostok1/README_vostok1_dashboard.md) | Web dashboard setup (rosbridge + web_video_server) and camera panel |
+| `one_click_launch_all/launch_vostok1_complete.sh` | One-click launcher for Gazebo, rosbridge, navigation, camera, RViz, dashboard |
 
 ### System Requirements
 
@@ -303,16 +305,19 @@ cd ~/seal_ws
 source /opt/ros/jazzy/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
 
-# 4. Install rosbridge for web dashboard
+# 4. Install rosbridge (dashboard WebSocket bridge)
 sudo apt install ros-jazzy-rosbridge-suite
 
-# 5. Build workspace
+# 5. Install web_video_server (dashboard camera panel)
+sudo apt install ros-jazzy-web-video-server
+
+# 6. Build workspace
 colcon build --merge-install
 
-# 6. Source environment
+# 7. Source environment
 source ~/seal_ws/install/setup.bash
 
-# 7. (Recommended) Add to ~/.bashrc for auto-sourcing
+# 8. (Recommended) Add to ~/.bashrc for auto-sourcing
 echo "source ~/seal_ws/install/setup.bash" >> ~/.bashrc
 ```
 
@@ -331,27 +336,27 @@ ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
 **Terminal 2** — Run Navigation (choose one):
 
 ```bash
-# Integrated Vostok1 (recommended)
+# Integrated Vostok1
 ros2 run plan vostok1
 
 # Modular system (configurable)
 ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml
 ```
 
-### Four-Terminal Full Setup (with Web Dashboard)
+### Five-Terminal Full Setup (Web Dashboard + Camera)
 
 | Terminal | Command | Purpose |
 |:---------|:--------|:--------|
 | **T1** | `ros2 launch vrx_gz competition.launch.py world:=sydney_regatta` | Gazebo simulation |
 | **T2** | `ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0` | WebSocket bridge |
-| **T3** | `ros2 run plan vostok1` | Vostok1 navigation |
-| **T4** | `cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1 && python3 -m http.server 8000` | Web server |
+| **T3** | `ros2 run web_video_server web_video_server` | MJPEG camera stream for dashboard (http://<host>:8080) |
+| **T4** | `ros2 run plan vostok1` **or** `ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml` | Navigation (integrated or modular) |
+| **T5** | `cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1 && python3 -m http.server 8000` | Dashboard web server |
 
 > **Important:** The `delay_between_messages:=0.0` parameter is required for ROS 2 Jazzy due to a parameter type bug.
-
-This starts a WebSocket server on `ws://localhost:9090`.
-
-> **Note:** T4 must run in a separate terminal — it's a simple HTTP server, not a ROS node.
+> This starts a WebSocket server on `ws://localhost:9090`.
+> **Camera panel:** Default topic `/wamv/sensors/cameras/front_left_camera_sensor/image_raw`; change it in the dashboard input and click “Refresh” if needed.
+> **Note:** T5 must run in a separate terminal — it's a simple HTTP server, not a ROS node.
 
 Then open: **<http://localhost:8000>**
 
@@ -471,6 +476,7 @@ Detailed ROS 2 topic connections between the modular nodes:
 │  └─ /sputnik/mission_command    ◄─────────── CLI: start, pause, stop, go_home  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
 ### Atlantis Topic Flow Diagram
 
 Detailed ROS 2 connections for the Atlantis architecture. Note the direct LIDAR ingestion by both nodes:
@@ -914,10 +920,8 @@ The **vostok1_cli** provides terminal-based mission control when the web dashboa
 | **Vostok1** | `--mode vostok1` | Integrated navigation |
 
 > **Note:** Default mode is `modular` since the Sputnik + Buran architecture is the primary system.
-
+>
 ### Waypoint Generation
-
-The `generate` command automatically waits for the navigation system to be ready before sending commands.
 
 ```bash
 # Default: 8 lanes, 50m length, 20m width
@@ -942,9 +946,9 @@ ros2 run plan vostok1_cli generate --lanes 10 --length 60 --width 25 --kp 400 --
    Speed: base=500, max=800
 ```
 
+> **Note:** use `ros2 run plan vostok1_cli confirm` to confirm waypoints before starting the mission.
+>
 | Parameter | Default | Description |
-|:----------|:--------|:------------|
-| `--lanes`, `-l` | 8 | Number of parallel scan lines |
 | `--length`, `-L` | 50.0 | Length of each lane (meters) |
 | `--width`, `-w` | 20.0 | Spacing between lanes (meters) |
 | `--kp` | - | PID Proportional gain (optional) |
@@ -1019,32 +1023,40 @@ ros2 run plan vostok1_cli --mode vostok1 interactive
 > ```bash
 > # Terminal 1: Start Gazebo simulation
 > ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
-> 
+>
 > # Terminal 2: Start modular navigation system
 > ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml
 > ```
-
+>
 ```bash
 # 1. Generate waypoints with PID and speed (all-in-one)
-#    CLI will wait for navigation system to be ready
+
+# CLI will wait for navigation system to be ready
+
 ros2 run plan vostok1_cli generate --lanes 10 --length 60 --width 25 --kp 400 --ki 20 --kd 100 --base 500 --max 800
 
 # 2. Confirm waypoints
+
 ros2 run plan vostok1_cli confirm
 
 # 3. Start mission
+
 ros2 run plan vostok1_cli start
 
 # 4. Monitor (optional)
+
 ros2 run plan vostok1_cli status
 
 # 5. Pause if needed
+
 ros2 run plan vostok1_cli stop
 
 # 6. Resume
+
 ros2 run plan vostok1_cli resume
 
 # 7. Return home when done
+
 ros2 run plan vostok1_cli home
 ```
 

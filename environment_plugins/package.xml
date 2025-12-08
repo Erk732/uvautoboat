@@ -13,11 +13,15 @@
   <build_depend>gz-plugin2</build_depend>
   <build_depend>gz-math7</build_depend>
   <build_depend>gz-common5</build_depend>
+  <build_depend>gz-transport13</build_depend>
+  <build_depend>gz-msgs10</build_depend>
 
   <exec_depend>gz-sim8</exec_depend>
   <exec_depend>gz-plugin2</exec_depend>
   <exec_depend>gz-math7</exec_depend>
   <exec_depend>gz-common5</exec_depend>
+  <exec_depend>gz-transport13</exec_depend>
+  <exec_depend>gz-msgs10</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

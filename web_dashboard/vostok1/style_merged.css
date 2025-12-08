@@ -1,45 +1,16 @@
-/* Vostok1 Web Dashboard - Unified Stylesheet */
-/* Three Style Modes: Normal, Bureau (TNO), Terminal */
+/* Vostok1 Web Dashboard - Stylesheet */
 
 /* ========== FONTS ========== */
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@300;400;500;600;700&family=Roboto+Condensed:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@300;400;500;600&display=swap');
 
 /* ========== CSS VARIABLES ========== */
 :root {
-    /* Normal Mode Colors (Purple Gradient) */
-    --normal-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --normal-panel: #ffffff;
-    --normal-text: #333333;
-    --normal-accent: #667eea;
-    --normal-accent-2: #764ba2;
-    
-    /* Bureau Mode Colors (TNO Soviet) */
-    --bureau-bg-main: #0D0F11;
-    --bureau-bg-panel: #13171C;
-    --bureau-bg-inset: #1A1F26;
-    --bureau-bg-highlight: #242A33;
-    --bureau-text-main: #D7DCE3;
-    --bureau-text-secondary: #A0A7B3;
-    --bureau-text-disabled: #6D7480;
-    --bureau-soviet-red: #CC3534;
-    --bureau-soviet-red-deep: #A72A2A;
-    --bureau-soviet-red-dark: #7C1F1F;
-    --bureau-teal: #3A91A8;
-    --bureau-blue: #2E7A8E;
-    --bureau-steel: #6F7A87;
-    --bureau-warning: #D7B044;
-    
-    /* Terminal Mode Colors (CRT Green) */
-    --terminal-bg: #0D0F11;
-    --terminal-text: #3A91A8;
-    --terminal-accent: #4BA3BA;
-    --terminal-glow: rgba(58, 145, 168, 0.6);
-    
-    /* Fonts */
-    --font-normal: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    --font-header: "Bebas Neue", "Oswald", sans-serif;
-    --font-subheader: "Oswald", "Roboto Condensed", sans-serif;
-    --font-body: "Roboto Condensed", "Noto Sans", sans-serif;
+    --bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --panel: #ffffff;
+    --text: #333333;
+    --accent: #667eea;
+    --accent-2: #764ba2;
+    --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     --font-mono: "Courier New", monospace;
 }
 
@@ -50,11 +21,11 @@
     box-sizing: border-box;
 }
 
-/* ========== NORMAL MODE (Default) ========== */
+/* ========== BODY ========== */
 body {
-    font-family: var(--font-normal);
-    background: var(--normal-bg);
-    color: var(--normal-text);
+    font-family: var(--font-main);
+    background: var(--bg);
+    color: var(--text);
     min-height: 100vh;
     padding: 20px;
 }
@@ -64,6 +35,7 @@ body {
     margin: 0 auto;
 }
 
+/* ========== HEADER ========== */
 header {
     background: white;
     padding: 20px 30px;
@@ -87,46 +59,29 @@ header {
     gap: 1.2rem;
 }
 
-.ideology-icon {
-    height: 2.8rem;
-    width: auto;
-    display: none; /* Hidden in normal mode */
+.ideology-icon, .milspec-emblem, .milspec-designation {
+    display: none;
 }
 
 h1 {
-    color: var(--normal-accent);
-    font-size: 28px;
+    color: var(--accent);
+    font-size: 24px;
 }
 
 h2 {
-    color: var(--normal-accent);
+    color: var(--accent);
     font-size: 18px;
     margin-bottom: 15px;
     padding-bottom: 10px;
     border-bottom: 2px solid #e0e0e0;
 }
 
-/* Style Toggle Button - Normal Mode */
+/* Style Toggle Button - Hidden */
 .style-toggle-btn {
-    background: linear-gradient(135deg, var(--normal-accent) 0%, var(--normal-accent-2) 100%);
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
-    font-family: var(--font-normal);
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-    border-radius: 20px;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    display: none;
 }
 
-.style-toggle-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
-}
-
-/* Connection Status */
+/* ========== CONNECTION STATUS ========== */
 .status {
     padding: 8px 16px;
     border-radius: 20px;
@@ -144,14 +99,14 @@ h2 {
     color: white;
 }
 
-/* Dashboard Grid */
+/* ========== DASHBOARD GRID ========== */
 .dashboard {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
     gap: 20px;
 }
 
-/* Panels */
+/* ========== PANELS ========== */
 .panel {
     background: white;
     padding: 20px;
@@ -159,17 +114,80 @@ h2 {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.map-panel {
+.map-panel, .logs-panel, .config-panel, .terminal-panel, .mission-control-panel, .camera-panel {
     grid-column: span 2;
 }
 
-.logs-panel {
-    grid-column: span 2;
+/* ========== CAMERA PANEL ========== */
+.camera-panel {
+    background: #f5f5f5;
+}
+
+.camera-panel h2 {
+    color: #333;
+    border-bottom: 2px solid #0066cc;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.camera-container {
+    width: 100%;
+    background: black;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 15px;
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#camera-feed {
+    width: 100%;
+    text-align: center;
+    position: relative;
+}
+
+#camera-image {
+    max-width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+}
+
+.camera-status {
+    color: #999;
+    font-size: 14px;
+    padding: 10px;
+    text-align: center;
+}
+.camera-status.error {
+    color: #f44336;
+}
+
+.camera-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: white;
+    border-radius: 4px;
+}
+
+.camera-controls label {
+    font-weight: 600;
+    color: #333;
+}
+
+.camera-controls input[type="text"] {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 6px;
+    font-family: monospace;
+    font-size: 12px;
 }
 
 /* ========== MISSION CONTROL PANEL ========== */
 .mission-control-panel {
-    grid-column: span 2;
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
     color: white;
 }
@@ -399,11 +417,6 @@ h2 {
     margin-bottom: 10px;
 }
 
-.joystick-hint {
-    font-style: italic;
-    color: #888;
-}
-
 .joystick-status {
     margin-top: 15px;
     padding: 10px;
@@ -423,7 +436,7 @@ h2 {
     margin-bottom: 5px;
 }
 
-/* Joystick Instructions Box */
+/* Joystick Instructions */
 .joystick-instructions {
     margin-top: 12px;
     padding: 12px;
@@ -443,7 +456,6 @@ h2 {
     font-size: 14px;
 }
 
-/* War Thunder / GTA5 Style Control Grid */
 .teleop-controls-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -488,7 +500,6 @@ h2 {
     text-align: center;
 }
 
-/* Feature tags */
 .teleop-features {
     display: flex;
     flex-wrap: wrap;
@@ -529,20 +540,12 @@ h2 {
     margin: 5px 0;
 }
 
-.instructions-hint {
-    font-size: 11px;
-    color: #aaa;
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid rgba(255,255,255,0.1);
-}
-
 .joystick-instructions p {
     margin: 5px 0;
     font-size: 12px;
 }
 
-/* Map Legend */
+/* ========== MAP LEGEND ========== */
 .map-legend {
     display: flex;
     gap: 15px;
@@ -570,15 +573,7 @@ h2 {
 .legend-color.path { background: #3388ff; }
 .legend-color.trajectory { background: #667eea; }
 
-.config-panel {
-    grid-column: span 2;
-}
-
-.terminal-panel {
-    grid-column: span 2;
-}
-
-/* Info Grid */
+/* ========== INFO GRID ========== */
 .info-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -608,7 +603,7 @@ h2 {
     font-weight: bold;
 }
 
-/* Badges */
+/* ========== BADGES ========== */
 .badge {
     display: inline-block;
     padding: 5px 12px;
@@ -631,7 +626,7 @@ h2 {
     color: white;
 }
 
-/* Thruster Bars */
+/* ========== THRUSTER BARS ========== */
 .thrust-bars {
     margin-top: 20px;
     display: flex;
@@ -670,7 +665,7 @@ h2 {
     background: linear-gradient(90deg, #f44336, #d32f2f);
 }
 
-/* Map */
+/* ========== MAP ========== */
 #map {
     width: 100%;
     height: 400px;
@@ -678,14 +673,14 @@ h2 {
     overflow: hidden;
 }
 
-/* Logs */
+/* ========== LOGS ========== */
 .logs-container {
     max-height: 300px;
     overflow-y: auto;
     background: #f5f5f5;
     padding: 15px;
     border-radius: 8px;
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 13px;
 }
 
@@ -711,7 +706,7 @@ h2 {
     margin-right: 10px;
 }
 
-/* Config Panel - Normal Mode */
+/* ========== CONFIG PANEL ========== */
 .config-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -728,10 +723,10 @@ h2 {
 
 .config-section h3 {
     font-size: 16px;
-    color: var(--normal-accent);
+    color: var(--accent);
     margin: 0 0 15px 0;
     padding-bottom: 10px;
-    border-bottom: 2px solid var(--normal-accent);
+    border-bottom: 2px solid var(--accent);
 }
 
 .config-item {
@@ -765,7 +760,7 @@ h2 {
 
 .config-item input:focus {
     outline: none;
-    border-color: var(--normal-accent);
+    border-color: var(--accent);
 }
 
 .config-buttons {
@@ -787,7 +782,7 @@ h2 {
 }
 
 .config-btn.apply {
-    background: linear-gradient(135deg, var(--normal-accent) 0%, var(--normal-accent-2) 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
     color: white;
 }
 
@@ -796,27 +791,7 @@ h2 {
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
-.config-btn.pid {
-    background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
-    color: white;
-}
-
-.config-btn.pid:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4);
-}
-
-.config-btn.restart {
-    background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
-    color: white;
-}
-
-.config-btn.restart:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
-}
-
-/* Terminal Panel - Normal Mode */
+/* ========== TERMINAL PANEL ========== */
 .terminal-header {
     display: flex;
     justify-content: space-between;
@@ -844,15 +819,15 @@ h2 {
     padding: 5px 12px;
     font-family: var(--font-mono);
     font-size: 11px;
-    color: var(--normal-accent);
+    color: var(--accent);
     background: white;
-    border: 1px solid var(--normal-accent);
+    border: 1px solid var(--accent);
     border-radius: 4px;
     cursor: pointer;
 }
 
 .terminal-btn:hover {
-    background: var(--normal-accent);
+    background: var(--accent);
     color: white;
 }
 
@@ -901,7 +876,7 @@ h2 {
 .terminal-line.system .level { color: #667eea; }
 .terminal-line.system .message { color: #9fa8da; }
 
-/* Scrollbar - Normal Mode */
+/* ========== SCROLLBAR ========== */
 .logs-container::-webkit-scrollbar,
 .terminal-container::-webkit-scrollbar {
     width: 8px;
@@ -919,13 +894,12 @@ h2 {
     border-radius: 4px;
 }
 
-/* Boat marker */
+/* ========== MAP CONTROLS ========== */
 .boat-marker {
     font-size: 24px;
     text-align: center;
 }
 
-/* Follow boat toggle button */
 .follow-boat-control {
     margin-top: 10px;
 }
@@ -956,7 +930,7 @@ h2 {
     background: #5a6fd6;
 }
 
-/* Waypoint tooltip styling */
+/* Waypoint tooltip */
 .waypoint-tooltip-container {
     background: white;
     border: none;
@@ -964,10 +938,6 @@ h2 {
     box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     padding: 0;
     font-family: inherit;
-}
-
-.waypoint-tooltip-container .leaflet-tooltip-content {
-    margin: 0;
 }
 
 .waypoint-tooltip {
@@ -996,7 +966,7 @@ h2 {
     color: #666;
 }
 
-/* Dirty input indicator - shows user has modified value */
+/* Dirty input indicator */
 .input-dirty {
     border-color: #f0ad4e !important;
     box-shadow: 0 0 3px rgba(240, 173, 78, 0.5);
@@ -1008,9 +978,9 @@ h2 {
     box-shadow: 0 0 5px rgba(236, 151, 31, 0.5);
 }
 
-/* Responsive - Normal Mode */
+/* ========== RESPONSIVE ========== */
 @media (max-width: 1200px) {
-    .map-panel, .logs-panel, .config-panel, .terminal-panel {
+    .map-panel, .logs-panel, .config-panel, .terminal-panel, .mission-control-panel {
         grid-column: span 1;
     }
     .config-grid {
@@ -1045,2279 +1015,5 @@ h2 {
     }
     .config-btn {
         width: 100%;
-    }
-}
-
-
-/* ============================================================ */
-/* ========== BUREAU MODE (TNO Soviet Industrial) ============= */
-/* ============================================================ */
-
-/* ═══════════════════════════════════════════════════════════════
-   POST-APOCALYPTIC CRT DAMAGE EFFECTS
-   Simulates a damaged terminal in a fallout bunker
-   ═══════════════════════════════════════════════════════════════ */
-
-/* Severe screen flicker - damaged power supply */
-@keyframes screen-flicker {
-    0%, 100% { opacity: 1; }
-    2% { opacity: 0.4; }
-    4% { opacity: 0.9; }
-    5% { opacity: 0.3; }
-    6% { opacity: 1; }
-    8% { opacity: 0.85; }
-    10% { opacity: 0.95; }
-    12% { opacity: 0.6; }
-    15% { opacity: 0.94; }
-    20% { opacity: 1; }
-    25% { opacity: 0.7; }
-    26% { opacity: 1; }
-    45% { opacity: 0.97; }
-    50% { opacity: 0.5; }
-    51% { opacity: 0.9; }
-    55% { opacity: 1; }
-    70% { opacity: 0.8; }
-    72% { opacity: 0.95; }
-    80% { opacity: 0.3; }
-    81% { opacity: 1; }
-    90% { opacity: 0.6; }
-    92% { opacity: 1; }
-}
-
-/* Horizontal sync damage - VHS tracking error */
-@keyframes tracking-error {
-    0%, 85%, 100% { transform: translateX(0) skewX(0); }
-    86% { transform: translateX(-8px) skewX(-0.5deg); }
-    88% { transform: translateX(12px) skewX(0.8deg); }
-    89% { transform: translateX(-5px) skewX(-0.3deg); }
-    90% { transform: translateX(15px) skewX(1deg); }
-    91% { transform: translateX(-20px) skewX(-1.5deg); }
-    92% { transform: translateX(8px) skewX(0.5deg); }
-    93% { transform: translateX(-3px); }
-    94% { transform: translateX(25px) skewX(2deg); }
-    95% { transform: translateX(-15px) skewX(-0.8deg); }
-}
-
-/* RGB channel separation - damaged electron gun */
-@keyframes rgb-shift {
-    0%, 75%, 100% { 
-        text-shadow: 
-            0 0 2px rgba(215, 220, 227, 0.8),
-            -1px 0 0 rgba(204, 53, 52, 0.3),
-            1px 0 0 rgba(58, 145, 168, 0.3);
-    }
-    78% { 
-        text-shadow: 
-            0 0 5px rgba(215, 220, 227, 0.9),
-            -8px 2px 0 rgba(255, 0, 0, 0.8),
-            6px -1px 0 rgba(0, 255, 255, 0.7);
-    }
-    80% {
-        text-shadow: 
-            0 0 2px rgba(215, 220, 227, 0.8),
-            -12px 0 0 rgba(255, 0, 0, 0.9),
-            10px 0 0 rgba(0, 255, 255, 0.8),
-            0 5px 0 rgba(0, 255, 0, 0.5);
-    }
-    82% {
-        text-shadow: 
-            0 0 8px rgba(255, 255, 255, 1),
-            -4px -3px 0 rgba(255, 0, 0, 0.7),
-            3px 2px 0 rgba(0, 255, 255, 0.6);
-    }
-    90% { 
-        text-shadow: 
-            0 0 2px rgba(215, 220, 227, 0.8),
-            -5px 0 0 rgba(204, 53, 52, 0.7),
-            4px 0 0 rgba(58, 145, 168, 0.6);
-    }
-}
-
-/* Severe VHS glitch - corrupted tape */
-@keyframes vhs-glitch {
-    0%, 90%, 100% { 
-        clip-path: inset(0 0 0 0);
-        transform: translateX(0);
-        filter: none;
-    }
-    91% { 
-        clip-path: inset(5% 0 85% 0);
-        transform: translateX(-30px);
-        filter: saturate(2) hue-rotate(20deg);
-    }
-    92% { 
-        clip-path: inset(20% 0 60% 0);
-        transform: translateX(25px) scaleY(1.1);
-        filter: saturate(0.5);
-    }
-    93% { 
-        clip-path: inset(50% 0 30% 0);
-        transform: translateX(-50px) scaleY(0.9);
-        filter: brightness(2);
-    }
-    94% {
-        clip-path: inset(70% 0 10% 0);
-        transform: translateX(40px) skewX(5deg);
-        filter: saturate(3) contrast(1.5);
-    }
-    95% { 
-        clip-path: inset(10% 0 70% 0);
-        transform: translateX(-15px);
-        filter: hue-rotate(-30deg);
-    }
-    96% {
-        clip-path: inset(80% 0 5% 0);
-        transform: translateX(60px) scaleY(1.2);
-        filter: invert(0.1);
-    }
-}
-
-/* Electromagnetic interference pulse */
-@keyframes em-pulse {
-    0%, 100% { filter: blur(0.4px) contrast(1.15); }
-    15% { filter: blur(0.8px) contrast(1.4) brightness(1.1); }
-    30% { filter: blur(0.3px) contrast(1.1); }
-    45% { filter: blur(1.2px) contrast(1.6) brightness(1.2) saturate(1.3); }
-    50% { filter: blur(0.5px) contrast(1.2); }
-    75% { filter: blur(2px) contrast(2) brightness(0.8); }
-    76% { filter: blur(0.4px) contrast(1.15); }
-}
-
-/* Screen tear/roll - vertical hold damage */
-@keyframes screen-tear {
-    0%, 95%, 100% {
-        background-position: 0 0;
-    }
-    96% {
-        background-position: 0 -50px;
-    }
-    97% {
-        background-position: 0 30px;
-    }
-    98% {
-        background-position: 0 -100px;
-    }
-}
-
-/* Radiation static noise overlay */
-@keyframes static-noise {
-    0%, 100% { background-position: 0 0; }
-    10% { background-position: -10% -10%; }
-    20% { background-position: 20% 15%; }
-    30% { background-position: -15% 20%; }
-    40% { background-position: 25% -10%; }
-    50% { background-position: -20% 25%; }
-    60% { background-position: 15% -15%; }
-    70% { background-position: -25% 10%; }
-    80% { background-position: 10% 20%; }
-    90% { background-position: -10% -20%; }
-}
-
-/* Complete screen blackout glitch */
-@keyframes blackout-glitch {
-    0%, 97%, 100% { 
-        opacity: 1;
-        filter: none;
-    }
-    97.5% { 
-        opacity: 0;
-        filter: brightness(0);
-    }
-    98% {
-        opacity: 1;
-        filter: brightness(3) contrast(0.5);
-    }
-    98.5% {
-        opacity: 0.3;
-    }
-    99% {
-        opacity: 1;
-        filter: brightness(0.5) saturate(2);
-    }
-}
-
-/* Burn-in ghost image effect */
-@keyframes burn-in {
-    0%, 100% {
-        box-shadow: inset 0 0 100px rgba(204, 53, 52, 0.05);
-    }
-    50% {
-        box-shadow: inset 0 0 150px rgba(204, 53, 52, 0.15);
-    }
-}
-
-@keyframes emergency-pulse {
-    0%, 100% { box-shadow: 0 4px 0 #3A0808, 0 6px 12px rgba(0, 0, 0, 0.4); }
-    50% { box-shadow: 0 4px 0 #3A0808, 0 6px 20px rgba(204, 53, 52, 0.4); }
-}
-
-/* Bureau Mode Body */
-body.bureau-mode {
-    font-family: var(--font-body);
-    background: var(--bureau-bg-main);
-    color: var(--bureau-text-main);
-    padding: 0;
-    font-size: 14px;
-    line-height: 1.5;
-    text-shadow: 
-        0 0 3px rgba(215, 220, 227, 0.9),
-        -2px 0 0 rgba(255, 0, 0, 0.4),
-        2px 0 0 rgba(0, 255, 255, 0.4);
-    -webkit-font-smoothing: none;
-    filter: blur(0.5px) contrast(1.2) saturate(0.9);
-    animation: 
-        rgb-shift 8s infinite,
-        tracking-error 10s infinite,
-        em-pulse 4s infinite,
-        blackout-glitch 30s infinite;
-    image-rendering: pixelated;
-}
-
-/* Damaged CRT Scanlines - thick and uneven */
-body.bureau-mode::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: 
-        repeating-linear-gradient(
-            0deg,
-            rgba(0, 0, 0, 0.4) 0px,
-            rgba(0, 0, 0, 0.4) 2px,
-            transparent 2px,
-            transparent 4px
-        ),
-        repeating-linear-gradient(
-            0deg,
-            transparent 0px,
-            transparent 100px,
-            rgba(255, 0, 0, 0.03) 100px,
-            rgba(255, 0, 0, 0.03) 102px
-        );
-    pointer-events: none;
-    z-index: 9999;
-    opacity: 0.85;
-    animation: screen-flicker 5s infinite, screen-tear 20s infinite;
-}
-
-/* Static noise overlay */
-body.bureau-mode .container::before {
-    content: '';
-    position: fixed;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-    opacity: 0.08;
-    pointer-events: none;
-    z-index: 9996;
-    animation: static-noise 0.5s steps(10) infinite;
-}
-
-/* CRT Vignette with burn damage */
-body.bureau-mode::after {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: 
-        radial-gradient(
-            ellipse at center,
-            transparent 0%,
-            transparent 40%,
-            rgba(0, 0, 0, 0.6) 100%
-        ),
-        radial-gradient(
-            circle at 20% 80%,
-            rgba(204, 53, 52, 0.1) 0%,
-            transparent 30%
-        ),
-        radial-gradient(
-            circle at 80% 20%,
-            rgba(58, 145, 168, 0.08) 0%,
-            transparent 25%
-        );
-    pointer-events: none;
-    z-index: 9998;
-    animation: burn-in 10s infinite;
-}
-
-body.bureau-mode .container {
-    max-width: 1800px;
-    padding: 0;
-}
-
-body.bureau-mode header {
-    background: var(--bureau-bg-panel);
-    padding: 0.6rem 2rem;
-    border-radius: 0;
-    border-bottom: 3px solid var(--bureau-soviet-red-dark);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.8);
-    margin-bottom: 0;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-}
-
-body.bureau-mode .ideology-icon {
-    display: block;
-    filter: drop-shadow(0 0 12px rgba(204, 53, 52, 0.6));
-}
-
-body.bureau-mode h1 {
-    font-family: var(--font-header);
-    color: var(--bureau-text-main);
-    font-size: 1.6rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    text-shadow: 
-        0 0 5px rgba(215, 220, 227, 1), 
-        0 0 12px rgba(215, 220, 227, 0.7),
-        -4px 0 0 rgba(255, 0, 0, 0.5),
-        4px 0 0 rgba(0, 255, 255, 0.5);
-    animation: vhs-glitch 12s infinite, rgb-shift 8s infinite;
-}
-
-body.bureau-mode h2 {
-    font-family: var(--font-subheader);
-    font-size: 0.9rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--bureau-text-secondary);
-    border-bottom: 2px solid var(--bureau-bg-highlight);
-}
-
-body.bureau-mode .style-toggle-btn {
-    background: linear-gradient(135deg, var(--bureau-bg-inset) 0%, var(--bureau-bg-highlight) 100%);
-    color: var(--bureau-teal);
-    border: 2px solid var(--bureau-teal);
-    border-radius: 0;
-    font-family: var(--font-subheader);
-    font-size: 0.7rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    box-shadow: 0 0 12px rgba(58, 145, 168, 0.3);
-}
-
-body.bureau-mode .style-toggle-btn:hover {
-    background: linear-gradient(135deg, var(--bureau-teal) 0%, var(--bureau-blue) 100%);
-    color: var(--bureau-bg-main);
-    box-shadow: 0 0 20px rgba(58, 145, 168, 0.6);
-}
-
-body.bureau-mode .status {
-    border-radius: 0;
-    font-family: var(--font-subheader);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    border: 2px solid;
-}
-
-body.bureau-mode .status.connected {
-    background: linear-gradient(135deg, #1a3a2e 0%, #0f2419 100%);
-    color: #7FD99A;
-    border-color: #4A8C62;
-    box-shadow: 0 0 16px rgba(127, 217, 154, 0.3);
-}
-
-body.bureau-mode .status.disconnected {
-    background: linear-gradient(135deg, #3a1a1a 0%, #240f0f 100%);
-    color: #E88A87;
-    border-color: var(--bureau-soviet-red-deep);
-    box-shadow: 0 0 16px rgba(232, 138, 135, 0.3);
-}
-
-body.bureau-mode .dashboard {
-    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-    gap: 1.2rem;
-    padding: 1.5rem 2rem;
-}
-
-body.bureau-mode .panel {
-    background: var(--bureau-bg-panel);
-    border: 1px solid var(--bureau-steel);
-    border-radius: 0;
-    padding: 1.2rem 1.5rem;
-    box-shadow: 
-        0 0 0 1px rgba(0, 0, 0, 0.8),
-        inset 0 1px 0 rgba(255, 255, 255, 0.03),
-        0 4px 12px rgba(0, 0, 0, 0.5);
-    position: relative;
-}
-
-body.bureau-mode .panel::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, var(--bureau-teal) 0%, var(--bureau-blue) 100%);
-    opacity: 0.8;
-}
-
-body.bureau-mode .map-panel::before {
-    background: linear-gradient(90deg, var(--bureau-warning) 0%, #E7C660 100%);
-}
-
-body.bureau-mode .logs-panel::before {
-    background: linear-gradient(90deg, var(--bureau-steel) 0%, var(--bureau-text-disabled) 100%);
-}
-
-body.bureau-mode .info-item {
-    background: var(--bureau-bg-inset);
-    padding: 0.6rem 0.9rem;
-    border: 1px solid var(--bureau-bg-highlight);
-    border-left: 3px solid var(--bureau-teal);
-    box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.5);
-}
-
-body.bureau-mode .label {
-    font-size: 0.7rem;
-    color: var(--bureau-text-disabled);
-    font-family: var(--font-subheader);
-    letter-spacing: 0.15em;
-}
-
-body.bureau-mode .value {
-    font-size: 1.25rem;
-    color: var(--bureau-text-main);
-    font-family: var(--font-mono);
-    text-shadow: 0 0 3px rgba(215, 220, 227, 0.9);
-}
-
-body.bureau-mode .badge {
-    border-radius: 0;
-    font-family: var(--font-subheader);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    border: 2px solid;
-}
-
-body.bureau-mode .badge.clear {
-    background: linear-gradient(135deg, #1a3a2e 0%, #0f2419 100%);
-    color: #7FD99A;
-    border-color: #4A8C62;
-}
-
-body.bureau-mode .badge.warning {
-    background: linear-gradient(135deg, #3a321a 0%, #24200f 100%);
-    color: var(--bureau-warning);
-    border-color: #8B7B33;
-}
-
-body.bureau-mode .badge.critical {
-    background: linear-gradient(135deg, #3a1a1a 0%, #240f0f 100%);
-    color: #E88A87;
-    border-color: var(--bureau-soviet-red-deep);
-}
-
-body.bureau-mode .thrust-bar-container label {
-    color: var(--bureau-text-secondary);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    font-family: var(--font-subheader);
-}
-
-body.bureau-mode .thrust-bar {
-    background: var(--bureau-bg-inset);
-    border: 2px solid var(--bureau-bg-highlight);
-    border-radius: 0;
-}
-
-body.bureau-mode .thrust-fill {
-    background: linear-gradient(90deg, var(--bureau-teal) 0%, var(--bureau-blue) 100%);
-    border-radius: 0;
-    box-shadow: 0 0 16px rgba(58, 145, 168, 0.6);
-}
-
-body.bureau-mode .thrust-fill.reverse {
-    background: linear-gradient(90deg, var(--bureau-soviet-red) 0%, var(--bureau-soviet-red-deep) 100%);
-    box-shadow: 0 0 16px rgba(204, 53, 52, 0.6);
-}
-
-body.bureau-mode #map {
-    border-radius: 0;
-    border: 2px solid var(--bureau-bg-highlight);
-}
-
-body.bureau-mode .logs-container {
-    background: var(--bureau-bg-inset);
-    border: 2px solid var(--bureau-bg-highlight);
-    border-radius: 0;
-    font-family: var(--font-mono);
-    color: var(--bureau-text-main);
-}
-
-body.bureau-mode .log-entry {
-    background: rgba(13, 15, 17, 0.6);
-    border-radius: 0;
-    border-left: 3px solid var(--bureau-teal);
-}
-
-body.bureau-mode .log-entry.warning {
-    border-left-color: var(--bureau-warning);
-}
-
-body.bureau-mode .log-entry.error {
-    border-left-color: var(--bureau-soviet-red);
-}
-
-body.bureau-mode .log-entry .timestamp {
-    color: var(--bureau-text-disabled);
-}
-
-/* Config Panel - Bureau Mode */
-body.bureau-mode .config-panel {
-    background: linear-gradient(180deg, var(--bureau-bg-panel) 0%, #0F1216 100%);
-    border: 2px solid rgba(204, 53, 52, 0.3);
-}
-
-body.bureau-mode .config-section {
-    background: linear-gradient(135deg, rgba(26, 31, 38, 0.9) 0%, rgba(13, 15, 17, 0.9) 100%);
-    border: 1px solid rgba(111, 122, 135, 0.4);
-    border-radius: 2px;
-}
-
-body.bureau-mode .config-section h3 {
-    font-family: var(--font-header);
-    color: var(--bureau-soviet-red);
-    letter-spacing: 3px;
-    border-bottom: 1px solid rgba(204, 53, 52, 0.4);
-}
-
-body.bureau-mode .config-item label {
-    color: var(--bureau-text-main);
-}
-
-body.bureau-mode .config-item input {
-    background: linear-gradient(180deg, #0A0C0E 0%, #12161A 100%);
-    border: 2px solid rgba(111, 122, 135, 0.5);
-    color: #4AE88C;
-    border-radius: 2px;
-}
-
-body.bureau-mode .config-item input:focus {
-    border-color: var(--bureau-soviet-red);
-    box-shadow: 0 0 15px rgba(204, 53, 52, 0.4);
-}
-
-body.bureau-mode .config-buttons {
-    border-top: 1px solid rgba(111, 122, 135, 0.3);
-}
-
-body.bureau-mode .config-btn {
-    font-family: var(--font-header);
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    border-radius: 2px;
-}
-
-body.bureau-mode .config-btn.apply {
-    background: linear-gradient(180deg, #2A5A66 0%, #1E4550 50%, #16363F 100%);
-    color: #B8E6F0;
-    border: 2px solid var(--bureau-teal);
-    box-shadow: 0 4px 0 #0F2830, 0 6px 12px rgba(0, 0, 0, 0.4);
-}
-
-body.bureau-mode .config-btn.apply:hover {
-    background: linear-gradient(180deg, #3A7080 0%, #2A5A66 50%, #1E4550 100%);
-    transform: translateY(2px);
-}
-
-body.bureau-mode .config-btn.pid {
-    background: linear-gradient(180deg, #8B7340 0%, #6B5830 50%, #4D4020 100%);
-    color: #F5E6B8;
-    border: 2px solid #B89B50;
-}
-
-body.bureau-mode .config-btn.pid:hover {
-    background: linear-gradient(180deg, #A08850 0%, #8B7340 50%, #6B5830 100%);
-    transform: translateY(2px);
-}
-
-body.bureau-mode .config-btn.restart {
-    background: linear-gradient(180deg, #9A2020 0%, #7A1818 50%, #5A1010 100%);
-    color: #FFD0D0;
-    border: 2px solid var(--bureau-soviet-red);
-    animation: emergency-pulse 3s ease-in-out infinite;
-}
-
-body.bureau-mode .config-btn.restart:hover {
-    background: linear-gradient(180deg, #B82828 0%, #9A2020 50%, #7A1818 100%);
-    animation: none;
-    transform: translateY(2px);
-}
-
-/* Terminal Panel - Bureau Mode */
-body.bureau-mode .terminal-panel {
-    background: linear-gradient(180deg, #0A0C0E 0%, #050607 100%);
-    border: 2px solid rgba(74, 232, 140, 0.3);
-}
-
-body.bureau-mode .terminal-header {
-    background: linear-gradient(180deg, rgba(74, 232, 140, 0.1) 0%, transparent 100%);
-    border-bottom: 1px solid rgba(74, 232, 140, 0.3);
-    border-radius: 0;
-    margin: -1.2rem -1.5rem 15px -1.5rem;
-}
-
-body.bureau-mode .terminal-title {
-    color: #4AE88C;
-    text-shadow: 0 0 10px rgba(74, 232, 140, 0.5);
-}
-
-body.bureau-mode .terminal-btn {
-    color: #4AE88C;
-    background: rgba(74, 232, 140, 0.1);
-    border: 1px solid rgba(74, 232, 140, 0.4);
-    border-radius: 2px;
-}
-
-body.bureau-mode .terminal-btn:hover {
-    background: rgba(74, 232, 140, 0.2);
-    box-shadow: 0 0 10px rgba(74, 232, 140, 0.3);
-}
-
-body.bureau-mode .terminal-container {
-    background: linear-gradient(180deg, #080A0C 0%, #040506 100%);
-    border: 1px solid rgba(74, 232, 140, 0.2);
-    border-radius: 2px;
-}
-
-body.bureau-mode .terminal-line.info .message {
-    color: #4AE88C;
-    text-shadow: 0 0 5px rgba(74, 232, 140, 0.3);
-}
-
-body.bureau-mode .terminal-line.warn .message {
-    color: #E7C660;
-    text-shadow: 0 0 5px rgba(215, 176, 68, 0.3);
-}
-
-body.bureau-mode .terminal-line.error .message {
-    color: #FF6666;
-    text-shadow: 0 0 5px rgba(255, 68, 68, 0.4);
-}
-
-body.bureau-mode .terminal-line.system .message {
-    color: #66CCDD;
-}
-
-body.bureau-mode .boat-marker {
-    filter: drop-shadow(0 0 6px rgba(58, 145, 168, 0.9));
-}
-
-body.bureau-mode .follow-boat-btn {
-    background: rgba(10, 20, 30, 0.9);
-    color: #4AE88C;
-    border: 1px solid rgba(74, 232, 140, 0.4);
-}
-
-body.bureau-mode .follow-boat-btn:hover {
-    background: rgba(20, 40, 60, 0.9);
-    box-shadow: 0 0 10px rgba(74, 232, 140, 0.3);
-}
-
-body.bureau-mode .follow-boat-btn.active {
-    background: rgba(74, 232, 140, 0.3);
-    color: #4AE88C;
-    border-color: #4AE88C;
-    box-shadow: 0 0 15px rgba(74, 232, 140, 0.5);
-}
-
-body.bureau-mode .waypoint-tooltip-container {
-    background: rgba(10, 20, 30, 0.95);
-    border: 1px solid rgba(74, 232, 140, 0.4);
-    box-shadow: 0 0 15px rgba(74, 232, 140, 0.3);
-}
-
-body.bureau-mode .waypoint-tooltip {
-    color: #4AE88C;
-}
-
-body.bureau-mode .waypoint-tooltip strong {
-    color: #4AE88C;
-}
-
-body.bureau-mode .waypoint-tooltip b {
-    color: rgba(74, 232, 140, 0.7);
-}
-
-body.bureau-mode .waypoint-tooltip hr {
-    border-color: rgba(74, 232, 140, 0.3);
-}
-
-/* Scrollbars - Bureau Mode */
-body.bureau-mode .logs-container::-webkit-scrollbar-track,
-body.bureau-mode .terminal-container::-webkit-scrollbar-track {
-    background: var(--bureau-bg-inset);
-}
-
-body.bureau-mode .logs-container::-webkit-scrollbar-thumb,
-body.bureau-mode .terminal-container::-webkit-scrollbar-thumb {
-    background: var(--bureau-steel);
-    border-radius: 0;
-}
-
-body.bureau-mode .logs-container::-webkit-scrollbar-thumb:hover,
-body.bureau-mode .terminal-container::-webkit-scrollbar-thumb:hover {
-    background: var(--bureau-teal);
-}
-
-body.bureau-mode .input-dirty {
-    border-color: #E7C660 !important;
-    box-shadow: 0 0 8px rgba(231, 198, 96, 0.4);
-    background-color: rgba(231, 198, 96, 0.1);
-}
-
-/* Bureau Mode - War Thunder / GTA5 Style Teleop Controls */
-body.bureau-mode .teleop-controls-grid {
-    gap: 15px;
-}
-
-body.bureau-mode .control-group {
-    background: rgba(204, 53, 52, 0.05);
-    border: 1px solid rgba(204, 53, 52, 0.3);
-    border-left: 3px solid var(--bureau-soviet-red);
-}
-
-body.bureau-mode .control-header {
-    color: var(--bureau-soviet-red);
-    border-bottom-color: rgba(204, 53, 52, 0.3);
-    font-family: var(--font-subheader);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-body.bureau-mode .control-keys {
-    color: var(--bureau-text-secondary);
-    font-family: var(--font-body);
-}
-
-body.bureau-mode .control-keys kbd {
-    background: linear-gradient(180deg, var(--bureau-bg-highlight) 0%, var(--bureau-bg-panel) 100%);
-    border: 1px solid var(--bureau-soviet-red);
-    color: var(--bureau-text-main);
-    box-shadow: 0 2px 0 var(--bureau-bg-main);
-}
-
-body.bureau-mode .teleop-features {
-    background: rgba(204, 53, 52, 0.05);
-    border: 1px solid rgba(204, 53, 52, 0.2);
-}
-
-body.bureau-mode .feature-tag {
-    color: var(--bureau-teal);
-    background: rgba(58, 145, 168, 0.1);
-    border-color: rgba(58, 145, 168, 0.4);
-}
-
-body.bureau-mode .instructions-title {
-    color: var(--bureau-soviet-red);
-    font-family: var(--font-subheader);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-body.bureau-mode .joystick-instructions {
-    background: rgba(204, 53, 52, 0.03);
-    border-color: rgba(204, 53, 52, 0.3);
-}
-
-body.bureau-mode .joystick-instructions code {
-    background: var(--bureau-bg-inset);
-    color: var(--bureau-teal);
-    border-left-color: var(--bureau-soviet-red);
-}
-
-
-/* ============================================================ */
-/* ========== TERMINAL MODE (CRT Green Phosphor) ============== */
-/* ============================================================ */
-
-@keyframes terminal-flicker {
-    0%, 100% { opacity: 1; }
-    2% { opacity: 0.9; }
-    4% { opacity: 0.95; }
-    8% { opacity: 0.88; }
-    12% { opacity: 1; }
-    50% { opacity: 0.92; }
-    60% { opacity: 1; }
-}
-
-@keyframes terminal-tracking {
-    0%, 95%, 100% { transform: translateX(0); }
-    96% { transform: translateX(-3px); }
-    97% { transform: translateX(4px); }
-    98% { transform: translateX(-2px); }
-}
-
-@keyframes terminal-value-pulse {
-    0%, 100% { 
-        text-shadow: 0 0 4px rgba(58, 145, 168, 0.9), 0 0 8px rgba(58, 145, 168, 0.5);
-    }
-    50% { 
-        text-shadow: 0 0 6px rgba(58, 145, 168, 1), 0 0 12px rgba(58, 145, 168, 0.6), 0 0 16px rgba(58, 145, 168, 0.3);
-    }
-}
-
-@keyframes terminal-emergency-pulse {
-    0%, 100% { box-shadow: 0 4px 0 #200010, 0 0 15px rgba(255, 51, 102, 0.3); }
-    50% { box-shadow: 0 4px 0 #200010, 0 0 30px rgba(255, 51, 102, 0.6); }
-}
-
-body.terminal-mode {
-    background: var(--terminal-bg);
-    font-family: "Courier New", "Consolas", monospace;
-    color: var(--terminal-text);
-    padding: 0;
-    text-shadow: 
-        0 0 4px var(--terminal-glow),
-        0 0 8px rgba(58, 145, 168, 0.4),
-        0 0 12px rgba(58, 145, 168, 0.2);
-    filter: blur(0.6px) contrast(1.2) brightness(1.05);
-    animation: terminal-flicker 4s infinite, terminal-tracking 20s infinite;
-}
-
-/* Heavy CRT Scanlines */
-body.terminal-mode::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: repeating-linear-gradient(
-        0deg,
-        rgba(0, 0, 0, 0.5) 0px,
-        rgba(0, 0, 0, 0.5) 1px,
-        transparent 1px,
-        transparent 3px
-    );
-    pointer-events: none;
-    z-index: 9999;
-    opacity: 0.9;
-}
-
-/* Strong vignette */
-body.terminal-mode::after {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: radial-gradient(
-        ellipse at center,
-        transparent 0%,
-        transparent 40%,
-        rgba(0, 0, 0, 0.7) 100%
-    );
-    pointer-events: none;
-    z-index: 9998;
-}
-
-body.terminal-mode .container {
-    max-width: 1800px;
-    padding: 0;
-}
-
-body.terminal-mode header {
-    background: var(--terminal-bg);
-    padding: 0.6rem 2rem;
-    border-radius: 0;
-    border-bottom: 2px solid var(--terminal-text);
-    box-shadow: 0 0 25px rgba(58, 145, 168, 0.25);
-    margin-bottom: 0;
-}
-
-body.terminal-mode .ideology-icon {
-    display: block;
-    filter: drop-shadow(0 0 12px var(--terminal-glow));
-}
-
-body.terminal-mode h1,
-body.terminal-mode h2 {
-    font-family: "Courier New", "Consolas", monospace;
-    color: var(--terminal-text);
-    text-shadow: 
-        0 0 5px var(--terminal-glow),
-        0 0 10px rgba(58, 145, 168, 0.4),
-        0 0 15px rgba(58, 145, 168, 0.2);
-    letter-spacing: 0.15em;
-}
-
-body.terminal-mode .style-toggle-btn {
-    background: linear-gradient(135deg, rgba(13, 15, 17, 0.95) 0%, rgba(19, 23, 28, 0.95) 100%);
-    color: var(--terminal-text);
-    border: 1px solid var(--terminal-text);
-    border-radius: 0;
-    box-shadow: 0 0 12px rgba(58, 145, 168, 0.25);
-}
-
-body.terminal-mode .style-toggle-btn:hover {
-    background: linear-gradient(135deg, var(--terminal-text) 0%, var(--terminal-accent) 100%);
-    color: var(--terminal-bg);
-    box-shadow: 0 0 20px var(--terminal-glow);
-}
-
-body.terminal-mode .status {
-    font-family: "Courier New", "Consolas", monospace;
-    border: 1px solid var(--terminal-text);
-    border-radius: 0;
-    box-shadow: 0 0 12px rgba(58, 145, 168, 0.3);
-}
-
-body.terminal-mode .status.connected {
-    background: rgba(20, 40, 50, 0.9);
-    color: var(--terminal-accent);
-    border-color: var(--terminal-accent);
-    text-shadow: 0 0 6px rgba(75, 163, 186, 0.8);
-}
-
-body.terminal-mode .status.disconnected {
-    background: rgba(40, 15, 15, 0.9);
-    color: #CC3534;
-    border-color: #CC3534;
-    text-shadow: 0 0 6px rgba(204, 53, 52, 0.8);
-}
-
-body.terminal-mode .dashboard {
-    gap: 1.2rem;
-    padding: 1.5rem 2rem;
-}
-
-body.terminal-mode .panel {
-    background: rgba(13, 15, 17, 0.95);
-    border: 1px solid #2E7A8E;
-    border-radius: 0;
-    box-shadow: 
-        0 0 15px rgba(58, 145, 168, 0.15),
-        inset 0 0 30px rgba(0, 0, 0, 0.7);
-}
-
-body.terminal-mode .panel::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, var(--terminal-text) 0%, var(--terminal-accent) 100%);
-}
-
-body.terminal-mode .info-item {
-    background: rgba(19, 23, 28, 0.9);
-    border: 1px solid #1E4E5A;
-    border-left: 3px solid var(--terminal-text);
-    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
-}
-
-body.terminal-mode .label {
-    color: #5AAFC4;
-    font-family: "Courier New", "Consolas", monospace;
-    text-shadow: 0 0 3px rgba(90, 175, 196, 0.6);
-}
-
-body.terminal-mode .value {
-    color: var(--terminal-text);
-    font-family: "Courier New", "Consolas", monospace;
-    text-shadow: 0 0 4px var(--terminal-glow), 0 0 8px rgba(58, 145, 168, 0.5);
-    animation: terminal-value-pulse 8s infinite;
-}
-
-body.terminal-mode .badge {
-    font-family: "Courier New", "Consolas", monospace;
-    border: 1px solid;
-    border-radius: 0;
-    text-shadow: 0 0 4px currentColor;
-}
-
-body.terminal-mode .badge.clear {
-    background: rgba(20, 40, 50, 0.9);
-    color: var(--terminal-accent);
-    border-color: var(--terminal-accent);
-}
-
-body.terminal-mode .badge.warning {
-    background: rgba(40, 35, 15, 0.9);
-    color: #D7B044;
-    border-color: #D7B044;
-}
-
-body.terminal-mode .badge.critical {
-    background: rgba(40, 15, 15, 0.9);
-    color: #CC3534;
-    border-color: #CC3534;
-}
-
-body.terminal-mode .thrust-bar-container label {
-    color: #5AAFC4;
-    font-family: "Courier New", "Consolas", monospace;
-    text-shadow: 0 0 3px rgba(90, 175, 196, 0.6);
-}
-
-body.terminal-mode .thrust-bar {
-    background: rgba(19, 23, 28, 0.9);
-    border: 1px solid #1E4E5A;
-    border-radius: 0;
-}
-
-body.terminal-mode .thrust-fill {
-    background: linear-gradient(90deg, var(--terminal-text) 0%, var(--terminal-accent) 100%);
-    border-radius: 0;
-    box-shadow: 0 0 15px var(--terminal-glow);
-}
-
-body.terminal-mode .thrust-fill.reverse {
-    background: linear-gradient(90deg, #CC3534 0%, #A72A2A 100%);
-    box-shadow: 0 0 15px rgba(204, 53, 52, 0.5);
-}
-
-body.terminal-mode #map {
-    border: 1px solid #2E7A8E;
-    border-radius: 0;
-    box-shadow: 0 0 15px rgba(58, 145, 168, 0.15), inset 0 0 30px rgba(0, 0, 0, 0.7);
-    filter: saturate(0.6) brightness(0.8);
-}
-
-body.terminal-mode .logs-container {
-    background: rgba(13, 15, 17, 0.95);
-    border: 1px solid #2E7A8E;
-    border-radius: 0;
-    font-family: "Courier New", "Consolas", monospace;
-    color: var(--terminal-text);
-    text-shadow: 0 0 3px var(--terminal-glow);
-}
-
-body.terminal-mode .log-entry {
-    background: rgba(19, 23, 28, 0.6);
-    border-radius: 0;
-    border-left: 3px solid var(--terminal-text);
-}
-
-body.terminal-mode .log-entry.warning {
-    border-left-color: #D7B044;
-}
-
-body.terminal-mode .log-entry.error {
-    border-left-color: #CC3534;
-}
-
-body.terminal-mode .log-entry .timestamp {
-    color: #2E7A8E;
-}
-
-/* Config Panel - Terminal Mode */
-body.terminal-mode .config-panel {
-    border-color: rgba(51, 204, 255, 0.4);
-    background: linear-gradient(180deg, rgba(0, 15, 25, 0.95) 0%, rgba(0, 8, 15, 0.98) 100%);
-}
-
-body.terminal-mode .config-section {
-    background: linear-gradient(135deg, rgba(0, 30, 50, 0.8) 0%, rgba(0, 15, 25, 0.9) 100%);
-    border: 1px solid rgba(51, 204, 255, 0.3);
-    border-radius: 0;
-}
-
-body.terminal-mode .config-section h3 {
-    font-family: "Courier New", "Consolas", monospace;
-    color: #33CCFF;
-    border-bottom-color: rgba(51, 204, 255, 0.4);
-    text-shadow: 0 0 10px rgba(51, 204, 255, 0.8);
-}
-
-body.terminal-mode .config-item label {
-    color: #88DDFF;
-    font-family: "Courier New", "Consolas", monospace;
-}
-
-body.terminal-mode .config-item input {
-    background: linear-gradient(180deg, #001520 0%, #002030 100%);
-    border: 2px solid rgba(51, 204, 255, 0.4);
-    border-radius: 0;
-    color: #00FF88;
-    text-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
-}
-
-body.terminal-mode .config-item input:focus {
-    border-color: #33CCFF;
-    box-shadow: 0 0 20px rgba(51, 204, 255, 0.5);
-}
-
-body.terminal-mode .config-buttons {
-    border-top-color: rgba(51, 204, 255, 0.3);
-}
-
-body.terminal-mode .config-btn {
-    font-family: "Courier New", "Consolas", monospace;
-    border-radius: 0;
-}
-
-body.terminal-mode .config-btn.apply {
-    background: linear-gradient(180deg, #004060 0%, #003050 50%, #002040 100%);
-    color: #66EEFF;
-    border: 2px solid #33CCFF;
-    box-shadow: 0 4px 0 #001525, 0 0 15px rgba(51, 204, 255, 0.3);
-}
-
-body.terminal-mode .config-btn.apply:hover {
-    background: linear-gradient(180deg, #005580 0%, #004060 50%, #003050 100%);
-    box-shadow: 0 2px 0 #001525, 0 0 25px rgba(51, 204, 255, 0.5);
-}
-
-body.terminal-mode .config-btn.pid {
-    background: linear-gradient(180deg, #606000 0%, #404000 50%, #303000 100%);
-    color: #FFFF66;
-    border: 2px solid #CCCC00;
-    box-shadow: 0 4px 0 #202000, 0 0 15px rgba(204, 204, 0, 0.3);
-}
-
-body.terminal-mode .config-btn.pid:hover {
-    background: linear-gradient(180deg, #808000 0%, #606000 50%, #404000 100%);
-    box-shadow: 0 2px 0 #202000, 0 0 25px rgba(204, 204, 0, 0.5);
-}
-
-body.terminal-mode .config-btn.restart {
-    background: linear-gradient(180deg, #600030 0%, #400020 50%, #300018 100%);
-    color: #FF66AA;
-    border: 2px solid #FF3366;
-    box-shadow: 0 4px 0 #200010, 0 0 15px rgba(255, 51, 102, 0.3);
-    animation: terminal-emergency-pulse 2s ease-in-out infinite;
-}
-
-body.terminal-mode .config-btn.restart:hover {
-    background: linear-gradient(180deg, #800040 0%, #600030 50%, #400020 100%);
-    box-shadow: 0 2px 0 #200010, 0 0 35px rgba(255, 51, 102, 0.7);
-    animation: none;
-}
-
-/* Terminal Panel - Terminal Mode */
-body.terminal-mode .terminal-panel {
-    border-color: rgba(51, 204, 255, 0.4);
-}
-
-body.terminal-mode .terminal-header {
-    background: linear-gradient(180deg, rgba(51, 204, 255, 0.1) 0%, transparent 100%);
-    border-bottom-color: rgba(51, 204, 255, 0.3);
-}
-
-body.terminal-mode .terminal-title {
-    color: #33CCFF;
-    text-shadow: 0 0 10px rgba(51, 204, 255, 0.8);
-}
-
-body.terminal-mode .terminal-btn {
-    color: #33CCFF;
-    background: rgba(51, 204, 255, 0.1);
-    border-color: rgba(51, 204, 255, 0.4);
-}
-
-body.terminal-mode .terminal-container {
-    border-color: rgba(51, 204, 255, 0.2);
-    box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8), inset 0 0 10px rgba(51, 204, 255, 0.05);
-}
-
-body.terminal-mode .terminal-line.info .level,
-body.terminal-mode .terminal-line.info .message {
-    color: #33CCFF;
-    text-shadow: 0 0 8px rgba(51, 204, 255, 0.5);
-}
-
-body.terminal-mode .auto-scroll-label input[type="checkbox"] {
-    accent-color: #33CCFF;
-}
-
-body.terminal-mode .boat-marker {
-    filter: drop-shadow(0 0 8px var(--terminal-glow));
-}
-
-body.terminal-mode .follow-boat-btn {
-    background: rgba(0, 0, 0, 0.9);
-    color: #33CCFF;
-    border: 1px solid rgba(51, 204, 255, 0.4);
-    font-family: 'Courier New', monospace;
-}
-
-body.terminal-mode .follow-boat-btn:hover {
-    background: rgba(51, 204, 255, 0.1);
-    box-shadow: 0 0 10px rgba(51, 204, 255, 0.3);
-}
-
-body.terminal-mode .follow-boat-btn.active {
-    background: rgba(51, 204, 255, 0.2);
-    color: #33CCFF;
-    border-color: #33CCFF;
-    box-shadow: 0 0 15px rgba(51, 204, 255, 0.5);
-}
-
-body.terminal-mode .waypoint-tooltip-container {
-    background: rgba(0, 0, 0, 0.95);
-    border: 1px solid rgba(51, 204, 255, 0.4);
-    box-shadow: 0 0 15px rgba(51, 204, 255, 0.3);
-    font-family: 'Courier New', monospace;
-}
-
-body.terminal-mode .waypoint-tooltip {
-    color: #33CCFF;
-}
-
-body.terminal-mode .waypoint-tooltip strong {
-    color: #33CCFF;
-}
-
-body.terminal-mode .waypoint-tooltip b {
-    color: rgba(51, 204, 255, 0.7);
-}
-
-body.terminal-mode .waypoint-tooltip hr {
-    border-color: rgba(51, 204, 255, 0.3);
-}
-
-body.terminal-mode .input-dirty {
-    border-color: #FFCC00 !important;
-    box-shadow: 0 0 8px rgba(255, 204, 0, 0.4);
-    background-color: rgba(255, 204, 0, 0.1);
-}
-
-/* Terminal Mode - War Thunder / GTA5 Style Teleop Controls */
-body.terminal-mode .teleop-controls-grid {
-    gap: 15px;
-}
-
-body.terminal-mode .control-group {
-    background: rgba(51, 204, 255, 0.05);
-    border: 1px solid rgba(51, 204, 255, 0.3);
-    border-left: 3px solid #33CCFF;
-}
-
-body.terminal-mode .control-header {
-    color: #33CCFF;
-    text-shadow: 0 0 8px rgba(51, 204, 255, 0.5);
-    border-bottom-color: rgba(51, 204, 255, 0.3);
-}
-
-body.terminal-mode .control-keys {
-    color: rgba(51, 204, 255, 0.8);
-    font-family: 'Courier New', monospace;
-}
-
-body.terminal-mode .control-keys kbd {
-    background: linear-gradient(180deg, #1a1a1a 0%, #0d0d0d 100%);
-    border: 1px solid #33CCFF;
-    color: #33CCFF;
-    box-shadow: 0 2px 0 #1a4a5a, 0 0 8px rgba(51, 204, 255, 0.3);
-    text-shadow: 0 0 5px rgba(51, 204, 255, 0.5);
-}
-
-body.terminal-mode .teleop-features {
-    background: rgba(51, 204, 255, 0.05);
-    border: 1px solid rgba(51, 204, 255, 0.2);
-}
-
-body.terminal-mode .feature-tag {
-    color: #33CCFF;
-    background: rgba(51, 204, 255, 0.1);
-    border-color: rgba(51, 204, 255, 0.4);
-    text-shadow: 0 0 5px rgba(51, 204, 255, 0.3);
-}
-
-body.terminal-mode .instructions-title {
-    color: #33CCFF;
-    text-shadow: 0 0 10px rgba(51, 204, 255, 0.5);
-}
-
-body.terminal-mode .joystick-instructions {
-    background: rgba(51, 204, 255, 0.03);
-    border-color: rgba(51, 204, 255, 0.3);
-}
-
-body.terminal-mode .joystick-instructions code {
-    background: rgba(0, 0, 0, 0.5);
-    color: #33FF99;
-    border-left-color: #33CCFF;
-    text-shadow: 0 0 5px rgba(51, 255, 153, 0.5);
-}
-
-/* Scrollbars - Terminal Mode */
-body.terminal-mode .logs-container::-webkit-scrollbar-track,
-body.terminal-mode .terminal-container::-webkit-scrollbar-track {
-    background: var(--terminal-bg);
-}
-
-body.terminal-mode .logs-container::-webkit-scrollbar-thumb,
-body.terminal-mode .terminal-container::-webkit-scrollbar-thumb {
-    background: rgba(51, 204, 255, 0.3);
-    border-radius: 0;
-}
-
-body.terminal-mode .logs-container::-webkit-scrollbar-thumb:hover,
-body.terminal-mode .terminal-container::-webkit-scrollbar-thumb:hover {
-    background: rgba(51, 204, 255, 0.5);
-}
-
-
-/* ============================================================ */
-/* ========== MILSPEC MODE (Warsaw Pact Military) ============= */
-/* ============================================================ */
-/* POST-APOCALYPTIC SOVIET BUNKER TERMINAL                      */
-/* Damaged military equipment after nuclear exchange            */
-/* MIL-STD-1553 / ГОСТ Р 52070-2003 Compliant Visual Design     */
-
-:root {
-    /* MilSpec Colors - Soviet Navy / Warsaw Pact */
-    --milspec-bg-main: #0a0c08;
-    --milspec-bg-panel: #101208;
-    --milspec-bg-inset: #181a10;
-    --milspec-bg-highlight: #202418;
-    --milspec-text-main: #c0d0a0;
-    --milspec-text-secondary: #90a070;
-    --milspec-text-disabled: #506040;
-    --milspec-soviet-red: #cc2020;
-    --milspec-navy-gold: #d4a820;
-    --milspec-phosphor: #40ff40;
-    --milspec-amber: #ff9000;
-    --milspec-steel: #607050;
-    --milspec-warning: #ffcc00;
-    --milspec-critical: #ff2020;
-}
-
-/* MilSpec Animations - INTENSE POST-APOCALYPTIC */
-@keyframes milspec-radar-sweep {
-    0% { opacity: 0.2; transform: rotate(0deg); }
-    25% { opacity: 0.9; }
-    50% { opacity: 0.3; transform: rotate(180deg); }
-    75% { opacity: 0.7; }
-    100% { opacity: 0.2; transform: rotate(360deg); }
-}
-
-@keyframes milspec-alert-flash {
-    0%, 100% { opacity: 1; filter: none; }
-    10% { opacity: 0.2; }
-    20% { opacity: 1; filter: brightness(2); }
-    30% { opacity: 0.3; filter: hue-rotate(20deg); }
-    40% { opacity: 0.9; }
-    50% { opacity: 0.1; filter: saturate(3); }
-    60% { opacity: 1; }
-}
-
-@keyframes milspec-system-pulse {
-    0%, 100% { 
-        box-shadow: inset 0 0 20px rgba(64, 255, 64, 0.1);
-    }
-    50% { 
-        box-shadow: inset 0 0 60px rgba(64, 255, 64, 0.3);
-    }
-}
-
-@keyframes milspec-data-stream {
-    0% { background-position: 0 0; }
-    100% { background-position: 0 200px; }
-}
-
-/* Radiation interference pattern */
-@keyframes milspec-radiation-interference {
-    0%, 100% { 
-        filter: none;
-        transform: scale(1);
-    }
-    5% {
-        filter: brightness(0.3) contrast(2);
-        transform: scale(1.002);
-    }
-    10% {
-        filter: brightness(1.5) hue-rotate(10deg);
-        transform: scale(0.998);
-    }
-    15% {
-        filter: none;
-    }
-    50% {
-        filter: saturate(0.5) brightness(0.8);
-    }
-    52% {
-        filter: saturate(2) brightness(1.3);
-        transform: scale(1.003) skewX(0.2deg);
-    }
-    54% {
-        filter: none;
-        transform: scale(1);
-    }
-}
-
-/* Heavy phosphor burn and screen damage */
-@keyframes milspec-phosphor-burn {
-    0%, 90%, 100% {
-        text-shadow: 
-            0 0 3px rgba(64, 255, 64, 0.8),
-            0 0 10px rgba(64, 255, 64, 0.4);
-    }
-    92% {
-        text-shadow: 
-            0 0 15px rgba(64, 255, 64, 1),
-            0 0 30px rgba(64, 255, 64, 0.8),
-            -5px 0 0 rgba(255, 0, 0, 0.8),
-            5px 0 0 rgba(0, 255, 255, 0.6);
-    }
-    94% {
-        text-shadow: 
-            0 0 5px rgba(255, 255, 255, 1),
-            0 0 20px rgba(64, 255, 64, 0.5),
-            -10px 2px 0 rgba(255, 0, 0, 0.9),
-            8px -1px 0 rgba(0, 255, 255, 0.7);
-    }
-    96% {
-        text-shadow: 
-            0 0 20px rgba(64, 255, 64, 0.6),
-            -3px 0 0 rgba(255, 0, 0, 0.5),
-            3px 0 0 rgba(0, 255, 255, 0.4);
-    }
-}
-
-/* Military CRT vertical roll - severe */
-@keyframes milspec-vertical-roll {
-    0%, 85%, 100% {
-        transform: translateY(0);
-    }
-    87% {
-        transform: translateY(-20px);
-    }
-    89% {
-        transform: translateY(50px);
-    }
-    91% {
-        transform: translateY(-80px);
-    }
-    93% {
-        transform: translateY(30px);
-    }
-    95% {
-        transform: translateY(-10px);
-    }
-}
-
-/* EMP damage effect */
-@keyframes milspec-emp-damage {
-    0%, 95%, 100% {
-        filter: none;
-        opacity: 1;
-    }
-    96% {
-        filter: brightness(0) contrast(0);
-        opacity: 0;
-    }
-    97% {
-        filter: brightness(5) contrast(0.1) saturate(0);
-        opacity: 1;
-    }
-    98% {
-        filter: brightness(0.2) contrast(3) hue-rotate(180deg);
-        opacity: 0.7;
-    }
-    99% {
-        filter: brightness(1.5) saturate(2);
-        opacity: 0.9;
-    }
-}
-
-/* MilSpec Body - POST-APOCALYPTIC */
-body.milspec-mode {
-    font-family: 'Courier New', 'Lucida Console', monospace;
-    background: var(--milspec-bg-main);
-    color: var(--milspec-text-main);
-    padding: 0;
-    text-shadow: 
-        0 0 5px rgba(64, 255, 64, 0.9),
-        0 0 15px rgba(64, 255, 64, 0.4),
-        -2px 0 0 rgba(255, 0, 0, 0.3),
-        2px 0 0 rgba(0, 255, 255, 0.3);
-    letter-spacing: 0.05em;
-    -webkit-font-smoothing: none;
-    animation: 
-        milspec-radiation-interference 15s infinite,
-        milspec-vertical-roll 25s infinite,
-        milspec-emp-damage 45s infinite;
-    filter: contrast(1.1) saturate(0.95);
-}
-
-/* Military Grid Overlay - damaged/incomplete */
-body.milspec-mode::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: 
-        /* Heavy scanlines */
-        repeating-linear-gradient(
-            0deg,
-            rgba(0, 0, 0, 0.5) 0px,
-            rgba(0, 0, 0, 0.5) 2px,
-            transparent 2px,
-            transparent 5px
-        ),
-        /* Damaged grid pattern */
-        repeating-linear-gradient(
-            0deg,
-            transparent 0px,
-            transparent 48px,
-            rgba(64, 255, 64, 0.06) 48px,
-            rgba(64, 255, 64, 0.06) 50px
-        ),
-        repeating-linear-gradient(
-            90deg,
-            transparent 0px,
-            transparent 48px,
-            rgba(64, 255, 64, 0.04) 48px,
-            rgba(64, 255, 64, 0.04) 50px
-        ),
-        /* Interference bars */
-        repeating-linear-gradient(
-            0deg,
-            transparent 0px,
-            transparent 200px,
-            rgba(255, 0, 0, 0.02) 200px,
-            rgba(255, 0, 0, 0.02) 205px,
-            transparent 205px,
-            transparent 400px
-        );
-    pointer-events: none;
-    z-index: 9997;
-    animation: screen-flicker 4s infinite, milspec-data-stream 3s linear infinite;
-}
-
-/* Heavy static noise overlay - radiation damage */
-body.milspec-mode .container::before {
-    content: '';
-    position: fixed;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-    opacity: 0.12;
-    pointer-events: none;
-    z-index: 9996;
-    animation: static-noise 0.3s steps(15) infinite;
-    mix-blend-mode: overlay;
-}
-
-/* Vignette for CRT effect - heavy burn damage */
-body.milspec-mode::after {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: 
-        radial-gradient(
-            ellipse at center,
-            transparent 0%,
-            transparent 35%,
-            rgba(0, 0, 0, 0.7) 100%
-        ),
-        /* Phosphor burn marks */
-        radial-gradient(
-            circle at 15% 85%,
-            rgba(64, 255, 64, 0.08) 0%,
-            transparent 20%
-        ),
-        radial-gradient(
-            circle at 85% 15%,
-            rgba(64, 255, 64, 0.06) 0%,
-            transparent 15%
-        ),
-        /* Red hot spots from CRT damage */
-        radial-gradient(
-            circle at 50% 90%,
-            rgba(255, 0, 0, 0.05) 0%,
-            transparent 10%
-        );
-    pointer-events: none;
-    z-index: 9998;
-    animation: milspec-system-pulse 8s infinite;
-}
-
-body.milspec-mode .container {
-    max-width: 1800px;
-    padding: 0;
-}
-
-/* MilSpec Header - Command Bar */
-body.milspec-mode header {
-    background: linear-gradient(180deg, #181a10 0%, #101208 100%);
-    padding: 0.5rem 1.5rem;
-    border-radius: 0;
-    border-top: 4px solid var(--milspec-soviet-red);
-    border-bottom: 2px solid var(--milspec-navy-gold);
-    box-shadow: 
-        0 4px 20px rgba(0, 0, 0, 0.8),
-        inset 0 -1px 0 rgba(212, 168, 32, 0.3);
-    margin-bottom: 0;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-}
-
-body.milspec-mode .ideology-icon {
-    display: none;
-}
-
-/* Soviet Emblem - Only visible in milspec */
-.milspec-emblem {
-    display: none;
-}
-
-body.milspec-mode .milspec-emblem {
-    display: block;
-    font-size: 2.5rem;
-    color: var(--milspec-soviet-red);
-    text-shadow: 
-        0 0 10px rgba(204, 32, 32, 0.8),
-        0 0 20px rgba(204, 32, 32, 0.4);
-    margin-right: 1rem;
-    animation: milspec-radar-sweep 3s ease-in-out infinite;
-}
-
-/* Military Designation */
-.milspec-designation {
-    display: none;
-}
-
-body.milspec-mode .milspec-designation {
-    display: block;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9rem;
-    font-weight: bold;
-    color: var(--milspec-navy-gold);
-    text-transform: uppercase;
-    letter-spacing: 0.3em;
-    margin-left: 1rem;
-    padding: 0.3rem 0.8rem;
-    border: 2px solid var(--milspec-navy-gold);
-    text-shadow: 0 0 8px rgba(212, 168, 32, 0.6);
-}
-
-body.milspec-mode h1 {
-    font-family: 'Courier New', 'Lucida Console', monospace;
-    color: var(--milspec-phosphor);
-    font-size: 1.3rem;
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    text-shadow: 
-        0 0 5px rgba(64, 255, 64, 0.9), 
-        0 0 10px rgba(64, 255, 64, 0.6),
-        0 0 20px rgba(64, 255, 64, 0.3);
-    animation: milspec-phosphor-burn 12s infinite;
-}
-
-body.milspec-mode h2 {
-    font-family: 'Courier New', monospace;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.2em;
-    color: var(--milspec-navy-gold);
-    border-bottom: 1px solid var(--milspec-navy-gold);
-    text-shadow: 0 0 5px rgba(212, 168, 32, 0.5);
-    padding-bottom: 8px;
-}
-
-body.milspec-mode h2::before {
-    content: "▸ ";
-    color: var(--milspec-phosphor);
-}
-
-body.milspec-mode .style-toggle-btn {
-    background: linear-gradient(180deg, #282a20 0%, #181a10 100%);
-    color: var(--milspec-phosphor);
-    border: 2px solid var(--milspec-phosphor);
-    border-radius: 0;
-    font-family: 'Courier New', monospace;
-    font-size: 0.75rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    box-shadow: 0 0 15px rgba(64, 255, 64, 0.3);
-}
-
-body.milspec-mode .style-toggle-btn:hover {
-    background: var(--milspec-phosphor);
-    color: var(--milspec-bg-main);
-    box-shadow: 0 0 25px rgba(64, 255, 64, 0.6);
-}
-
-body.milspec-mode .status {
-    font-family: 'Courier New', monospace;
-    border: 2px solid;
-    border-radius: 0;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-}
-
-body.milspec-mode .status.connected {
-    background: linear-gradient(180deg, #1a2a10 0%, #102008 100%);
-    color: var(--milspec-phosphor);
-    border-color: var(--milspec-phosphor);
-    box-shadow: 0 0 15px rgba(64, 255, 64, 0.4);
-    text-shadow: 0 0 5px rgba(64, 255, 64, 0.8);
-}
-
-body.milspec-mode .status.disconnected {
-    background: linear-gradient(180deg, #2a1010 0%, #200808 100%);
-    color: var(--milspec-critical);
-    border-color: var(--milspec-critical);
-    animation: milspec-alert-flash 1s infinite;
-    text-shadow: 0 0 5px rgba(255, 32, 32, 0.8);
-}
-
-body.milspec-mode .dashboard {
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-    gap: 1rem;
-    padding: 1rem 1.5rem;
-    background: 
-        linear-gradient(180deg, rgba(16, 18, 8, 0.95) 0%, rgba(10, 12, 8, 1) 100%);
-}
-
-body.milspec-mode .panel {
-    background: linear-gradient(135deg, var(--milspec-bg-panel) 0%, var(--milspec-bg-main) 100%);
-    border: 1px solid var(--milspec-steel);
-    border-radius: 0;
-    padding: 1rem 1.2rem;
-    box-shadow: 
-        inset 0 0 30px rgba(0, 0, 0, 0.5),
-        0 4px 15px rgba(0, 0, 0, 0.6);
-    position: relative;
-    animation: milspec-system-pulse 4s ease-in-out infinite;
-}
-
-body.milspec-mode .panel::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, 
-        var(--milspec-soviet-red) 0%, 
-        var(--milspec-navy-gold) 50%, 
-        var(--milspec-soviet-red) 100%);
-}
-
-body.milspec-mode .panel::after {
-    content: '◆';
-    position: absolute;
-    top: -8px;
-    left: 50%;
-    transform: translateX(-50%);
-    color: var(--milspec-navy-gold);
-    font-size: 12px;
-    text-shadow: 0 0 5px rgba(212, 168, 32, 0.8);
-}
-
-body.milspec-mode .info-item {
-    background: var(--milspec-bg-inset);
-    padding: 0.5rem 0.8rem;
-    border: 1px solid var(--milspec-bg-highlight);
-    border-left: 3px solid var(--milspec-phosphor);
-    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
-}
-
-body.milspec-mode .label {
-    font-size: 0.65rem;
-    color: var(--milspec-text-disabled);
-    font-family: 'Courier New', monospace;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-}
-
-body.milspec-mode .value {
-    font-size: 1.1rem;
-    color: var(--milspec-phosphor);
-    font-family: 'Courier New', monospace;
-    text-shadow: 0 0 5px rgba(64, 255, 64, 0.7);
-}
-
-body.milspec-mode .badge {
-    font-family: 'Courier New', monospace;
-    border: 2px solid;
-    border-radius: 0;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-}
-
-body.milspec-mode .badge.clear {
-    background: linear-gradient(180deg, #1a2a10 0%, #102008 100%);
-    color: var(--milspec-phosphor);
-    border-color: var(--milspec-phosphor);
-    text-shadow: 0 0 5px rgba(64, 255, 64, 0.6);
-}
-
-body.milspec-mode .badge.warning {
-    background: linear-gradient(180deg, #2a2010 0%, #201808 100%);
-    color: var(--milspec-amber);
-    border-color: var(--milspec-amber);
-    text-shadow: 0 0 5px rgba(255, 144, 0, 0.6);
-}
-
-body.milspec-mode .badge.critical {
-    background: linear-gradient(180deg, #2a1010 0%, #200808 100%);
-    color: var(--milspec-critical);
-    border-color: var(--milspec-critical);
-    animation: milspec-alert-flash 0.5s infinite;
-    text-shadow: 0 0 5px rgba(255, 32, 32, 0.8);
-}
-
-body.milspec-mode .thrust-bar-container label {
-    color: var(--milspec-text-secondary);
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    font-family: 'Courier New', monospace;
-}
-
-body.milspec-mode .thrust-bar {
-    background: var(--milspec-bg-inset);
-    border: 2px solid var(--milspec-bg-highlight);
-    border-radius: 0;
-}
-
-body.milspec-mode .thrust-fill {
-    background: linear-gradient(90deg, #206020 0%, var(--milspec-phosphor) 100%);
-    border-radius: 0;
-    box-shadow: 0 0 15px rgba(64, 255, 64, 0.5);
-}
-
-body.milspec-mode .thrust-fill.reverse {
-    background: linear-gradient(90deg, #602020 0%, var(--milspec-critical) 100%);
-    box-shadow: 0 0 15px rgba(255, 32, 32, 0.5);
-}
-
-body.milspec-mode #map {
-    border: 2px solid var(--milspec-steel);
-    border-radius: 0;
-    box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.7);
-    filter: hue-rotate(60deg) saturate(0.5) brightness(0.7) contrast(1.2);
-}
-
-body.milspec-mode .logs-container {
-    background: var(--milspec-bg-main);
-    border: 2px solid var(--milspec-steel);
-    border-radius: 0;
-    font-family: 'Courier New', monospace;
-    color: var(--milspec-phosphor);
-    text-shadow: 0 0 3px rgba(64, 255, 64, 0.5);
-}
-
-body.milspec-mode .log-entry {
-    background: rgba(16, 18, 8, 0.8);
-    border-radius: 0;
-    border-left: 3px solid var(--milspec-phosphor);
-}
-
-body.milspec-mode .log-entry.warning {
-    border-left-color: var(--milspec-amber);
-    color: var(--milspec-amber);
-}
-
-body.milspec-mode .log-entry.error {
-    border-left-color: var(--milspec-critical);
-    color: var(--milspec-critical);
-}
-
-body.milspec-mode .log-entry .timestamp {
-    color: var(--milspec-text-disabled);
-}
-
-/* Config Panel - MilSpec Mode */
-body.milspec-mode .config-panel {
-    border: 2px solid var(--milspec-soviet-red);
-    background: linear-gradient(180deg, var(--milspec-bg-panel) 0%, var(--milspec-bg-main) 100%);
-}
-
-body.milspec-mode .config-section {
-    background: linear-gradient(135deg, var(--milspec-bg-inset) 0%, var(--milspec-bg-main) 100%);
-    border: 1px solid var(--milspec-steel);
-    border-radius: 0;
-}
-
-body.milspec-mode .config-section h3 {
-    font-family: 'Courier New', monospace;
-    color: var(--milspec-soviet-red);
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    border-bottom: 1px solid var(--milspec-soviet-red);
-    text-shadow: 0 0 8px rgba(204, 32, 32, 0.5);
-}
-
-body.milspec-mode .config-item label {
-    color: var(--milspec-text-main);
-    font-family: 'Courier New', monospace;
-    font-size: 0.75rem;
-}
-
-body.milspec-mode .config-item input {
-    background: linear-gradient(180deg, #080a04 0%, #101208 100%);
-    border: 2px solid var(--milspec-steel);
-    border-radius: 0;
-    color: var(--milspec-phosphor);
-    text-shadow: 0 0 5px rgba(64, 255, 64, 0.5);
-    font-family: 'Courier New', monospace;
-}
-
-body.milspec-mode .config-item input:focus {
-    border-color: var(--milspec-phosphor);
-    box-shadow: 0 0 15px rgba(64, 255, 64, 0.4);
-}
-
-body.milspec-mode .config-buttons {
-    border-top: 1px solid var(--milspec-steel);
-}
-
-body.milspec-mode .config-btn {
-    font-family: 'Courier New', monospace;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    border-radius: 0;
-    font-size: 0.75rem;
-}
-
-body.milspec-mode .config-btn.apply {
-    background: linear-gradient(180deg, #204020 0%, #183018 50%, #102010 100%);
-    color: var(--milspec-phosphor);
-    border: 2px solid var(--milspec-phosphor);
-    box-shadow: 0 4px 0 #081008, 0 0 15px rgba(64, 255, 64, 0.3);
-}
-
-body.milspec-mode .config-btn.apply:hover {
-    background: linear-gradient(180deg, #306030 0%, #204020 50%, #183018 100%);
-    box-shadow: 0 2px 0 #081008, 0 0 25px rgba(64, 255, 64, 0.5);
-}
-
-body.milspec-mode .config-btn.pid {
-    background: linear-gradient(180deg, #403010 0%, #302008 50%, #201008 100%);
-    color: var(--milspec-amber);
-    border: 2px solid var(--milspec-amber);
-}
-
-body.milspec-mode .config-btn.pid:hover {
-    background: linear-gradient(180deg, #504020 0%, #403010 50%, #302008 100%);
-}
-
-body.milspec-mode .config-btn.restart {
-    background: linear-gradient(180deg, #401010 0%, #300808 50%, #200404 100%);
-    color: var(--milspec-critical);
-    border: 2px solid var(--milspec-critical);
-    animation: milspec-alert-flash 2s infinite;
-}
-
-body.milspec-mode .config-btn.restart:hover {
-    animation: none;
-    background: linear-gradient(180deg, #602020 0%, #401010 50%, #300808 100%);
-}
-
-/* Terminal Panel - MilSpec Mode */
-body.milspec-mode .terminal-panel {
-    background: linear-gradient(180deg, #080a04 0%, #040604 100%);
-    border: 2px solid var(--milspec-phosphor);
-}
-
-body.milspec-mode .terminal-header {
-    background: linear-gradient(180deg, rgba(64, 255, 64, 0.1) 0%, transparent 100%);
-    border-bottom: 1px solid rgba(64, 255, 64, 0.3);
-    border-radius: 0;
-    margin: -1rem -1.2rem 15px -1.2rem;
-}
-
-body.milspec-mode .terminal-title {
-    color: var(--milspec-phosphor);
-    text-shadow: 0 0 10px rgba(64, 255, 64, 0.6);
-    font-family: 'Courier New', monospace;
-}
-
-body.milspec-mode .terminal-btn {
-    color: var(--milspec-phosphor);
-    background: rgba(64, 255, 64, 0.1);
-    border: 1px solid rgba(64, 255, 64, 0.4);
-    border-radius: 0;
-    font-family: 'Courier New', monospace;
-}
-
-body.milspec-mode .terminal-btn:hover {
-    background: rgba(64, 255, 64, 0.2);
-    box-shadow: 0 0 10px rgba(64, 255, 64, 0.4);
-}
-
-body.milspec-mode .terminal-container {
-    background: linear-gradient(180deg, #040604 0%, #020402 100%);
-    border: 1px solid rgba(64, 255, 64, 0.3);
-    border-radius: 0;
-    animation: milspec-data-stream 10s linear infinite;
-}
-
-body.milspec-mode .terminal-line.info .message {
-    color: var(--milspec-phosphor);
-    text-shadow: 0 0 5px rgba(64, 255, 64, 0.5);
-}
-
-body.milspec-mode .terminal-line.warn .message {
-    color: var(--milspec-amber);
-    text-shadow: 0 0 5px rgba(255, 144, 0, 0.5);
-}
-
-body.milspec-mode .terminal-line.error .message {
-    color: var(--milspec-critical);
-    text-shadow: 0 0 5px rgba(255, 32, 32, 0.6);
-}
-
-body.milspec-mode .terminal-line.system .message {
-    color: var(--milspec-navy-gold);
-}
-
-body.milspec-mode .boat-marker {
-    filter: drop-shadow(0 0 8px rgba(64, 255, 64, 0.9));
-}
-
-body.milspec-mode .follow-boat-btn {
-    background: var(--milspec-bg-inset);
-    color: var(--milspec-phosphor);
-    border: 1px solid rgba(64, 255, 64, 0.4);
-}
-
-body.milspec-mode .follow-boat-btn:hover {
-    background: var(--milspec-bg-highlight);
-    box-shadow: 0 0 10px rgba(64, 255, 64, 0.4);
-}
-
-body.milspec-mode .follow-boat-btn.active {
-    background: rgba(64, 255, 64, 0.3);
-    color: var(--milspec-phosphor);
-    border-color: var(--milspec-phosphor);
-    box-shadow: 0 0 15px rgba(64, 255, 64, 0.6);
-}
-
-body.milspec-mode .waypoint-tooltip-container {
-    background: rgba(16, 18, 8, 0.95);
-    border: 1px solid rgba(64, 255, 64, 0.5);
-    box-shadow: 0 0 15px rgba(64, 255, 64, 0.3);
-}
-
-body.milspec-mode .waypoint-tooltip {
-    color: var(--milspec-phosphor);
-    font-family: 'Courier New', monospace;
-}
-
-body.milspec-mode .waypoint-tooltip strong {
-    color: var(--milspec-phosphor);
-}
-
-body.milspec-mode .waypoint-tooltip b {
-    color: var(--milspec-text-secondary);
-}
-
-body.milspec-mode .waypoint-tooltip hr {
-    border-color: rgba(64, 255, 64, 0.3);
-}
-
-/* Mission Control Panel - MilSpec Mode */
-body.milspec-mode .mission-control-panel {
-    background: linear-gradient(135deg, #101208 0%, #0a0c08 100%);
-    border: 2px solid var(--milspec-soviet-red);
-}
-
-body.milspec-mode .mission-control-panel h2 {
-    color: var(--milspec-soviet-red);
-    border-bottom-color: var(--milspec-soviet-red);
-}
-
-body.milspec-mode .mission-control-panel h2::before {
-    content: "★ ";
-    color: var(--milspec-navy-gold);
-}
-
-body.milspec-mode .mission-status-bar {
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid var(--milspec-steel);
-}
-
-body.milspec-mode .mission-badge {
-    border-radius: 0;
-    font-family: 'Courier New', monospace;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    border: 2px solid;
-}
-
-body.milspec-mode .mission-badge.idle {
-    background: var(--milspec-bg-inset);
-    color: var(--milspec-text-secondary);
-    border-color: var(--milspec-steel);
-}
-
-body.milspec-mode .mission-badge.running {
-    background: linear-gradient(180deg, #1a2a10 0%, #102008 100%);
-    color: var(--milspec-phosphor);
-    border-color: var(--milspec-phosphor);
-    animation: milspec-alert-flash 1s infinite;
-}
-
-body.milspec-mode .mission-step {
-    background: rgba(0, 0, 0, 0.4);
-    border-radius: 0;
-    border-left: 4px solid var(--milspec-navy-gold);
-}
-
-body.milspec-mode .mission-step h3 {
-    color: var(--milspec-navy-gold);
-    font-family: 'Courier New', monospace;
-}
-
-body.milspec-mode .mission-btn {
-    border-radius: 0;
-    font-family: 'Courier New', monospace;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    border: 2px solid;
-}
-
-body.milspec-mode .mission-btn.start {
-    background: linear-gradient(180deg, #204020 0%, #183018 50%, #102010 100%);
-    color: var(--milspec-phosphor);
-    border-color: var(--milspec-phosphor);
-    box-shadow: 0 4px 0 #081008;
-}
-
-body.milspec-mode .mission-btn.stop {
-    background: linear-gradient(180deg, #401010 0%, #300808 50%, #200404 100%);
-    color: var(--milspec-critical);
-    border-color: var(--milspec-critical);
-    box-shadow: 0 4px 0 #100404;
-}
-
-body.milspec-mode .mission-btn.home {
-    background: linear-gradient(180deg, #302010 0%, #201808 50%, #101008 100%);
-    color: var(--milspec-navy-gold);
-    border-color: var(--milspec-navy-gold);
-}
-
-body.milspec-mode .config-item-inline input {
-    background: var(--milspec-bg-main);
-    border: 1px solid var(--milspec-steel);
-    color: var(--milspec-phosphor);
-    font-family: 'Courier New', monospace;
-}
-
-/* Scrollbars - MilSpec Mode */
-body.milspec-mode .logs-container::-webkit-scrollbar-track,
-body.milspec-mode .terminal-container::-webkit-scrollbar-track {
-    background: var(--milspec-bg-main);
-}
-
-body.milspec-mode .logs-container::-webkit-scrollbar-thumb,
-body.milspec-mode .terminal-container::-webkit-scrollbar-thumb {
-    background: var(--milspec-steel);
-    border-radius: 0;
-}
-
-body.milspec-mode .logs-container::-webkit-scrollbar-thumb:hover,
-body.milspec-mode .terminal-container::-webkit-scrollbar-thumb:hover {
-    background: var(--milspec-phosphor);
-}
-
-/* MilSpec responsive */
-@media (max-width: 1400px) {
-    body.milspec-mode .map-panel,
-    body.milspec-mode .logs-panel,
-    body.milspec-mode .config-panel,
-    body.milspec-mode .terminal-panel {
-        grid-column: span 1;
-    }
-}
-
-@media (max-width: 900px) {
-    body.milspec-mode .dashboard {
-        grid-template-columns: 1fr;
-        padding: 1rem;
-    }
-    
-    body.milspec-mode header {
-        flex-direction: column;
-        gap: 1rem;
-        text-align: center;
-        padding: 1rem;
-    }
-    
-    body.milspec-mode .header-left,
-    body.milspec-mode .header-right {
-        flex-direction: column;
-        gap: 0.8rem;
-    }
-    
-    body.milspec-mode .milspec-emblem {
-        font-size: 2rem;
-    }
-    
-    body.milspec-mode h1 {
-        font-size: 1.1rem;
-    }
-}
-
-
-/* Responsive - Bureau/Terminal Mode */
-@media (max-width: 1400px) {
-    body.bureau-mode .map-panel,
-    body.bureau-mode .logs-panel,
-    body.bureau-mode .config-panel,
-    body.bureau-mode .terminal-panel,
-    body.terminal-mode .map-panel,
-    body.terminal-mode .logs-panel,
-    body.terminal-mode .config-panel,
-    body.terminal-mode .terminal-panel {
-        grid-column: span 1;
-    }
-}
-
-@media (max-width: 900px) {
-    body.bureau-mode .dashboard,
-    body.terminal-mode .dashboard {
-        grid-template-columns: 1fr;
-        padding: 1rem;
-    }
-    
-    body.bureau-mode header,
-    body.terminal-mode header {
-        flex-direction: column;
-        gap: 1rem;
-        text-align: center;
-        padding: 1rem;
-    }
-    
-    body.bureau-mode .header-left,
-    body.bureau-mode .header-right,
-    body.terminal-mode .header-left,
-    body.terminal-mode .header-right {
-        flex-direction: column;
-        gap: 0.8rem;
-    }
-    
-    body.bureau-mode .ideology-icon,
-    body.terminal-mode .ideology-icon {
-        height: 2.2rem;
-    }
-    
-    body.bureau-mode h1,
-    body.terminal-mode h1 {
-        font-size: 1.3rem;
     }
 }

@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 """
-Modular Navigation Launch File
-Système de Navigation Modulaire - French Academic Edition
+Modular Navigation Launch File (v2.1)
 
-Launches the modular Vostok1-based navigation system:
-- oko_perception (plan package) - ŒIL - 3D LIDAR processing
-- sputnik_planner (plan package) - SPOUTNIK - GPS waypoint planning
-- buran_controller (control package) - BOURANE - PID control with obstacle avoidance
+Launches the modular Vostok1-based navigation system with AllInOneStack enhancements:
+- oko_perception (plan package) - OKO v2.1 - 3D LIDAR + LaserScan fusion, VFH steering
+- sputnik_planner (plan package) - SPUTNIK v2.1 - GPS waypoint planning with hazard zones
+- buran_controller (control package) - BURAN - PID control with obstacle avoidance
+
+v2.1 Enhancements (ported from AllInOneStack):
+- VFH steering for gap-finding navigation
+- Polar histogram for smooth steering bias
+- LaserScan + PointCloud2 fusion for robust detection
+- Hazard zone pre-planning support
+- Extended detection horizon (60m full_clear_distance)
 
 Usage:
     ros2 launch plan vostok1_modular_navigation.launch.py
-    
+
     # With custom PID gains:
     ros2 launch plan vostok1_modular_navigation.launch.py kp:=500.0 ki:=30.0 kd:=150.0
 """
@@ -69,17 +75,17 @@ def generate_launch_description():
     
     base_speed_arg = DeclareLaunchArgument(
         'base_speed',
-        default_value='500.0',
+        default_value='1000.0',
         description='Base thrust speed when moving forward'
     )
     
     max_speed_arg = DeclareLaunchArgument(
         'max_speed',
-        default_value='800.0',
+        default_value='2000.0',
         description='Maximum thrust speed limit'
     )
 
-    # ŒIL Perception Node - 3D LIDAR Processing
+    # OKO Perception Node - 3D LIDAR Processing (v2.1)
     # Parameters tuned for lake bank and harbour detection
     oko_perception = Node(
         package='plan',
@@ -92,8 +98,8 @@ def generate_launch_description():
             'hysteresis_distance': 1.5,
             'min_height': -15.0,     # Catch lake bank, harbour, water-level obstacles
             'max_height': 10.0,      # Catch tall structures
-            'min_range': 5.0,        # Ignore spawn dock and boat structure
-            'max_range': 50.0,
+            'min_range': 3.0,        # Reduced: detect closer obstacles (was 5.0)
+            'max_range': 60.0,       # Increased: longer detection range (was 50.0)
             'sample_rate': 1,        # Process ALL points for maximum detection
             # Enhanced OKO v2.0 parameters (tuned for faster response)
             'temporal_history_size': 3,      # Reduced: faster response
@@ -102,10 +108,24 @@ def generate_launch_description():
             'min_cluster_size': 3,           # Reduced: detect smaller obstacles
             'water_plane_threshold': 0.5,    # Tolerance for water plane removal (m)
             'velocity_history_size': 5,      # Reduced: faster velocity estimate
+            # === v2.1: VFH Steering (from AllInOneStack) ===
+            'vfh_enabled': True,             # Enable VFH gap-finding
+            'vfh_bin_deg': 5.0,              # VFH bin angle (degrees)
+            'vfh_block_dist': 15.0,          # VFH blocking distance (m)
+            'vfh_clearance_deg': 10.0,       # Inflation clearance (degrees)
+            # === v2.1: Polar Histogram (from AllInOneStack) ===
+            'polar_enabled': True,           # Enable polar histogram bias
+            'polar_weight_power': 1.0,       # Weight power for distance
+            # === v2.1: LaserScan Fusion ===
+            'laserscan_enabled': True,       # Enable LaserScan fusion
+            'laserscan_topic': '/wamv/sensors/lidars/lidar_wamv_sensor/scan',
+            'laserscan_topic_alt': '/wamv/sensors/lidars/lidar_wamv/scan',
+            # === v2.1: Extended Detection Horizon ===
+            'full_clear_distance': 60.0,     # Force avoidance trigger distance (m)
         }]
     )
 
-    # SPOUTNIK Planner Node - GPS Waypoint Navigation
+    # SPUTNIK Planner Node - GPS Waypoint Navigation (v2.1)
     sputnik_planner = Node(
         package='plan',
         executable='sputnik_planner',
@@ -115,12 +135,20 @@ def generate_launch_description():
             'scan_length': LaunchConfiguration('scan_length'),
             'scan_width': LaunchConfiguration('scan_width'),
             'lanes': LaunchConfiguration('lanes'),
-            'waypoint_tolerance': 2.0,
-            'waypoint_skip_timeout': 45.0,  # Skip waypoint if obstacle blocks
+            'waypoint_tolerance': 1.0,                         # Reduced from 2.0m - stricter tolerance
+            'waypoint_skip_timeout': 20.0,                     # Reduced from 45s - faster skip
+            # === v2.1: Hazard Zone Planning (from AllInOneStack) ===
+            'hazard_enabled': False,         # Set to True and provide hazard_world_boxes to enable
+            'hazard_boxes': '',              # Local frame boxes: "xmin,ymin,xmax,ymax;..."
+            'hazard_world_boxes': '',        # World frame boxes (see hazard_world_boxes.yaml)
+            'hazard_origin_world_x': 0.0,    # Origin for world->local conversion
+            'hazard_origin_world_y': 0.0,
+            'plan_avoid_margin': 5.0,        # Planning detour margin (m)
+            'hull_radius': 1.5,              # Boat hull radius for clearance (m)
         }]
     )
 
-    # BOURANE Navigation Controller - PID Control
+    # BURAN Navigation Controller - PID Control (v2.1)
     buran_controller = Node(
         package='control',
         executable='buran_controller',
@@ -132,15 +160,19 @@ def generate_launch_description():
             'kd': LaunchConfiguration('kd'),
             'base_speed': LaunchConfiguration('base_speed'),
             'max_speed': LaunchConfiguration('max_speed'),
-            # Obstacle Avoidance
+            # === Obstacle Avoidance (v2.1: increased horizon) ===
             'obstacle_slow_factor': 0.3,
-            'critical_distance': 5.0,
+            'critical_distance': 10.0,      # Increased: hard stop distance (v2.1: increased from 5.0)
             'reverse_timeout': 5.0,
-            # Smart Anti-Stuck System (SASS)
+            # === Smart Anti-Stuck System (SASS) ===
             'stuck_timeout': 3.0,
             'stuck_threshold': 0.5,
-            'no_go_zone_radius': 8.0,
-            'detour_distance': 12.0,
+            'no_go_zone_radius': 10.0,      # Increased: larger no-go zones (v2.1: was 8.0)
+            'detour_distance': 15.0,        # Increased: longer detours (v2.1: was 12.0)
+            # === Kalman Filter Tuning ===
+            'kalman_process_noise': 0.01,
+            'kalman_measurement_noise': 0.5,
+            'drift_compensation_gain': 0.3,
         }]
     )
 
