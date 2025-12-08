@@ -250,23 +250,33 @@ class AtlantisController(Node):
         y = d_lon * R * math.cos(lat0)
         return y, x
 
-    #  Helper to check if target line is blocked 
+    # --- FIX: Check blocked but respect sensor limits ---
     def check_waypoint_blocked(self, angle_to_target, dist_to_target):
         # Normalize angle
         while angle_to_target > math.pi: angle_to_target -= 2.0 * math.pi
         while angle_to_target < -math.pi: angle_to_target += 2.0 * math.pi
         
         is_blocked = False
-        check_dist = dist_to_target - 2.0 # Check slightly shorter than full distance
-        if check_dist < 1.0: return False # Too close to worry
+        check_dist = dist_to_target - 2.0 
+        if check_dist < 1.0: return False 
+
+        # SENSOR LIMIT: Don't check for obstacles beyond 95m
+        # If the target is 150m away, we only care if there is an obstacle < 95m
+        sensor_limit = 95.0 
         
-        # Check specific sector
-        if -0.7 < angle_to_target < 0.7:  # Front Sector
-            if self.front_clear < check_dist: is_blocked = True
-        elif angle_to_target >= 0.7:      # Left Sector
-            if self.left_clear < check_dist: is_blocked = True
-        elif angle_to_target <= -0.7:     # Right Sector
-            if self.right_clear < check_dist: is_blocked = True
+        sector_clearance = 100.0 # Default clear
+        
+        if -0.7 < angle_to_target < 0.7:    # Front
+            sector_clearance = self.front_clear
+        elif angle_to_target >= 0.7:        # Left
+            sector_clearance = self.left_clear
+        elif angle_to_target <= -0.7:       # Right
+            sector_clearance = self.right_clear
+            
+        # We are blocked ONLY if the sector sees a REAL obstacle (clearance < sensor_limit)
+        # AND that obstacle is closer than the target
+        if sector_clearance < sensor_limit and sector_clearance < check_dist:
+            is_blocked = True
             
         return is_blocked
 
@@ -310,8 +320,7 @@ class AtlantisController(Node):
             
             elapsed_blocked = (now - self.blocked_start_time).nanoseconds / 1e9
             
-            # [NEW] Smart Threshold: Skip fast if obstacle is close!
-            # If obstacle is closer than 8m, we assume it's a solid blockage (Pier).
+            # [NEW] Smart Threshold: Skip fast if obstacle is close (Pier/Wall)!
             is_critical_block = self.min_obstacle_distance < 8.0 
             
             # Use 2.0s for critical blocks, otherwise use the standard 15.0s
@@ -327,7 +336,6 @@ class AtlantisController(Node):
                 self.integral_error = 0.0
                 return # Skip this loop immediately
         else:
-            # Reset if we get a glimpse of the target
             self.blocked_start_time = None
         # -------------------------------------------
         
@@ -705,16 +713,21 @@ class AtlantisController(Node):
         })
         self.pub_anti_stuck.publish(msg)
 
+# --- FIX: SAFE SHUTDOWN WRAPPER ---
 def main(args=None):
     rclpy.init(args=args)
     node = AtlantisController()
-    try: rclpy.spin(node)
+    try:
+        rclpy.spin(node)
     except KeyboardInterrupt:
-        node.stop_boat()
-        time.sleep(0.1) 
+        pass # Graceful exit on Ctrl+C
     finally:
+        node.get_logger().info("🛑 STOPPING MOTORS...")
+        node.stop_boat()
+        time.sleep(0.5) # Give ROS time to publish the stop command
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

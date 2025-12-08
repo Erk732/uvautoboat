@@ -115,12 +115,13 @@ class AtlantisPlanner(Node):
         self.get_logger().info("Atlantis Planner with camera smoke detection initialized")
 
 
-        # Auto Start
-        threading.Timer(2.0, self.generate_lawnmower_path).start()
+        # --- FIX: DISABLED AUTO-START ---
+        # threading.Timer(2.0, self.generate_lawnmower_path).start()
+        
         self.input_thread = threading.Thread(target=self.input_loop, daemon=True)
         self.input_thread.start()
         
-        self.get_logger().info("Atlantis Planner Started")
+        self.get_logger().info("Atlantis Planner Started (Waiting for 'r' command)")
 
     def input_loop(self):
         time.sleep(1.0)
