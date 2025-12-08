@@ -118,7 +118,7 @@ class AtlantisPlanner(Node):
         self.path_pub = self.create_publisher(Path, '/atlantis/path', 10)
         
         self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, 10)
-        # NEW: Need IMU for rotation
+        # IMU required for rotation
         self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_callback, 10)
         self.create_subscription(String, '/perception/obstacle_info', self.obstacle_callback, 10)
         self.create_subscription(String, '/planning/detour_request', self.detour_callback, 10)
@@ -129,7 +129,7 @@ class AtlantisPlanner(Node):
         self.start_gps = None
         self.current_gps = None
         self.current_local_pos = (0.0, 0.0)
-        self.current_yaw = 0.0  # NEW: Track heading
+        self.current_yaw = 0.0  # Track heading
         self.mission_state = "IDLE" 
         self.known_obstacles = [] 
         
@@ -191,6 +191,8 @@ class AtlantisPlanner(Node):
         try:
             data = json.loads(msg.data)
             if 'clusters' in data:
+                if len(data['clusters']) > 0:
+                    self.get_logger().info(f"Planner received {len(data['clusters'])} obstacles from OKO", throttle_duration_sec=2.0)
                 self.known_obstacles = []
                 
                 boat_x, boat_y = self.current_local_pos
