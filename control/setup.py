@@ -4,7 +4,7 @@ package_name = 'control'
 
 setup(
     name=package_name,
-    version='0.0.0',
+    version='0.1.0',
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -13,14 +13,26 @@ setup(
         ('share/' + package_name + '/launch', [
             'launch/all_in_one_bringup.launch.py',
         ]),
+        ('share/' + package_name + '/config', [
+            'config/hazard_world_boxes.yaml',
+        ]),
     ],
-    install_requires=['setuptools'],
+    install_requires=[
+        'setuptools',
+        'numpy',
+    ],
     zip_safe=True,
     maintainer='ghostzero',
     maintainer_email='yinpuchen0@gmail.com',
     description='Control package for VRX WAM-V thruster-based path following.',
     license='Apache-2.0',
     tests_require=['pytest'],
+    python_requires='>=3.10',
+    classifiers=[
+        'Programming Language :: Python :: 3',
+        'License :: OSI Approved :: Apache Software License',
+        'Operating System :: OS Independent',
+    ],
     extras_require={
         'test': [
             'pytest',

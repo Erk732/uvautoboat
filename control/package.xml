@@ -2,10 +2,11 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>control</name>
-  <version>0.0.0</version>
+  <version>0.1.0</version>
   <description>Control package for VRX WAM-V thruster-based path following.</description>
   <maintainer email="yinpuchen0@gmail.com">ghostzero</maintainer>
   <license>Apache-2.0</license>
+  <url type="repository">https://github.com/Erk732/uvautoboat</url>
 
   <buildtool_depend>ament_python</buildtool_depend>
 
@@ -18,6 +19,7 @@
   <exec_depend>sensor_msgs_py</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>tf2_geometry_msgs</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
