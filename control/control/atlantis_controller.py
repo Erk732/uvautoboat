@@ -17,16 +17,16 @@ class AtlantisController(Node):
         # --- PARAMETERS ---
         self.declare_parameter('base_speed', 500.0)
         self.declare_parameter('max_speed', 800.0)
-        self.declare_parameter('waypoint_tolerance', 3.0) # Increased tolerance slightly
-        self.declare_parameter('kp', 400.0)
+        self.declare_parameter('waypoint_tolerance', 3.0)
+        self.declare_parameter('kp', 450.0) # Increased slightly for better heading hold
         self.declare_parameter('ki', 20.0)
-        self.declare_parameter('kd', 100.0)
+        self.declare_parameter('kd', 120.0)
         
         # --- OBSTACLE PARAMETERS ---
         self.declare_parameter('min_safe_distance', 6.0)
         self.declare_parameter('critical_distance', 3.0)
-        self.declare_parameter('obstacle_slow_factor', 0.08)  
-        self.declare_parameter('hysteresis_distance', 2.5)   
+        self.declare_parameter('obstacle_slow_factor', 0.2) # Increased speed during avoidance
+        self.declare_parameter('hysteresis_distance', 2.0)   
         self.declare_parameter('reverse_timeout', 10.0)    
 
         # Stuck detection & Waypoint Skipping
@@ -136,15 +136,12 @@ class AtlantisController(Node):
         self.get_logger().info("Atlantis Controller Ready - Waiting for GPS and Path...")
 
     def path_callback(self, msg):
-        if self.escape_mode or self.is_stuck:
-            return
+        if self.escape_mode or self.is_stuck: return
         try:
             new_waypoints = []
             for pose in msg.poses:
                 new_waypoints.append((pose.pose.position.x, pose.pose.position.y))
-            
             if len(new_waypoints) < 2: return
-            
             if new_waypoints != self.waypoints:
                 self.waypoints = new_waypoints
                 self.current_wp_index = 0
@@ -152,12 +149,10 @@ class AtlantisController(Node):
                 self.current_path_version += 1
                 self.waypoint_start_time = self.get_clock().now()
                 self.blocked_start_time = None
-                
                 if self.start_gps is not None:
                     self.mission_enabled = True
                     self.state = "DRIVING"
-        except Exception as e:
-            self.get_logger().error(f"Path callback error: {e}")
+        except Exception as e: self.get_logger().error(f"Path callback error: {e}")
 
     def gps_callback(self, msg):
         self.current_gps = (msg.latitude, msg.longitude)
@@ -169,8 +164,7 @@ class AtlantisController(Node):
 
     def start_callback(self, msg):
         self.mission_enabled = True
-        if self.start_gps is not None and len(self.waypoints) > 0:
-            self.state = "DRIVING"
+        if self.start_gps is not None and len(self.waypoints) > 0: self.state = "DRIVING"
 
     def stop_callback(self, msg):
         self.mission_enabled = False
@@ -184,14 +178,9 @@ class AtlantisController(Node):
         self.current_yaw = math.atan2(siny_cosp, cosy_cosp)
 
     def lidar_callback(self, msg):
-        point_step = msg.point_step
-        self.lidar_detector.z_filter_enabled = False 
-        
-        detected_obstacles = self.lidar_detector.process_pointcloud(msg.data, point_step, sampling_factor=10)
+        detected_obstacles = self.lidar_detector.process_pointcloud(msg.data, msg.point_step, sampling_factor=10)
         points = []
-        
         for obs in detected_obstacles:
-            # Look 25m ahead, 15m wide
             is_forward = obs.x > -2.0 and obs.x < 25.0 
             is_width = abs(obs.y) < 15.0 
             if is_forward and is_width:
@@ -200,27 +189,12 @@ class AtlantisController(Node):
         if points:
             distances = [p[3] for p in points]
             self.min_obstacle_distance = min(distances)
-            
-            # Simple clustering for diagnostics
-            front_obstacles = [p for p in points if p[0] > -1.0 and abs(p[1]) < 12.0]
-            if front_obstacles:
-                front_min_distance = min([p[3] for p in front_obstacles])
-            else:
-                front_min_distance = 100.0
-            
-            # Hysteresis for stability
-            if self.obstacle_detected:
-                exit_threshold = self.min_safe_distance + self.hysteresis_distance
-                self.obstacle_detected = front_min_distance < exit_threshold
-            else:
-                self.obstacle_detected = front_min_distance < self.min_safe_distance
-
             self.analyze_scan_sectors_3d(points)
+            self.obstacle_detected = self.min_obstacle_distance < self.min_safe_distance
         else:
-            # --- CRITICAL FIX: Default to 100m (Clear), NOT 50m ---
             self.min_obstacle_distance = 100.0
-            if not self.obstacle_detected:
-                self.front_clear = 100.0; self.left_clear = 100.0; self.right_clear = 100.0
+            self.obstacle_detected = False
+            self.front_clear = 100.0; self.left_clear = 100.0; self.right_clear = 100.0
 
     def analyze_scan_sectors_3d(self, points):
         front_points = []
@@ -228,12 +202,9 @@ class AtlantisController(Node):
         right_points = []
         for x, y, z, dist in points:
             angle = math.atan2(y, x)
-            if -math.pi/4 < angle < math.pi/4: # Front
-                front_points.append(dist)
-            elif math.pi/4 <= angle <= 3*math.pi/4: # Left
-                left_points.append(dist)
-            elif -3*math.pi/4 <= angle < -math.pi/4: # Right
-                right_points.append(dist)
+            if -0.7 < angle < 0.7: front_points.append(dist)
+            elif angle >= 0.7: left_points.append(dist)
+            elif angle <= -0.7: right_points.append(dist)
         
         max_range = 100.0
         self.front_clear = min(front_points) if front_points else max_range
@@ -249,42 +220,26 @@ class AtlantisController(Node):
         y = d_lon * R * math.cos(lat0)
         return y, x
 
-    # --- FIX: Check blocked but respect sensor limits ---
     def check_waypoint_blocked(self, angle_to_target, dist_to_target):
-        # Normalize angle
         while angle_to_target > math.pi: angle_to_target -= 2.0 * math.pi
         while angle_to_target < -math.pi: angle_to_target += 2.0 * math.pi
         
-        is_blocked = False
         check_dist = dist_to_target - 2.0 
         if check_dist < 1.0: return False 
-
-        # SENSOR LIMIT: Don't check for obstacles beyond 95m
+        
         sensor_limit = 95.0 
+        sector_clearance = 100.0
         
-        sector_clearance = 100.0 # Default clear
-        
-        if -0.7 < angle_to_target < 0.7:    # Front
-            sector_clearance = self.front_clear
-        elif angle_to_target >= 0.7:        # Left
-            sector_clearance = self.left_clear
-        elif angle_to_target <= -0.7:       # Right
-            sector_clearance = self.right_clear
+        if -0.7 < angle_to_target < 0.7: sector_clearance = self.front_clear
+        elif angle_to_target >= 0.7: sector_clearance = self.left_clear
+        elif angle_to_target <= -0.7: sector_clearance = self.right_clear
             
-        # We are blocked ONLY if the sector sees a REAL obstacle
         if sector_clearance < sensor_limit and sector_clearance < check_dist:
-            is_blocked = True
-            
-        return is_blocked
+            return True
+        return False
 
     def control_loop(self):
-        if not self.mission_enabled:
-            if self.state == "DRIVING": self.state = "PAUSED"
-            return
-        
-        if not self.path_validation_ok or not self.waypoints:
-            self.stop_boat()
-            return
+        if not self.mission_enabled or not self.waypoints: return
 
         curr_x, curr_y = self.latlon_to_meters(self.current_gps[0], self.current_gps[1])
         
@@ -294,186 +249,119 @@ class AtlantisController(Node):
 
         self.check_stuck_condition(curr_x, curr_y)
 
-        # Mission Complete Check
         if self.current_wp_index >= len(self.waypoints):
             self.finish_mission(curr_x, curr_y)
             return
 
         now = self.get_clock().now()
-        
-        # Target Math
         target_x, target_y = self.waypoints[self.current_wp_index]
         dx = target_x - curr_x
         dy = target_y - curr_y
         dist = math.hypot(dx, dy)
         
-        # --- BLOCKED WAYPOINT SKIP LOGIC (SMART) ---
+        # Calculate Target Angle FIRST
         target_angle_raw = math.atan2(dy, dx)
-        angle_to_target_check = target_angle_raw - self.current_yaw
+        angle_to_target = target_angle_raw - self.current_yaw
+        while angle_to_target > math.pi: angle_to_target -= 2.0 * math.pi
+        while angle_to_target < -math.pi: angle_to_target += 2.0 * math.pi
+
+        # --- PATH PRIORITY LOGIC (Your Request) ---
+        # 1. Is the direct path to the waypoint clear?
+        is_path_blocked = self.check_waypoint_blocked(angle_to_target, dist)
         
-        if self.check_waypoint_blocked(angle_to_target_check, dist):
-            if self.blocked_start_time is None:
-                self.blocked_start_time = now
+        # 2. Check for CRITICAL collision (Emergency Stop < 3m)
+        is_critical = self.min_obstacle_distance < self.critical_distance
+
+        # 3. Decision Tree
+        if is_critical:
+            # SAFETY OVERRIDE: Ignore path, just don't crash
+            if self.reverse_start_time is None: self.reverse_start_time = now
+            if (now - self.reverse_start_time).nanoseconds/1e9 < self.reverse_timeout:
+                self.send_thrust(-800.0, -800.0)
+                return
+            self.avoidance_mode = True
+        
+        elif not is_path_blocked:
+            # GREEN LIGHT: Path is clear! Go to GPS even if other things are nearby.
+            self.avoidance_mode = False
+            self.obstacle_detected = False # Override detection flag
+            self.blocked_start_time = None
+            target_heading = target_angle_raw
             
-            elapsed_blocked = (now - self.blocked_start_time).nanoseconds / 1e9
+        else:
+            # RED LIGHT: Path is blocked. Enter Avoidance Mode.
+            self.avoidance_mode = True
+            if self.blocked_start_time is None: self.blocked_start_time = now
             
-            # [NEW] Smart Threshold: Skip fast if obstacle is close!
-            is_critical_block = self.min_obstacle_distance < 8.0 
+            # Fast Skip Logic (Pier)
+            elapsed = (now - self.blocked_start_time).nanoseconds / 1e9
+            threshold = 2.0 if self.min_obstacle_distance < 8.0 else self.blocked_skip_time
             
-            # Use 2.0s for critical blocks, otherwise use the standard 15.0s
-            current_threshold = 2.0 if is_critical_block else self.blocked_skip_time
-            
-            if elapsed_blocked > current_threshold:
-                reason = "CRITICAL BLOCK (Pier)" if is_critical_block else "BLOCK TIMEOUT"
-                self.get_logger().warn(f"⏭️ SKIP WP {self.current_wp_index + 1}: {reason} after {elapsed_blocked:.1f}s")
-                
+            if elapsed > threshold:
+                self.get_logger().warn(f"⏭️ SKIP WP {self.current_wp_index+1}: Blocked for {elapsed:.1f}s")
                 self.current_wp_index += 1
                 self.blocked_start_time = None
-                self.waypoint_start_time = now 
-                self.integral_error = 0.0
-                return # Skip this loop immediately
-        else:
-            self.blocked_start_time = None
-        # -------------------------------------------
+                return
+
+        # --- EXECUTE MOVEMENT ---
         
-        # Standard Timeout Check
-        if self.waypoint_start_time is None: self.waypoint_start_time = now
-        elapsed_wp = (now - self.waypoint_start_time).nanoseconds / 1e9
-        if elapsed_wp > self.waypoint_timeout and self.obstacle_detected:
-             self.get_logger().warn(f"WP {self.current_wp_index+1} TIMEOUT ({elapsed_wp:.0f}s) - SKIPPING!")
-             self.current_wp_index += 1
-             self.waypoint_start_time = now
-             self.integral_error = 0.0
-             return
-
-        if dist < self.waypoint_tolerance:
-            self.current_wp_index += 1
-            self.waypoint_start_time = now 
-            self.total_distance += dist
-            self.integral_error = 0.0
-            self.blocked_start_time = None
-            return
-
-        # 1. Stuck Escape
+        # 1. Stuck Escape (Highest Priority)
         if self.is_stuck and self.escape_mode:
             self.execute_escape_maneuver()
             return
 
-        # 2. Critical Reverse
-        if self.min_obstacle_distance < self.critical_distance:
-            if self.reverse_start_time is None:
-                self.reverse_start_time = now
-                self.integral_error = 0.0
-            
-            elapsed = (now - self.reverse_start_time).nanoseconds / 1e9
-            if elapsed > self.reverse_timeout:
-                self.reverse_start_time = None
-            else:
-                self.send_thrust(-800.0, -800.0)
-                self.avoidance_mode = True
-                return
-        else:
-            self.reverse_start_time = None
-
-        # 3. Standard Avoidance
-        is_committed = False
-        if self.avoidance_commit_time is not None:
-             commit_elapsed = (now - self.avoidance_commit_time).nanoseconds / 1e9
-             if commit_elapsed < 3.0: 
-                 is_committed = True
-             else:
-                 self.avoidance_commit_time = None
-                 self.avoidance_direction = None
-
-        if self.obstacle_detected or is_committed:
-            if not self.avoidance_mode:
-                self.integral_error = 0.0
-                self.previous_error = 0.0
-            self.avoidance_mode = True
-
-            if is_committed and self.avoidance_direction:
-                direction = self.avoidance_direction
-            else:
-                if self.left_clear > self.right_clear: direction = "LEFT"
-                else: direction = "RIGHT"
-                self.avoidance_commit_time = now
-                self.avoidance_direction = direction
-
-            # Turn Logic
-            min_dist = self.min_obstacle_distance
-            if min_dist < 4.0: turn_angle = 1.9
-            elif min_dist < 8.0: turn_angle = 1.65
-            else: turn_angle = 1.57
-            
-            if direction == "LEFT": avoidance_heading = self.current_yaw + turn_angle
-            else: avoidance_heading = self.current_yaw - turn_angle
-            
-            target_angle = avoidance_heading
-            
-        else:
-            if self.avoidance_mode:
-                self.avoidance_mode = False
-                self.integral_error = 0.0
-            target_angle = math.atan2(dy, dx)
-        
-        # ---  SMART RETURN CHECK ---
-        if self.avoidance_mode and not is_committed:
-            angle_to_target = math.atan2(dy, dx) - self.current_yaw
-            while angle_to_target > math.pi: angle_to_target -= 2.0*math.pi
-            while angle_to_target < -math.pi: angle_to_target += 2.0*math.pi
-            
-            is_blocked = False
-            if -0.7 < angle_to_target < 0.7:
-                if self.front_clear < self.min_safe_distance: is_blocked = True
-            elif angle_to_target >= 0.7:
-                if self.left_clear < self.min_safe_distance: is_blocked = True
-            elif angle_to_target <= -0.7:
-                if self.right_clear < self.min_safe_distance: is_blocked = True
-                
-            if is_blocked:
-                self.obstacle_detected = True 
+        # 2. Avoidance Steering
+        if self.avoidance_mode:
+            # Stick to a decision (Commit)
+            if self.avoidance_commit_time is None:
                 self.avoidance_commit_time = now
                 self.avoidance_direction = "LEFT" if self.left_clear > self.right_clear else "RIGHT"
+            
+            # Reset commit after 3s
+            if (now - self.avoidance_commit_time).nanoseconds/1e9 > 3.0:
+                self.avoidance_commit_time = None
 
-                if self.avoidance_direction == "LEFT": target_angle = self.current_yaw + 1.57
-                else: target_angle = self.current_yaw - 1.57
-        # ---------------------------------
+            turn_dir = 1.0 if self.avoidance_direction == "LEFT" else -1.0
+            target_heading = self.current_yaw + (1.57 * turn_dir)
+            
+        else:
+            # 3. GPS Steering (PID)
+            target_heading = target_angle_raw
+            self.avoidance_commit_time = None # Reset avoidance memory
 
-        # PID Control
-        angle_error = target_angle - self.current_yaw
+        # PID Calculation
+        angle_error = target_heading - self.current_yaw
         while angle_error > math.pi: angle_error -= 2.0 * math.pi
         while angle_error < -math.pi: angle_error += 2.0 * math.pi
 
         self.integral_error += angle_error * self.dt
         self.integral_error = max(-0.5, min(0.5, self.integral_error))
-        derivative_error = (angle_error - self.previous_error) / self.dt
-        
-        turn_power = (self.kp * angle_error + self.ki * self.integral_error + self.kd * derivative_error)
+        derivative = (angle_error - self.previous_error) / self.dt
+        turn_power = (self.kp * angle_error + self.ki * self.integral_error + self.kd * derivative)
         self.previous_error = angle_error
         
-        if self.obstacle_detected:
-            turn_power = max(-900.0, min(900.0, turn_power))
-        else:
-            turn_power = max(-800.0, min(800.0, turn_power))
+        # Limit Turn Power
+        turn_power = max(-900.0, min(900.0, turn_power))
 
         # Speed Control
         speed = self.base_speed
-        angle_deg = abs(math.degrees(angle_error))
-        if angle_deg > 45: speed *= 0.5
-        elif angle_deg > 20: speed *= 0.75
+        if abs(math.degrees(angle_error)) > 45: speed *= 0.5
+        elif abs(math.degrees(angle_error)) > 20: speed *= 0.75
         
         if dist < 5.0: speed *= 0.7
-        if self.obstacle_detected: speed *= self.obstacle_slow_factor
+        if self.avoidance_mode: speed *= self.obstacle_slow_factor
         
-        left_thrust = max(-1000.0, min(1000.0, speed - turn_power))
-        right_thrust = max(-1000.0, min(1000.0, speed + turn_power))
-        
-        self.send_thrust(left_thrust, right_thrust)
-        self.publish_dashboard_status(curr_x, curr_y, target_x, target_y, dist)
-        self.publish_obstacle_status()
+        if dist < self.waypoint_tolerance:
+            self.current_wp_index += 1
+            self.total_distance += dist
+            self.integral_error = 0.0
+            return
+
+        self.send_thrust(speed - turn_power, speed + turn_power)
         
         if (now - self._last_log_time).nanoseconds / 1e9 > 2.0:
-            self.log_status(curr_x, curr_y, target_x, target_y, dist, angle_error)
+            mode = "AVOID" if self.avoidance_mode else "GPS"
+            self.get_logger().info(f"WP {self.current_wp_index+1} | Dist:{dist:.1f}m | Mode:{mode}")
             self._last_log_time = now
 
     def check_stuck_condition(self, curr_x, curr_y):
@@ -498,29 +386,13 @@ class AtlantisController(Node):
                     self.best_escape_direction = None
                     self.probe_results = {'left': 0.0, 'right': 0.0, 'back': 0.0}
                     self.add_no_go_zone(curr_x, curr_y)
-                    
-                    if self.last_stuck_waypoint == self.current_wp_index: self.consecutive_stuck_count += 1
-                    else:
-                        self.consecutive_stuck_count = 1
-                        self.last_stuck_waypoint = self.current_wp_index
-                        
+                    self.consecutive_stuck_count += 1
                     self.calculate_adaptive_escape_duration()
                     self.get_logger().warn(f"STUCK DETECTED! Escaping (Attempt {self.consecutive_stuck_count})")
-                    
-                    if self.consecutive_stuck_count == 2 and not self.detour_waypoint_inserted:
-                        self.insert_detour_waypoint(curr_x, curr_y)
-                    if self.consecutive_stuck_count >= 4:
-                        self.current_wp_index += 1
-                        self.consecutive_stuck_count = 0
-                        self.detour_waypoint_inserted = False
-                        self.is_stuck = False
-                        self.escape_mode = False
             else:
-                if self.is_stuck:
-                    self.record_escape_result(success=True)
                 self.is_stuck = False
                 self.escape_mode = False
-                self.escape_phase = 0
+                self.consecutive_stuck_count = 0
             self.last_position = (curr_x, curr_y)
             self.stuck_check_time = self.get_clock().now()
 
@@ -707,18 +579,17 @@ class AtlantisController(Node):
         })
         self.pub_anti_stuck.publish(msg)
 
-# --- FIX: SAFE SHUTDOWN WRAPPER ---
 def main(args=None):
     rclpy.init(args=args)
     node = AtlantisController()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        pass # Graceful exit on Ctrl+C
+        pass
     finally:
         node.get_logger().info("🛑 STOPPING MOTORS...")
         node.stop_boat()
-        time.sleep(0.5) # Give ROS time to publish the stop command
+        time.sleep(0.5)
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
