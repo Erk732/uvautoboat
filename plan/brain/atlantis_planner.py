@@ -2,77 +2,44 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
-from std_msgs.msg import Empty, String
-from sensor_msgs.msg import NavSatFix, Imu 
-from rcl_interfaces.msg import SetParametersResult
+from std_msgs.msg import String, Empty
+from sensor_msgs.msg import NavSatFix, Imu
 import json
 import threading
-import sys
 import time
 import math
 import heapq
 
-# A* SOLVER CLASS
-
+# A* SOLVER 
 class AStarSolver:
-    def __init__(self, resolution=2.0, safety_margin=5.0):
+    def __init__(self, resolution=3.0, safety_margin=10.0):
         self.resolution = resolution
         self.safety_margin = safety_margin
 
     def world_to_grid(self, x, y, min_x, min_y):
-        gx = int((x - min_x) / self.resolution)
-        gy = int((y - min_y) / self.resolution)
-        return (gx, gy)
+        return int((x - min_x)/self.resolution), int((y - min_y)/self.resolution)
 
     def grid_to_world(self, gx, gy, min_x, min_y):
-        wx = (gx * self.resolution) + min_x + (self.resolution / 2.0)
-        wy = (gy * self.resolution) + min_y + (self.resolution / 2.0)
-        return (wx, wy)
+        return (gx*self.resolution)+min_x, (gy*self.resolution)+min_y
 
-    def get_neighbors(self, node, grid_width, grid_height):
-        (x, y) = node
-        directions = [(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]
-        neighbors = []
-        for dx, dy in directions:
-            nx, ny = x + dx, y + dy
-            if 0 <= nx < grid_width and 0 <= ny < grid_height:
-                dist = 1.414 if dx != 0 and dy != 0 else 1.0
-                neighbors.append(((nx, ny), dist))
-        return neighbors
-
-    def plan(self, start, goal, obstacles, boundary_min, boundary_max):
-        # Local Search Area (Dynamic window around ship)
-        padding = 40.0 
-        min_x = min(start[0], goal[0]) - padding
-        max_x = max(start[0], goal[0]) + padding
-        min_y = min(start[1], goal[1]) - padding
-        max_y = max(start[1], goal[1]) + padding
-        
-        if boundary_min and boundary_max:
-            min_x = max(min_x, boundary_min[0])
-            max_x = min(max_x, boundary_max[0])
-            min_y = max(min_y, boundary_min[1])
-            max_y = min(max_y, boundary_max[1])
-
-        grid_width = int((max_x - min_x) / self.resolution) + 1
-        grid_height = int((max_y - min_y) / self.resolution) + 1
+    def plan(self, start, goal, obstacles, b_min, b_max):
+        padding = 40.0
+        min_x, max_x = min(start[0], goal[0])-padding, max(start[0], goal[0])+padding
+        min_y, max_y = min(start[1], goal[1])-padding, max(start[1], goal[1])+padding
         
         start_node = self.world_to_grid(start[0], start[1], min_x, min_y)
         goal_node = self.world_to_grid(goal[0], goal[1], min_x, min_y)
         
-        blocked_nodes = set()
-        # Optimization: Only map obstacles within the search window
+        blocked = set()
         for ox, oy in obstacles:
-            if min_x - 5 < ox < max_x + 5 and min_y - 5 < oy < max_y + 5:
+            if min_x < ox < max_x and min_y < oy < max_y:
                 ogx, ogy = self.world_to_grid(ox, oy, min_x, min_y)
-                radius_steps = int(self.safety_margin / self.resolution)
-                for dx in range(-radius_steps, radius_steps + 1):
-                    for dy in range(-radius_steps, radius_steps + 1):
-                        if dx*dx + dy*dy <= radius_steps*radius_steps:
-                            blocked_nodes.add((ogx + dx, ogy + dy))
+                steps = int(self.safety_margin/self.resolution)
+                for dx in range(-steps, steps+1):
+                    for dy in range(-steps, steps+1):
+                        blocked.add((ogx+dx, ogy+dy))
 
-        open_set = []
-        heapq.heappush(open_set, (0, start_node))
+        open_set = [(0, start_node)]
         came_from = {}
         g_score = {start_node: 0}
         
@@ -81,276 +48,160 @@ class AStarSolver:
             if current == goal_node:
                 path = []
                 while current in came_from:
-                    wx, wy = self.grid_to_world(current[0], current[1], min_x, min_y)
-                    path.append((wx, wy))
+                    path.append(self.grid_to_world(current[0], current[1], min_x, min_y))
                     current = came_from[current]
-                path.reverse()
-                return path
+                return path[::-1]
 
-            for neighbor, dist_cost in self.get_neighbors(current, grid_width, grid_height):
-                if neighbor in blocked_nodes: continue
-                tentative_g = g_score[current] + dist_cost
-                if neighbor not in g_score or tentative_g < g_score[neighbor]:
+            for dx, dy in [(0,1),(1,0),(0,-1),(-1,0),(1,1),(1,-1),(-1,1),(-1,-1)]:
+                neighbor = (current[0]+dx, current[1]+dy)
+                if neighbor in blocked: continue
+                
+                tent_g = g_score[current] + math.hypot(dx, dy)
+                if neighbor not in g_score or tent_g < g_score[neighbor]:
                     came_from[neighbor] = current
-                    g_score[neighbor] = tentative_g
-                    h = ((neighbor[0] - goal_node[0])**2 + (neighbor[1] - goal_node[1])**2)**0.5
-                    f_score = tentative_g + h
-                    heapq.heappush(open_set, (f_score, neighbor))
+                    g_score[neighbor] = tent_g
+                    f = tent_g + math.hypot(neighbor[0]-goal_node[0], neighbor[1]-goal_node[1])
+                    heapq.heappush(open_set, (f, neighbor))
         return []
-
-
-# ATLANTIS PLANNER with DYNAMIC REPLANNING
 
 class AtlantisPlanner(Node):
     def __init__(self):
         super().__init__('atlantis_planner')
-
+        
+        # Parameters
         self.declare_parameter('scan_length', 150.0)
-        self.declare_parameter('scan_width', 20.0) 
+        self.declare_parameter('scan_width', 20.0)
         self.declare_parameter('lanes', 4)
         self.declare_parameter('geo_min_x', -50.0)
         self.declare_parameter('geo_max_x', 200.0)
         self.declare_parameter('geo_min_y', -100.0)
         self.declare_parameter('geo_max_y', 100.0)
-        self.declare_parameter('waypoint_spacing', 10.0)
-        self.declare_parameter('waypoint_tolerance', 4.0)
-        self.declare_parameter('planner_safe_dist', 12.0) # Increased for safety
+        self.declare_parameter('planner_safe_dist', 12.0)
 
-        self.pub_current_target = self.create_publisher(String, '/planning/current_target', 10)
-        self.pub_mission_status = self.create_publisher(String, '/planning/mission_status', 10)
-        self.path_pub = self.create_publisher(Path, '/atlantis/path', 10)
+        # Communication
+        self.pub_target = self.create_publisher(String, '/planning/current_target', 10)
+        self.pub_status = self.create_publisher(String, '/planning/mission_status', 10)
+        self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_cb, 10)
+        self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_cb, 10)
+        self.create_subscription(String, '/perception/obstacle_info', self.obs_cb, 10)
+        self.create_subscription(String, '/planning/detour_request', self.detour_cb, 10)
         
-        self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, 10)
-        self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_callback, 10)
-        self.create_subscription(String, '/perception/obstacle_info', self.obstacle_callback, 10)
-        self.create_subscription(String, '/planning/detour_request', self.detour_callback, 10)
-        self.create_subscription(Empty, '/atlantis/replan', self.replan_callback, 10)
-        
-        self.waypoints = [] 
-        self.current_wp_index = 0
+        self.waypoints = []
+        self.wp_index = 0
         self.start_gps = None
-        self.current_gps = None
-        self.current_local_pos = (0.0, 0.0)
-        self.current_yaw = 0.0 
-        self.mission_state = "IDLE" 
-        self.known_obstacles = [] 
-        self.last_replan_time = self.get_clock().now()
+        self.local_pos = (0.0, 0.0)
+        self.yaw = 0.0
+        self.obstacles = []
+        self.state = "IDLE"
         
-        self.astar = AStarSolver(resolution=3.0, safety_margin=15.0) # Wider margin for replanning
-        
-        self.create_timer(0.1, self.mission_manager_loop)
-        self.input_thread = threading.Thread(target=self.input_loop, daemon=True)
-        self.input_thread.start()
-        
-        self.get_logger().info("Atlantis Dynamic Planner Ready.")
+        self.astar = AStarSolver()
+        self.create_timer(0.1, self.loop)
+        threading.Thread(target=self.input_loop, daemon=True).start()
+        self.get_logger().info("Atlantis Planner (Modular) Ready")
 
     def input_loop(self):
-        time.sleep(1.0)
-        print("\n" + "="*40)
-        print("  ATLANTIS MISSION MANAGER")
-        print("  Type 'r' + ENTER -> START Mission")
-        print("  Type 's' + ENTER -> STOP Mission")
-        print("="*40 + "\n")
+        time.sleep(1)
+        print("COMMANDS: 'r' = Run, 's' = Stop")
         while rclpy.ok():
             try:
-                user_input = input("Command (r/s) > ").strip().lower()
-                if user_input == 'r': 
-                    self.generate_lawnmower_path()
-                    self.mission_state = "DRIVING"
-                    self.current_wp_index = 0
-                    self.get_logger().info("Mission STARTED")
-                elif user_input == 's':
-                    self.mission_state = "IDLE"
-                    self.get_logger().info("Mission STOPPED.")
+                cmd = input("> ").strip()
+                if cmd == 'r': 
+                    self.plan_path()
+                    self.state = "DRIVING"
+                    self.wp_index = 0
+                elif cmd == 's': self.state = "IDLE"
             except: pass
 
-    def gps_callback(self, msg):
-        self.current_gps = (msg.latitude, msg.longitude)
-        if self.start_gps is None:
-            self.start_gps = (msg.latitude, msg.longitude)
-        y, x = self.latlon_to_meters(msg.latitude, msg.longitude)
-        self.current_local_pos = (x, y)
-
-    def latlon_to_meters(self, lat, lon):
-        if self.start_gps is None: return 0.0, 0.0
+    def gps_cb(self, msg):
+        if not self.start_gps: self.start_gps = (msg.latitude, msg.longitude)
         R = 6371000.0
-        d_lat = math.radians(lat - self.start_gps[0])
-        d_lon = math.radians(lon - self.start_gps[1])
-        lat0 = math.radians(self.start_gps[0])
-        x = d_lat * R
-        y = d_lon * R * math.cos(lat0)
-        return x, y 
+        dx = math.radians(msg.latitude - self.start_gps[0]) * R
+        dy = math.radians(msg.longitude - self.start_gps[1]) * R * math.cos(math.radians(self.start_gps[0]))
+        self.local_pos = (dx, dy)
 
-    def imu_callback(self, msg):
+    def imu_cb(self, msg):
         q = msg.orientation
-        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
-        cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
-        self.current_yaw = math.atan2(siny_cosp, cosy_cosp)
+        self.yaw = math.atan2(2*(q.w*q.z + q.x*q.y), 1-2*(q.y*q.y + q.z*q.z))
 
-    def obstacle_callback(self, msg):
+    def obs_cb(self, msg):
         try:
             data = json.loads(msg.data)
-            if 'clusters' in data:
-                self.known_obstacles = []
-                boat_x, boat_y = self.current_local_pos
-                yaw = self.current_yaw
-                cos_yaw = math.cos(yaw)
-                sin_yaw = math.sin(yaw)
-
-                for c in data['clusters']:
-                    local_x = c['x']
-                    local_y = c['y']
-                    rotated_x = local_x * cos_yaw - local_y * sin_yaw
-                    rotated_y = local_x * sin_yaw + local_y * cos_yaw
-                    self.known_obstacles.append((boat_x + rotated_x, boat_y + rotated_y))
+            self.obstacles = []
+            cx, cy = math.cos(self.yaw), math.sin(self.yaw)
+            for c in data.get('clusters', []):
+                # Rotate local to global
+                gx = self.local_pos[0] + (c['x']*cx - c['y']*cy)
+                gy = self.local_pos[1] + (c['x']*cy + c['y']*cx)
+                self.obstacles.append((gx, gy))
         except: pass
 
-    def detour_callback(self, msg):
+    def detour_cb(self, msg):
         try:
-            data = json.loads(msg.data)
-            if data.get('type') == 'detour':
-                dx, dy = data['x'], data['y']
-                self.waypoints.insert(self.current_wp_index, (dx, dy))
+            d = json.loads(msg.data)
+            if d.get('type') == 'detour':
+                self.waypoints.insert(self.wp_index, (d['x'], d['y']))
+                self.get_logger().info("Detour Inserted")
         except: pass
 
-    # --- MAIN LOOP WITH DYNAMIC REPLANNING ---
-    def mission_manager_loop(self):
-        status_msg = String()
-        status_msg.data = json.dumps({
-            "state": self.mission_state,
-            "current_waypoint": self.current_wp_index + 1,
-            "total_waypoints": len(self.waypoints)
-        })
-        self.pub_mission_status.publish(status_msg)
-
-        if self.mission_state != "DRIVING" or not self.waypoints: return
-        if self.current_wp_index >= len(self.waypoints):
-            self.mission_state = "FINISHED"
-            self.get_logger().info("MISSION COMPLETE")
+    def loop(self):
+        msg = String()
+        msg.data = json.dumps({"state": self.state})
+        self.pub_status.publish(msg)
+        
+        if self.state != "DRIVING" or not self.waypoints: return
+        if self.wp_index >= len(self.waypoints):
+            self.state = "FINISHED"
             return
 
-        target_x, target_y = self.waypoints[self.current_wp_index]
-        curr_x, curr_y = self.current_local_pos
-        dist = math.hypot(target_x - curr_x, target_y - curr_y)
+        tx, ty = self.waypoints[self.wp_index]
+        dist = math.hypot(tx - self.local_pos[0], ty - self.local_pos[1])
         
-        # --- DYNAMIC CHECK: Is the path BLOCKED? ---
-        # Only check every 1.0s to save CPU
-        now = self.get_clock().now()
-        if (now - self.last_replan_time).nanoseconds / 1e9 > 1.0:
-            if not self.is_line_safe(curr_x, curr_y, target_x, target_y):
-                self.get_logger().warn(f"Path to WP{self.current_wp_index+1} BLOCKED by new obstacle! Replanning...")
-                self.replan_current_segment(curr_x, curr_y, target_x, target_y)
-                self.last_replan_time = now
-                # Refresh target after replan
-                target_x, target_y = self.waypoints[self.current_wp_index]
-                dist = math.hypot(target_x - curr_x, target_y - curr_y)
-
-        # Feed Buran
-        target_msg = String()
-        target_msg.data = json.dumps({
-            "current_position": [curr_x, curr_y],
-            "target_waypoint": [target_x, target_y],
-            "distance_to_target": dist,
-            "waypoint_index": self.current_wp_index
+        t_msg = String()
+        t_msg.data = json.dumps({
+            "current_position": self.local_pos,
+            "target_waypoint": [tx, ty],
+            "distance_to_target": dist
         })
-        self.pub_current_target.publish(target_msg)
-
-        tolerance = self.get_parameter('waypoint_tolerance').value
-        if dist < tolerance:
-            self.get_logger().info(f"Reached WP {self.current_wp_index+1} -> Next")
-            self.current_wp_index += 1
-
-    def replan_current_segment(self, start_x, start_y, goal_x, goal_y):
-        """Generates A* path to the current goal and inserts it"""
-        geo_min = (self.get_parameter('geo_min_x').value, self.get_parameter('geo_min_y').value)
-        geo_max = (self.get_parameter('geo_max_x').value, self.get_parameter('geo_max_y').value)
+        self.pub_target.publish(t_msg)
         
-        path = self.astar.plan((start_x, start_y), (goal_x, goal_y), self.known_obstacles, geo_min, geo_max)
-        
-        if path:
-            self.get_logger().info(f"Replan successful: Found {len(path)} new nodes.")
-            # Remove the blocked target (we will replace it with the new path ending at the same spot)
-            self.waypoints.pop(self.current_wp_index)
-            
-            # Insert new path points (skipping start point as we are there)
-            for i, (px, py) in enumerate(path):
-                self.waypoints.insert(self.current_wp_index + i, (px, py))
-        else:
-            self.get_logger().error("Replan FAILED: No path found. Buran will attempt local avoidance.")
+        if dist < 4.0: 
+            self.wp_index += 1
+            self.get_logger().info(f"WP {self.wp_index} Reached")
 
-    def generate_lawnmower_path(self):
-        # (Standard generation code - same as before)
-        scan_length = self.get_parameter('scan_length').value
-        scan_width = self.get_parameter('scan_width').value
+    def plan_path(self):
+        # Lawnmower Gen + A* Hybrid
+        self.waypoints = []
+        len_ = self.get_parameter('scan_length').value
+        wid = self.get_parameter('scan_width').value
         lanes = self.get_parameter('lanes').value
-        self.waypoints = [] 
         
-        geo_min = (self.get_parameter('geo_min_x').value, self.get_parameter('geo_min_y').value)
-        geo_max = (self.get_parameter('geo_max_x').value, self.get_parameter('geo_max_y').value)
-
-        for i in range(lanes):
-            if i % 2 == 0: x_start, x_end = 0.0, scan_length
-            else: x_start, x_end = scan_length, 0.0
-            y_pos = i * scan_width
-
-            start = self.apply_geofence(x_start, y_pos)
-            end = self.apply_geofence(x_end, y_pos)
-            
-            if self.is_line_safe(start[0], start[1], end[0], end[1]):
-                points = self.interpolate_segment(start[0], start[1], end[0], end[1])
-                if i == 0: self._add_wp(start[0], start[1])
-                for px, py in points: self._add_wp(px, py)
-            else:
-                path = self.astar.plan(start, end, self.known_obstacles, geo_min, geo_max)
-                if path:
-                    if i == 0: self._add_wp(start[0], start[1])
-                    for px, py in path: self._add_wp(px, py)
-
-            if i < lanes - 1:
-                next_y = (i + 1) * scan_width
-                trans = self.apply_geofence(x_end, next_y)
-                self._add_wp(trans[0], trans[1])
-
-        self.get_logger().info(f"Generated {len(self.waypoints)} waypoints.")
-
-    def _add_wp(self, x, y):
-        self.waypoints.append((x, y))
-
-    def apply_geofence(self, x, y):
+        # Simple Geofence
         min_x = self.get_parameter('geo_min_x').value
         max_x = self.get_parameter('geo_max_x').value
-        min_y = self.get_parameter('geo_min_y').value
-        max_y = self.get_parameter('geo_max_y').value
-        return max(min_x, min(x, max_x)), max(min_y, min(y, max_y))
-
-    def is_line_safe(self, x1, y1, x2, y2):
-        dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-        steps = int(dist / 2.0)
-        if steps == 0: return True
-        safe_dist = self.get_parameter('planner_safe_dist').value
         
-        for i in range(steps + 1):
-            t = i / max(1, steps)
-            cx = x1 + (x2 - x1) * t
-            cy = y1 + (y2 - y1) * t
-            for ox, oy in self.known_obstacles:
-                if math.hypot(cx - ox, cy - oy) < safe_dist:
-                    return False
-        return True
-
-    def interpolate_segment(self, start_x, start_y, end_x, end_y):
-        spacing = self.get_parameter('waypoint_spacing').value
-        dist = math.hypot(end_x - start_x, end_y - start_y)
-        if dist <= spacing: return [(end_x, end_y)]
-        points = []
-        num = int(math.ceil(dist / spacing))
-        for i in range(1, num + 1):
-            t = i / float(num)
-            points.append((start_x + (end_x - start_x)*t, start_y + (end_y - start_y)*t))
-        return points
-
-    def replan_callback(self, msg):
-        self.generate_lawnmower_path()
+        for i in range(lanes):
+            sx, ex = (0.0, len_) if i%2==0 else (len_, 0.0)
+            y = i * wid
+            
+            # Check line safety
+            start, end = (max(min_x, sx), y), (min(max_x, ex), y)
+            
+            # Simple check: Is line clear?
+            blocked = False
+            for ox, oy in self.obstacles:
+                # Distance from point to line segment logic (simplified check)
+                if min(start[0], end[0]) < ox < max(start[0], end[0]) and abs(oy - y) < 10.0:
+                    blocked = True
+                    break
+            
+            if not blocked:
+                self.waypoints.append(start)
+                self.waypoints.append(end)
+            else:
+                self.get_logger().info("Using A* for segment")
+                path = self.astar.plan(start, end, self.obstacles, (-50,-100), (200,100))
+                if path: self.waypoints.extend(path)
+                else: self.waypoints.append(end) # Fallback
 
 def main(args=None):
     rclpy.init(args=args)
