@@ -12,7 +12,7 @@ import heapq
 
 # A* SOLVER 
 class AStarSolver:
-    def __init__(self, resolution=3.0, safety_margin=10.0):
+    def __init__(self, resolution=3.0, safety_margin=5.0):
         self.resolution = resolution
         self.safety_margin = safety_margin
 
