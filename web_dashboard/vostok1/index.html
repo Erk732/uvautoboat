@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vostok1 Dashboard</title>
-    <!-- Unified stylesheet with 3 modes: Normal, Bureau (TNO), Terminal -->
     <link rel="stylesheet" href="style_merged.css">
     <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -14,26 +13,20 @@
     <div class="container">
         <header>
             <div class="header-left">
-                <img src="Longtermism.png" alt="Socialist Longtermism" class="ideology-icon">
-                <span class="milspec-emblem">☭</span>
-                <h1>PROJET-17 — Système de Navigation Autonome Vostok1</h1>
-                <span class="milspec-designation">ВМФ СССР</span>
+                <h1>Vostok1 — Autonomous Navigation System | Système de Navigation Autonome</h1>
             </div>
             <div class="header-right">
-                <button id="style-toggle" class="style-toggle-btn">
-                    <span id="toggle-text">Mode Terminal</span>
-                </button>
-                <div id="connection-status" class="status disconnected">Déconnecté</div>
+                <div id="connection-status" class="status disconnected">Disconnected | Déconnecté</div>
             </div>
         </header>
 
         <div class="dashboard">
             <!-- Status Panel -->
             <div class="panel">
-                <h2>Statut Mission</h2>
+                <h2>Mission Status | Statut Mission</h2>
                 <div class="info-grid">
                     <div class="info-item">
-                        <span class="label">State:</span>
+                        <span class="label">State | État:</span>
                         <span id="state" class="value">-</span>
                     </div>
                     <div class="info-item">
@@ -49,7 +42,7 @@
 
             <!-- GPS Panel -->
             <div class="panel">
-                <h2>Position GPS</h2>
+                <h2>GPS Position</h2>
                 <div class="info-grid">
                     <div class="info-item">
                         <span class="label">Latitude:</span>
@@ -70,12 +63,12 @@
                 </div>
             </div>
 
-            <!-- Obstacle Detection Panel - OKO v2.0 Enhanced -->
+            <!-- Obstacle Detection Panel -->
             <div class="panel">
-                <h2>Détection d'obstacles (OKO v2.0)</h2>
+                <h2>Obstacle Detection | Détection d'Obstacles (OKO v2.0)</h2>
                 <div class="info-grid">
                     <div class="info-item">
-                        <span class="label">Minimum Distance:</span>
+                        <span class="label">Min Distance:</span>
                         <span id="min-obstacle" class="value">-</span>
                     </div>
                     <div class="info-item">
@@ -103,7 +96,7 @@
                         <span id="right-clear" class="value">-</span>
                     </div>
                     <div class="info-item full-width">
-                        <span class="label">Obstacle Status:</span>
+                        <span class="label">Status:</span>
                         <span id="obstacle-status" class="value badge">Clear</span>
                     </div>
                 </div>
@@ -111,26 +104,26 @@
 
             <!-- Thruster Control Panel -->
             <div class="panel">
-                <h2>Propulseurs</h2>
+                <h2>Thrusters | Propulseurs</h2>
                 <div class="info-grid">
                     <div class="info-item">
-                        <span class="label">Left Thrust:</span>
+                        <span class="label">Left | Gauche:</span>
                         <span id="left-thrust" class="value">-</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">Right Thrust:</span>
+                        <span class="label">Right | Droit:</span>
                         <span id="right-thrust" class="value">-</span>
                     </div>
                 </div>
                 <div class="thrust-bars">
                     <div class="thrust-bar-container">
-                        <label>Left</label>
+                        <label>Left | Gauche</label>
                         <div class="thrust-bar">
                             <div id="left-thrust-bar" class="thrust-fill"></div>
                         </div>
                     </div>
                     <div class="thrust-bar-container">
-                        <label>Right</label>
+                        <label>Right | Droit</label>
                         <div class="thrust-bar">
                             <div id="right-thrust-bar" class="thrust-fill"></div>
                         </div>
@@ -138,173 +131,172 @@
                 </div>
             </div>
 
-            <!-- Smart Anti-Stuck System (SASS) Panel -->
+            <!-- Smart Anti-Stuck System Panel -->
             <div class="panel sass-panel">
-                <h2>🛡️ Système Anti-blocage (SASS)</h2>
+                <h2>Smart Anti-Stuck System | Système Anti-Blocage (SASS)</h2>
                 <div class="info-grid">
                     <div class="info-item full-width">
-                        <span class="label">Statut:</span>
+                        <span class="label">Status | Statut:</span>
                         <span id="stuck-status" class="value badge clear">Normal</span>
                     </div>
                     <div class="info-item">
                         <span class="label">Phase:</span>
-                        <span id="escape-phase" class="value">En attente</span>
+                        <span id="escape-phase" class="value">Idle | En attente</span>
                     </div>
                     <div class="info-item">
                         <span class="label">Direction:</span>
                         <span id="best-direction" class="value">-</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">Zones interdites:</span>
+                        <span class="label">No-Go Zones:</span>
                         <span id="no-go-zones" class="value">0</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">Dérive:</span>
+                        <span class="label">Drift | Dérive:</span>
                         <span id="drift-vector" class="value">Minimal</span>
                     </div>
                     <div class="info-item">
                         <span class="label">Kalman σ:</span>
-                        <span id="drift-uncertainty" class="value" title="Incertitude filtre Kalman">-</span>
+                        <span id="drift-uncertainty" class="value" title="Kalman filter uncertainty">-</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">Historique:</span>
-                        <span id="escape-history" class="value">0 entrées</span>
+                        <span class="label">History | Historique:</span>
+                        <span id="escape-history" class="value">0 entries | entrées</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">Sonde:</span>
-                        <span id="probe-results" class="value">G:- D:-</span>
+                        <span class="label">Probe | Sonde:</span>
+                        <span id="probe-results" class="value">L:- R:-</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Mission Control Panel (NEW) -->
+            <!-- Mission Control Panel -->
             <div class="panel mission-control-panel">
-                <h2>🎯 Contrôle de Mission</h2>
+                <h2>Mission Control | Contrôle de Mission</h2>
                 <div class="mission-status-bar">
                     <div class="mission-state-indicator">
-                        <span class="label">État:</span>
-                        <span id="mission-state-badge" class="mission-badge idle">En attente</span>
+                        <span class="label">State | État:</span>
+                        <span id="mission-state-badge" class="mission-badge idle">Idle | En attente</span>
                     </div>
                     <div class="gps-indicator">
-                        <span id="gps-ready-badge" class="gps-badge not-ready">📡 GPS: En attente...</span>
+                        <span id="gps-ready-badge" class="gps-badge not-ready">📡 GPS: Waiting | En attente...</span>
                     </div>
                 </div>
-                
+
                 <!-- Step 1: Configure Waypoints -->
                 <div class="mission-step">
-                    <h3>Étape 1: Configuration du trajet</h3>
+                    <h3>Step 1: Route Configuration | Configuration du Trajet</h3>
                     <div class="waypoint-config-inline">
                         <div class="config-item-inline">
-                            <label for="wp-lanes">Couloirs:</label>
+                            <label for="wp-lanes">Lanes | Couloirs:</label>
                             <input type="number" id="wp-lanes" min="1" max="50" value="8">
                         </div>
                         <div class="config-item-inline">
-                            <label for="wp-length">Longueur (m):</label>
+                            <label for="wp-length">Length | Longueur (m):</label>
                             <input type="number" id="wp-length" min="10" max="500" step="10" value="150">
                         </div>
                         <div class="config-item-inline">
-                            <label for="wp-width">Largeur couloir (m):</label>
+                            <label for="wp-width">Lane Width | Largeur (m):</label>
                             <input type="number" id="wp-width" min="5" max="100" step="5" value="50">
                         </div>
                     </div>
                     <button id="btn-generate-waypoints" class="mission-btn generate">
-                        🗺️ Générer les waypoints
+                        🗺️ Generate Waypoints | Générer
                     </button>
                     <div class="waypoint-preview-info">
-                        <span id="waypoint-count">Waypoints: 0</span> | 
+                        <span id="waypoint-count">Waypoints: 0</span> |
                         <span id="estimated-distance">Distance: 0m</span>
                     </div>
                 </div>
-                
+
                 <!-- Step 2: Confirm or Cancel -->
                 <div class="mission-step">
-                    <h3>Étape 2: Confirmation</h3>
+                    <h3>Step 2: Confirmation</h3>
                     <div class="mission-buttons-row">
                         <button id="btn-confirm-waypoints" class="mission-btn confirm" disabled>
-                            ✅ Confirmer
+                            ✅ Confirm | Confirmer
                         </button>
                         <button id="btn-cancel-waypoints" class="mission-btn cancel" disabled>
-                            ❌ Annuler
+                            ❌ Cancel | Annuler
                         </button>
                     </div>
                 </div>
-                
+
                 <!-- Step 3: Start/Stop Mission -->
                 <div class="mission-step">
-                    <h3>Étape 3: Lancement</h3>
+                    <h3>Step 3: Launch | Lancement</h3>
                     <div class="mission-buttons-row">
                         <button id="btn-start-mission" class="mission-btn start" disabled>
-                            🚀 DÉMARRER
+                            🚀 START | DÉMARRER
                         </button>
                         <button id="btn-stop-mission" class="mission-btn stop" disabled>
-                            🛑 ARRÊT
+                            🛑 STOP | ARRÊT
                         </button>
                         <button id="btn-resume-mission" class="mission-btn resume" disabled>
-                            ▶️ REPRENDRE
+                            ▶️ RESUME | REPRENDRE
                         </button>
                         <button id="btn-reset-mission" class="mission-btn reset">
-                            🔄 RÉINITIALISER
+                            🔄 RESET | RÉINITIALISER
                         </button>
                     </div>
                     <div class="mission-buttons-row" style="margin-top: 10px;">
                         <button id="btn-go-home" class="mission-btn home">
-                            🏠 RETOUR MAISON
+                            🏠 RETURN HOME | RETOUR BASE
                         </button>
                     </div>
                 </div>
-                
+
                 <!-- Joystick Override -->
                 <div class="mission-step joystick-section">
-                    <h3>🎮 Contrôle manuel</h3>
+                    <h3>Manual Control | Contrôle Manuel</h3>
                     <div class="joystick-info">
-                        <span>Désactive le contrôle autonome pour le pilotage manuel</span><br>
-                        <span class="joystick-hint">Disables autonomous control for manual driving</span>
+                        <span>Disables autonomous control for manual piloting | Désactive le contrôle autonome</span>
                     </div>
                     <div class="mission-buttons-row">
                         <button id="btn-joystick-enable" class="mission-btn joystick">
-                            🎮 Activer joystick
+                            🎮 Enable Joystick | Activer
                         </button>
                         <button id="btn-joystick-disable" class="mission-btn joystick-off" disabled>
-                            🔒 Désactiver
+                            🔒 Disable | Désactiver
                         </button>
                     </div>
                     <div id="joystick-status" class="joystick-status hidden">
                         <span class="joystick-active">🎮 OVERRIDE ACTIVE - Autonomous control disabled</span>
                     </div>
                     <div id="joystick-instructions" class="joystick-instructions hidden">
-                        <div class="instructions-title">🎮 War Thunder / GTA5 Style Controls</div>
+                        <div class="instructions-title">🎮 Keyboard Controls</div>
                         <div class="instructions-content">
-                            <p><strong>Exécutez dans un nouveau terminal:</strong></p>
+                            <p><strong>Run in a new terminal | Exécuter dans un terminal:</strong></p>
                             <code>ros2 run control keyboard_teleop</code>
-                            
+
                             <div class="teleop-controls-grid">
                                 <div class="control-group">
-                                    <div class="control-header">⚡ Accélérateur</div>
+                                    <div class="control-header">⚡ Throttle | Accélérateur</div>
                                     <div class="control-keys">
-                                        <kbd>W</kbd> / <kbd>↑</kbd> = Avant<br>
-                                        <kbd>S</kbd> / <kbd>↓</kbd> = Arrière<br>
-                                        <kbd>Space</kbd> = Arrêt complet<br>
-                                        <kbd>X</kbd> = Urgence
+                                        <kbd>W</kbd> / <kbd>↑</kbd> = Forward | Avant<br>
+                                        <kbd>S</kbd> / <kbd>↓</kbd> = Backward | Arrière<br>
+                                        <kbd>Space</kbd> = Full Stop | Arrêt<br>
+                                        <kbd>X</kbd> = Emergency | Urgence
                                     </div>
                                 </div>
                                 <div class="control-group">
-                                    <div class="control-header">🧭 Gouvernail</div>
+                                    <div class="control-header">🧭 Rudder | Gouvernail</div>
                                     <div class="control-keys">
-                                        <kbd>A</kbd> / <kbd>←</kbd> = Gauche<br>
-                                        <kbd>D</kbd> / <kbd>→</kbd> = Droite<br>
-                                        <kbd>Q</kbd> = Virage serré ←<br>
-                                        <kbd>E</kbd> = Virage serré →
+                                        <kbd>A</kbd> / <kbd>←</kbd> = Left | Gauche<br>
+                                        <kbd>D</kbd> / <kbd>→</kbd> = Right | Droite<br>
+                                        <kbd>Q</kbd> = Sharp Left | Virage Gauche<br>
+                                        <kbd>E</kbd> = Sharp Right | Virage Droit
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <div class="teleop-features">
-                                <span class="feature-tag">✅ Accélération progressive</span>
-                                <span class="feature-tag">✅ Centrage auto gouvernail</span>
+                                <span class="feature-tag">✅ Progressive Acceleration</span>
+                                <span class="feature-tag">✅ Auto Rudder Centering</span>
                                 <span class="feature-tag">✅ 30 Hz</span>
                             </div>
-                            
-                            <p class="instructions-note">ou joystick VRX</p>
+
+                            <p class="instructions-note">Or VRX joystick | Ou joystick VRX</p>
                             <code>ros2 launch vrx_gz usv_joy_teleop.py</code>
                         </div>
                     </div>
@@ -313,10 +305,10 @@
 
             <!-- Configuration Panel -->
             <div class="panel config-panel">
-                <h2>⚙️ Configuration avancée</h2>
+                <h2>Advanced Configuration | Configuration Avancée</h2>
                 <div class="config-grid">
                     <div class="config-section">
-                        <h3>Contrôle PID</h3>
+                        <h3>PID Control | Contrôle PID</h3>
                         <div class="config-item">
                             <label for="cfg-kp">Kp (Proportional):</label>
                             <input type="number" id="cfg-kp" min="0" max="2000" step="50" value="400">
@@ -331,27 +323,26 @@
                         </div>
                     </div>
                     <div class="config-section">
-                        <h3>Vitesse</h3>
+                        <h3>Speed | Vitesse</h3>
                         <div class="config-item">
                             <label for="cfg-base-speed">Base:</label>
-                            <input type="number" id="cfg-base-speed" min="100" max="1000" step="50" value="500">
+                            <input type="number" id="cfg-base-speed" min="100" max="2000" step="50" value="500">
                         </div>
                         <div class="config-item">
                             <label for="cfg-max-speed">Max:</label>
-                            <input type="number" id="cfg-max-speed" min="100" max="1000" step="50" value="800">
+                            <input type="number" id="cfg-max-speed" min="100" max="2000" step="50" value="800">
                         </div>
                         <div class="config-item">
-                            <label for="cfg-safe-dist">Dist. sécurité (m):</label>
+                            <label for="cfg-safe-dist">Safe Dist. | Dist. Sécurité (m):</label>
                             <input type="number" id="cfg-safe-dist" min="5" max="50" step="1" value="15">
                         </div>
                     </div>
                 </div>
                 <div class="config-buttons">
                     <button id="btn-apply-config" class="config-btn apply">
-                        Appliquer PID
+                        Apply Config | Appliquer
                     </button>
                 </div>
-                <!-- Hidden fields to maintain compatibility -->
                 <input type="hidden" id="cfg-lanes" value="8">
                 <input type="hidden" id="cfg-scan-length" value="150">
                 <input type="hidden" id="cfg-scan-width" value="50">
@@ -359,24 +350,40 @@
 
             <!-- Map Panel -->
             <div class="panel map-panel">
-                <h2>🗺️ Carte et Waypoints</h2>
+                <h2>Map & Waypoints | Carte et Points</h2>
                 <div class="map-legend">
-                    <span class="legend-item"><span class="legend-color boat"></span> Navire</span>
+                    <span class="legend-item"><span class="legend-color boat"></span> Boat | Navire</span>
                     <span class="legend-item"><span class="legend-color waypoint"></span> Waypoint</span>
-                    <span class="legend-item"><span class="legend-color current-wp"></span> Cible actuelle</span>
-                    <span class="legend-item"><span class="legend-color path"></span> Trajet</span>
-                    <span class="legend-item"><span class="legend-color trajectory"></span> Trajectoire</span>
+                    <span class="legend-item"><span class="legend-color current-wp"></span> Current Target | Cible</span>
+                    <span class="legend-item"><span class="legend-color path"></span> Path | Trajet</span>
+                    <span class="legend-item"><span class="legend-color trajectory"></span> Trajectory | Trajectoire</span>
                 </div>
                 <div id="map"></div>
             </div>
 
-            <!-- Raw Terminal Output Panel -->
+            <!-- Camera Feed Panel -->
+            <div class="panel camera-panel">
+                <h2>Front Camera Feed | Flux Caméra Avant</h2>
+                <div class="camera-container">
+                    <div id="camera-feed">
+                    <img id="camera-image" src="" alt="Camera feed not available" style="width: 100%; height: auto; border-radius: 4px;">
+                    <div id="camera-status" class="camera-status">Waiting for camera feed... | En attente du flux...</div>
+                </div>
+            </div>
+            <div class="camera-controls">
+                <label for="camera-topic">Camera Topic:</label>
+                <input type="text" id="camera-topic" value="/wamv/sensors/cameras/front_left_camera_sensor/image_raw" style="width: 250px; padding: 5px;">
+                <button id="btn-refresh-camera" class="config-btn apply" style="margin-left: 10px;">Refresh | Actualiser</button>
+            </div>
+        </div>
+
+            <!-- Terminal Panel -->
             <div class="panel terminal-panel">
-                <h2>Terminal ROS2</h2>
+                <h2>ROS2 Terminal</h2>
                 <div class="terminal-header">
                     <span class="terminal-title">vostok1_node@ros2</span>
                     <div class="terminal-controls">
-                        <button id="btn-clear-terminal" class="terminal-btn">Effacer</button>
+                        <button id="btn-clear-terminal" class="terminal-btn">Clear | Effacer</button>
                         <label class="auto-scroll-label">
                             <input type="checkbox" id="auto-scroll" checked>
                             Auto-scroll
@@ -384,18 +391,18 @@
                     </div>
                 </div>
                 <div id="terminal-output" class="terminal-container">
-                    <div class="terminal-line system">[SYSTÈME] En attente de connexion à Vostok1...</div>
+                    <div class="terminal-line system">[SYSTEM] Waiting for Vostok1 connection | En attente de connexion...</div>
                 </div>
             </div>
 
             <!-- Logs Panel -->
             <div class="panel logs-panel">
-                <h2>Journaux Système</h2>
+                <h2>System Logs | Journaux Système</h2>
                 <div id="logs" class="logs-container"></div>
             </div>
         </div>
     </div>
 
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=4"></script>
 </body>
 </html>

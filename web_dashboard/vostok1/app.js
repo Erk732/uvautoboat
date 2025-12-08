@@ -20,6 +20,11 @@ let modularMissionCommandPublisher = null;  // For sputnik planner
 // Track which config inputs have been modified by user (prevents ROS from overwriting)
 let dirtyInputs = new Set();
 
+// Camera feed elements
+let cameraImageEl = null;
+let cameraStatusEl = null;
+let cameraTopicInput = null;
+
 // Mission state
 let missionState = {
     state: 'IDLE',
@@ -33,6 +38,8 @@ let missionState = {
     startLat: null,
     startLon: null
 };
+
+const WAYPOINT_STORAGE_KEY = 'vostok1_cached_waypoints';
 
 // Data storage
 let currentState = {
@@ -53,66 +60,25 @@ let currentState = {
     }
 };
 
-// Style mode state: 'normal', 'bureau', 'terminal', 'milspec'
-let currentStyleMode = 'normal';
-const styleModes = ['normal', 'bureau', 'terminal', 'milspec'];
-const styleModeLabels = {
-    'normal': 'БЮРО TNO',
-    'bureau': 'ТЕРМИНАЛ', 
-    'terminal': 'ВМФ СССР',
-    'milspec': 'ОБЫЧНЫЙ'
-};
-const styleModeLogMessages = {
-    'normal': 'Режим: Стандартный интерфейс',
-    'bureau': 'Режим: Бюро ТНО — Социалистический Долгосрочизм',
-    'terminal': 'Режим: Терминал ЭВМ — Командная строка',
-    'milspec': '>>> РЕЖИМ БОЕВОЙ ГОТОВНОСТИ <<<\n>>> ВМФ СССР — ВАРШАВСКИЙ ДОГОВОР <<<\n>>> СПЕЦИФИКАЦИЯ МИЛ-СТД-1553 <<<'
-};
+// Style mode (single mode - normal only)
 
 // Initialize everything when page loads
 window.addEventListener('load', () => {
     console.log('Dashboard loading...');
     initMap();
+    restorePersistedWaypoints();  // Recover waypoints after hard refresh
     connectToROS();
     initStyleToggle();
     initConfigPanel();
     initMissionControl();  // NEW: Mission control buttons
+    initCameraFeed();      // Camera/RViz stream panel
     initTerminal();
     addLog('Dashboard initialized', 'info');
 });
 
-// Initialize style toggle button - cycles through 3 modes
+// Style toggle removed - using single normal mode
 function initStyleToggle() {
-    const toggleBtn = document.getElementById('style-toggle');
-    const toggleText = document.getElementById('toggle-text');
-    const body = document.body;
-    const container = document.querySelector('.container');
-    
-    toggleBtn.addEventListener('click', () => {
-        // Remove current style class
-        body.classList.remove('bureau-mode', 'terminal-mode', 'milspec-mode');
-        container.classList.remove('bureau-mode', 'terminal-mode', 'milspec-mode');
-        
-        // Cycle to next style
-        const currentIndex = styleModes.indexOf(currentStyleMode);
-        const nextIndex = (currentIndex + 1) % styleModes.length;
-        currentStyleMode = styleModes[nextIndex];
-        
-        // Apply new style class (normal has no class)
-        if (currentStyleMode !== 'normal') {
-            body.classList.add(`${currentStyleMode}-mode`);
-            container.classList.add(`${currentStyleMode}-mode`);
-        }
-        
-        // Update button text to show NEXT mode
-        toggleText.textContent = styleModeLabels[currentStyleMode];
-        
-        // Log the change
-        addLog(styleModeLogMessages[currentStyleMode], 'info');
-        console.log(`Style changed to: ${currentStyleMode}`);
-    });
-    
-    console.log('Style toggle initialized (4-mode cycle: Normal → Bureau → Terminal → MilSpec)');
+    // Style toggle functionality removed
 }
 
 
@@ -126,11 +92,11 @@ function updateFollowButtonState() {
         if (mapFollowBoat) {
             btn.innerHTML = '🔒';
             btn.classList.add('active');
-            btn.title = 'Suivi actif (cliquer pour désactiver)';
+            btn.title = 'Following active (click to disable) | Suivi actif';
         } else {
             btn.innerHTML = '🎯';
             btn.classList.remove('active');
-            btn.title = 'Cliquer pour suivre le navire';
+            btn.title = 'Click to follow boat | Suivre le navire';
         }
     }
 }
@@ -162,7 +128,7 @@ function initMap() {
             const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control follow-boat-control');
             const button = L.DomUtil.create('a', 'follow-boat-btn', container);
             button.href = '#';
-            button.title = 'Suivre le navire';
+            button.title = 'Follow boat | Suivre le navire';
             button.innerHTML = '🎯';
             button.id = 'follow-boat-toggle';
             
@@ -217,14 +183,61 @@ function connectToROS() {
     });
 }
 
+// Initialize camera/RViz stream panel using web_video_server
+function initCameraFeed() {
+    cameraImageEl = document.getElementById('camera-image');
+    cameraStatusEl = document.getElementById('camera-status');
+    cameraTopicInput = document.getElementById('camera-topic');
+    const refreshBtn = document.getElementById('btn-refresh-camera');
+
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', updateCameraStream);
+    }
+
+    if (!cameraImageEl || !cameraStatusEl || !cameraTopicInput) {
+        return;
+    }
+
+    cameraImageEl.addEventListener('load', () => {
+        cameraStatusEl.textContent = 'Streaming | Flux en cours';
+        cameraStatusEl.classList.remove('error');
+    });
+
+    cameraImageEl.addEventListener('error', () => {
+        cameraStatusEl.textContent = 'Camera feed unavailable. Start web_video_server? | Flux indisponible';
+        cameraStatusEl.classList.add('error');
+    });
+
+    updateCameraStream();
+}
+
+function updateCameraStream() {
+    if (!cameraImageEl || !cameraTopicInput || !cameraStatusEl) {
+        return;
+    }
+    const topic = cameraTopicInput.value.trim() || '/wamv/sensors/cameras/front_left_camera_sensor/image_raw';
+    cameraStatusEl.textContent = `Connecting to ${topic}...`;
+    const streamUrl = buildCameraUrl(topic);
+    // Cache-bust each refresh to force a reconnect
+    cameraImageEl.src = `${streamUrl}&t=${Date.now()}`;
+}
+
+function buildCameraUrl(topic) {
+    // Use the current host so you don't need a separate tab on another localhost/host.
+    const baseHost = window.location.hostname || 'localhost';
+    const base = `${window.location.protocol}//${baseHost}:8080/stream`;
+    // web_video_server expects the topic path unencoded (slashes are valid), so build manually.
+    return `${base}?topic=${topic}&type=mjpeg&quality=80`;
+}
+
 // Update connection status indicator
 function updateConnectionStatus(isConnected) {
     const statusElement = document.getElementById('connection-status');
     if (isConnected) {
-        statusElement.textContent = 'Connecté';
+        statusElement.textContent = 'Connected | Connecté';
         statusElement.className = 'status connected';
     } else {
-        statusElement.textContent = 'Déconnecté';
+        statusElement.textContent = 'Disconnected | Déconnecté';
         statusElement.className = 'status disconnected';
     }
 }
@@ -322,7 +335,7 @@ function subscribeToTopics() {
     });
 
     // ==================== MODULAR NAVIGATION SUPPORT ====================
-    // Subscribe to modular navigation topics (sputnik_planner, oko_perception, buran_controller)
+// Subscribe to modular navigation topics (sputnik_planner, oko_perception, buran_controller)
     
     // Modular mission status from sputnik_planner
     const modularMissionTopic = new ROSLIB.Topic({
@@ -381,7 +394,10 @@ function subscribeToTopics() {
             
             missionState.waypoints = data.waypoints;
             missionState.totalWaypoints = data.total || data.waypoints.length;
+            persistWaypoints();
             displayWaypointsOnMap(data.waypoints, waypointsChanged);
+        } else {
+            clearWaypoints('Planner cleared waypoints');
         }
     });
     
@@ -494,7 +510,10 @@ function subscribeToTopics() {
             const waypointsChanged = newWpString !== oldWpString;
             
             missionState.waypoints = data.waypoints;
+            persistWaypoints();
             displayWaypointsOnMap(data.waypoints, waypointsChanged);
+        } else {
+            clearWaypoints('Waypoints cleared');
         }
     });
     
@@ -531,7 +550,79 @@ function subscribeToTopics() {
         }
     });
     
-    addTerminalLine({ level: 20, msg: 'Connecté à ROS', name: 'system' });
+    addTerminalLine({ level: 20, msg: 'Connected to ROS | Connecté à ROS', name: 'system' });
+}
+
+// ========== CAMERA STREAMING ==========
+let cameraTopic = null;
+let cameraImage = document.getElementById('camera-image');
+let cameraStatus = document.getElementById('camera-status');
+
+function initializeCamera() {
+    if (!connected) {
+        console.log('ROS not connected, skipping camera initialization');
+        return;
+    }
+    
+    const defaultTopic = '/wamv/sensors/camera/image_raw';
+    subscribeToCamera(defaultTopic);
+    
+    // Set up refresh button
+    document.getElementById('btn-refresh-camera').addEventListener('click', () => {
+        const topic = document.getElementById('camera-topic').value;
+        if (cameraTopic) {
+            cameraTopic.unsubscribe();
+        }
+        subscribeToCamera(topic);
+    });
+}
+
+function subscribeToCamera(topicName) {
+    try {
+        // Create video stream using ros bridge
+        cameraTopic = new ROSLIB.Topic({
+            ros: ros,
+            name: topicName,
+            messageType: 'sensor_msgs/Image'
+        });
+        
+        // Subscribe and display images
+        cameraTopic.subscribe((message) => {
+            try {
+                // Convert ROS image message to base64 and display
+                const imageData = message.data;
+                if (imageData && imageData.length > 0) {
+                    // Decode base64 image
+                    const binaryString = atob(imageData);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    const blob = new Blob([bytes], { type: 'image/jpeg' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    cameraImage.src = url;
+                    cameraStatus.style.display = 'none';
+                    cameraImage.style.display = 'block';
+                }
+            } catch (e) {
+                console.error('Error processing camera image:', e);
+                cameraStatus.textContent = `Error: ${e.message}`;
+                cameraStatus.style.display = 'block';
+            }
+        });
+        
+        console.log(`✓ Camera subscribed to: ${topicName}`);
+        cameraStatus.textContent = `Camera: ${topicName}`;
+        cameraStatus.style.display = 'block';
+        addLog(`✓ Camera feed initialized | Flux caméra initialisé: ${topicName}`, 'info');
+        
+    } catch (error) {
+        console.error('Error subscribing to camera topic:', error);
+        cameraStatus.textContent = `Error: Cannot connect to ${topicName}`;
+        cameraStatus.style.display = 'block';
+        addLog(`✗ Camera initialization failed | Échec: ${error.message}`, 'error');
+    }
 }
 
 // Update GPS data
@@ -549,8 +640,8 @@ function updateGPS(message) {
     
     // Add to trajectory
     trajectoryPoints.push(latLng);
-    if (trajectoryPoints.length > 100) {
-        trajectoryPoints.shift(); // Keep last 100 points
+    if (trajectoryPoints.length > 300) {
+        trajectoryPoints.shift(); // Keep last 300 points (extended trail)
     }
     trajectoryLine.setLatLngs(trajectoryPoints);
     
@@ -586,13 +677,38 @@ function updateThruster(side, value) {
 
 // Simulate mission data (would come from custom topics in real implementation)
 function updateMissionStatus(data) {
-    currentState.mission.state = data.state;
-    currentState.mission.waypoint = data.waypoint;
-    currentState.mission.distance = data.distance_to_waypoint;
+    currentState.mission.state = data.state || 'UNKNOWN';
+    currentState.mission.waypoint = data.waypoint || 0;
+    // Guard against missing distance fields to avoid crashes on refresh
+    const distance = (data.distance_to_waypoint !== undefined && data.distance_to_waypoint !== null)
+        ? data.distance_to_waypoint
+        : 0;
+    currentState.mission.distance = distance;
     
-    document.getElementById('state').textContent = data.state.replace(/_/g, ' ');
-    document.getElementById('waypoint').textContent = `${data.waypoint}/${data.total_waypoints}`;
-    document.getElementById('distance').textContent = data.distance_to_waypoint.toFixed(1) + 'm';
+    // CRITICAL: Update missionState.currentWaypoint so waypoints on map reflect current progress
+    // This is needed for displayWaypointsOnMap() to show correct waypoint coloring (passed/current/pending)
+    const previousWaypoint = missionState.currentWaypoint;
+    missionState.currentWaypoint = data.waypoint || 0;
+    // Sync totals if provided
+    if (data.total_waypoints !== undefined) {
+        missionState.totalWaypoints = data.total_waypoints || 0;
+        // If planner reports zero waypoints, clear map so stale routes disappear
+        if (missionState.totalWaypoints === 0 && missionState.waypoints.length > 0) {
+            clearWaypoints('Planner reported 0 waypoints');
+        } else {
+            persistWaypoints();
+        }
+    }
+    
+    // If waypoint changed, redraw waypoints on map to update colors (green for passed, orange for current)
+    if (previousWaypoint !== missionState.currentWaypoint && missionState.waypoints.length > 0) {
+        console.log(`Waypoint updated: ${previousWaypoint} → ${missionState.currentWaypoint}, redrawing map`);
+        displayWaypointsOnMap(missionState.waypoints, false);  // Don't fit to bounds, just update colors
+    }
+    
+    document.getElementById('state').textContent = (data.state || 'UNKNOWN').replace(/_/g, ' ');
+    document.getElementById('waypoint').textContent = `${data.waypoint || 0}/${data.total_waypoints || missionState.totalWaypoints || 0}`;
+    document.getElementById('distance').textContent = distance.toFixed(1) + 'm';
 }
 
 // Simulate obstacle data (would parse from PointCloud2 or custom topic)
@@ -652,13 +768,13 @@ function updateObstacleStatus(data) {
     } else {
         // Fallback to old behavior if status not provided
         if (minDist > 15 || minDist >= 999) {
-            statusBadge.textContent = 'Dégagé';
+            statusBadge.textContent = 'Clear | Dégagé';
             statusBadge.className = 'value badge clear';
         } else if (minDist > 5) {
-            statusBadge.textContent = 'Attention';
+            statusBadge.textContent = 'Warning | Attention';
             statusBadge.className = 'value badge warning';
         } else {
-            statusBadge.textContent = 'Critique';
+            statusBadge.textContent = 'Critical | Critique';
             statusBadge.className = 'value badge critical';
         }
     }
@@ -676,17 +792,17 @@ function updateAntiStuckStatus(data) {
     
     if (stuckStatus) {
         if (data.is_stuck && data.escape_mode) {
-            stuckStatus.textContent = `BLOQUÉ (Tentative ${data.consecutive_attempts})`;
+            stuckStatus.textContent = `STUCK | BLOQUÉ (Attempt ${data.consecutive_attempts})`;
             stuckStatus.className = 'value badge critical';
         } else {
             stuckStatus.textContent = 'Normal';
             stuckStatus.className = 'value badge clear';
         }
     }
-    
+
     if (escapePhase) {
         const phases = ['PROBE', 'REVERSE', 'TURN', 'FORWARD', 'IDLE'];
-        const phaseNames = ['SONDAGE', 'MARCHE ARRIÈRE', 'VIRAGE', 'AVANT', 'EN ATTENTE'];
+        const phaseNames = ['PROBE | Sondage', 'REVERSE | Arrière', 'TURN | Virage', 'FORWARD | Avant', 'IDLE | Attente'];
         const idx = data.escape_mode ? data.escape_phase : 4;
         escapePhase.textContent = phaseNames[idx];
         escapePhase.className = data.escape_mode ? 'value active' : 'value';
@@ -715,29 +831,29 @@ function updateAntiStuckStatus(data) {
         const uy = data.drift_uncertainty[1];
         const avgUncertainty = Math.hypot(ux, uy);
         if (avgUncertainty < 0.1) {
-            driftUncertainty.textContent = 'Haute conf.';
+            driftUncertainty.textContent = 'High conf. | Haute conf.';
             driftUncertainty.style.color = '#4CAF50';
         } else if (avgUncertainty < 0.5) {
             driftUncertainty.textContent = `σ=${avgUncertainty.toFixed(2)}`;
             driftUncertainty.style.color = '#FFC107';
         } else {
-            driftUncertainty.textContent = `σ=${avgUncertainty.toFixed(2)} (converge)`;
+            driftUncertainty.textContent = `σ=${avgUncertainty.toFixed(2)} (converging | convergence)`;
             driftUncertainty.style.color = '#FF9800';
         }
     }
-    
+
     if (escapeHistory) {
-        escapeHistory.textContent = `${data.escape_history_count} entrées`;
+        escapeHistory.textContent = `${data.escape_history_count} entries | entrées`;
     }
-    
+
     if (probeResults && data.probe_results) {
-        probeResults.textContent = `L:${data.probe_results.left}m R:${data.probe_results.right}m`;
+        probeResults.textContent = `L:${data.probe_results.left}m | R:${data.probe_results.right}m`;
     }
-    
+
     // Update best direction indicator if exists
     const bestDirection = document.getElementById('best-direction');
     if (bestDirection && data.best_direction) {
-        bestDirection.textContent = data.best_direction === 'LEFT' ? '← GAUCHE' : '→ DROITE';
+        bestDirection.textContent = data.best_direction === 'LEFT' ? '← LEFT | Gauche' : '→ RIGHT | Droite';
     }
     
     // Add terminal log for stuck events
@@ -818,9 +934,9 @@ function initConfigPanel() {
         }
     });
     
-    // Apply all config button (now applies PID/Speed only)
+    // Apply all config button (applies all parameters including PID, speed, and scan settings)
     document.getElementById('btn-apply-config').addEventListener('click', () => {
-        sendConfig(true, false);  // PID only
+        sendConfig(false, false);  // Send ALL parameters (PID, speed, scan settings)
         // Don't clear dirty state immediately - wait for ROS to confirm
         // The dirty state will be cleared when we receive matching values from ROS
         // For now, just give feedback
@@ -909,7 +1025,7 @@ function sendConfig(pidOnly = false, restart = false) {
             ki: parseFloat(document.getElementById('cfg-ki').value),
             kd: parseFloat(document.getElementById('cfg-kd').value)
         };
-        addLog('Envoi configuration PID...', 'info');
+        addLog('Sending PID config... | Envoi configuration PID...', 'info');
     } else {
         // Send all parameters
         config = {
@@ -923,12 +1039,12 @@ function sendConfig(pidOnly = false, restart = false) {
             max_speed: parseFloat(document.getElementById('cfg-max-speed').value),
             min_safe_distance: parseFloat(document.getElementById('cfg-safe-dist').value)
         };
-        addLog('Envoi configuration complète...', 'info');
+        addLog('Sending full config... | Envoi configuration complète...', 'info');
     }
-    
+
     if (restart) {
         config.restart_mission = true;
-        addLog('Redémarrage de la mission...', 'warning');
+        addLog('Restarting mission... | Redémarrage de la mission...', 'warning');
     }
     
     const message = new ROSLIB.Message({
@@ -940,7 +1056,7 @@ function sendConfig(pidOnly = false, restart = false) {
     if (modularConfigPublisher) {
         modularConfigPublisher.publish(message);
     }
-    addLog('Configuration envoyée!', 'info');
+    addLog('Config sent! | Configuration envoyée!', 'info');
     console.log('Config sent to both vostok1 and sputnik:', config);
 }
 
@@ -1007,7 +1123,7 @@ function initTerminal() {
     if (clearBtn) {
         clearBtn.addEventListener('click', () => {
             const terminal = document.getElementById('terminal-output');
-            terminal.innerHTML = '<div class="terminal-line system">[SYSTEM] Terminal effacé</div>';
+            terminal.innerHTML = '<div class="terminal-line system">[SYSTEM] Terminal cleared | Terminal effacé</div>';
         });
     }
 }
@@ -1047,18 +1163,18 @@ function initMissionControl() {
     });
     
     document.getElementById('btn-reset-mission').addEventListener('click', () => {
-        if (confirm('Réinitialiser la mission et effacer les waypoints?')) {
+        if (confirm('Reset mission and clear waypoints? | Réinitialiser la mission et effacer les waypoints?')) {
             sendMissionCommand('reset_mission');
             clearWaypointPreview();
-            addLog('Mission reset - ready for new waypoints', 'warning');
+            addLog('Mission reset - ready for new waypoints | Prêt pour nouveaux waypoints', 'warning');
         }
     });
-    
+
     // Go Home - One-click return to spawn point
     document.getElementById('btn-go-home').addEventListener('click', () => {
-        if (confirm('🏠 Retour maison: Le bateau va naviguer vers son point de départ. Continuer?')) {
+        if (confirm('🏠 Go Home: The boat will navigate to its starting point. Continue? | Le bateau va naviguer vers son point de départ. Continuer?')) {
             sendMissionCommand('go_home');
-            addLog('🏠 Retour maison activé - Navigation vers le point de départ', 'info');
+            addLog('🏠 Go Home activated | Retour maison activé', 'info');
         }
     });
     
@@ -1137,6 +1253,15 @@ function sendMissionCommand(command) {
             messageType: 'std_msgs/String'
         });
     }
+
+    // Ensure modular publisher exists too (avoid race after hard-refresh)
+    if (!modularMissionCommandPublisher) {
+        modularMissionCommandPublisher = new ROSLIB.Topic({
+            ros: ros,
+            name: '/sputnik/mission_command',
+            messageType: 'std_msgs/String'
+        });
+    }
     
     const msg = new ROSLIB.Message({
         data: JSON.stringify({ command: command })
@@ -1159,37 +1284,42 @@ function updateMissionControlUI(state) {
     missionState.gpsReady = (state.gps_ready !== undefined) ? state.gps_ready : connected;
     missionState.missionArmed = state.mission_armed || false;
     missionState.joystickOverride = state.joystick_override || false;
-    missionState.totalWaypoints = state.total_waypoints || 0;
+    missionState.totalWaypoints = (state.total_waypoints !== undefined)
+        ? state.total_waypoints
+        : missionState.totalWaypoints;
     missionState.currentWaypoint = state.current_waypoint || 0;
     missionState.startLat = state.start_lat;
     missionState.startLon = state.start_lon;
+    if (missionState.waypoints && missionState.waypoints.length > 0) {
+        persistWaypoints();
+    }
     
     // Update GPS indicator
     const gpsBadge = document.getElementById('gps-ready-badge');
     if (gpsBadge) {
         if (missionState.gpsReady) {
-            gpsBadge.textContent = '📡 GPS: Prêt';
+            gpsBadge.textContent = '📡 GPS: Ready | Prêt';
             gpsBadge.className = 'gps-badge ready';
         } else {
-            gpsBadge.textContent = '📡 GPS: En attente...';
+            gpsBadge.textContent = '📡 GPS: Waiting... | En attente...';
             gpsBadge.className = 'gps-badge not-ready';
         }
     }
-    
+
     // Update state badge
     const stateBadge = document.getElementById('mission-state-badge');
     if (stateBadge) {
         const stateLabels = {
-            'INIT': '🔄 Initialisation',
-            'IDLE': 'En attente',
-            'WAITING_CONFIRM': '👁️ Confirmation',
-            'WAYPOINTS_PREVIEW': '👁️ Aperçu',
-            'READY': '✅ Prêt',
-            'RUNNING': '🚀 En cours',
-            'DRIVING': '🚀 En cours',
-            'PAUSED': '⏸️ Pause',
-            'JOYSTICK': '🎮 Joystick',
-            'FINISHED': '🏁 Terminé'
+            'INIT': 'Init | Initialisation',
+            'IDLE': 'Idle | En attente',
+            'WAITING_CONFIRM': 'Confirm | Confirmation',
+            'WAYPOINTS_PREVIEW': 'Preview | Aperçu',
+            'READY': 'Ready | Prêt',
+            'RUNNING': 'Running | En cours',
+            'DRIVING': 'Driving | Navigation',
+            'PAUSED': 'Paused | Pause',
+            'JOYSTICK': 'Joystick',
+            'FINISHED': 'Finished | Terminé'
         };
         stateBadge.textContent = stateLabels[missionState.state] || missionState.state;
         stateBadge.className = `mission-badge ${missionState.state.toLowerCase()}`;
@@ -1204,6 +1334,7 @@ function updateMissionControlUI(state) {
     const btnResume = document.getElementById('btn-resume-mission');
     const btnJoyEnable = document.getElementById('btn-joystick-enable');
     const btnJoyDisable = document.getElementById('btn-joystick-disable');
+    const hasWaypoints = (missionState.totalWaypoints || 0) > 0 || (missionState.waypoints && missionState.waypoints.length > 0);
     
     // Reset all buttons
     [btnGenerate, btnConfirm, btnCancel, btnStart, btnStop, btnResume, btnJoyEnable, btnJoyDisable].forEach(btn => {
@@ -1223,14 +1354,14 @@ function updateMissionControlUI(state) {
         case 'WAITING_CONFIRM':  // Modular sputnik uses this instead of WAYPOINTS_PREVIEW
         case 'WAYPOINTS_PREVIEW':
             btnGenerate.disabled = false;
-            btnConfirm.disabled = false;
-            btnCancel.disabled = false;
+            btnConfirm.disabled = !hasWaypoints;
+            btnCancel.disabled = !hasWaypoints;
             btnJoyEnable.disabled = false;
             break;
             
         case 'READY':
-            btnStart.disabled = false;
-            btnCancel.disabled = false;
+            btnStart.disabled = !hasWaypoints;
+            btnCancel.disabled = !hasWaypoints;
             btnJoyEnable.disabled = false;
             break;
         
@@ -1240,9 +1371,9 @@ function updateMissionControlUI(state) {
             break;
             
         case 'PAUSED':
-            btnResume.disabled = false;
-            btnStart.disabled = false;
-            btnCancel.disabled = false;
+            btnResume.disabled = !hasWaypoints;
+            btnStart.disabled = !hasWaypoints;
+            btnCancel.disabled = !hasWaypoints;
             btnJoyEnable.disabled = false;
             break;
             
@@ -1283,10 +1414,22 @@ function displayWaypointsOnMap(waypoints, fitToWaypoints = false) {
     clearWaypointPreview();
     
     if (!waypoints || waypoints.length === 0) return;
-    if (!missionState.startLat || !missionState.startLon) return;
     
-    const startLat = missionState.startLat;
-    const startLon = missionState.startLon;
+    // Get reference point: use mission start if available, otherwise use current boat position
+    let startLat = missionState.startLat;
+    let startLon = missionState.startLon;
+    
+    if (!startLat || !startLon) {
+        // Fallback: use boat's current GPS position as reference
+        // This allows waypoints to display even if config hasn't arrived yet
+        startLat = currentState.gps.lat;
+        startLon = currentState.gps.lon;
+        
+        if (!startLat || !startLon || startLat === 0) {
+            // Still no reference point, can't display waypoints yet
+            return;
+        }
+    }
     
     // Convert local coordinates to GPS
     // Handle both formats: [{x, y}] from vostok1 or [[x, y]] from sputnik
@@ -1299,12 +1442,15 @@ function displayWaypointsOnMap(waypoints, fitToWaypoints = false) {
     
     // Create waypoint markers
     waypointLatLngs.forEach((wp, idx) => {
-        const isCurrentTarget = idx === missionState.currentWaypoint;
-        const isPassed = idx < missionState.currentWaypoint;
+        // Note: missionState.currentWaypoint is 1-indexed (from planner), but idx is 0-indexed
+        // Default to 0 if not yet initialized (after page refresh)
+        const currentWpIndex = (missionState.currentWaypoint || 1) - 1;
+        const isCurrentTarget = idx === currentWpIndex;
+        const isPassed = idx < currentWpIndex;
         
         const markerColor = isPassed ? 'green' : (isCurrentTarget ? 'orange' : 'blue');
         const markerSize = isCurrentTarget ? 14 : 10;
-        const statusText = isPassed ? '✓ Passed' : (isCurrentTarget ? '→ Current Target' : 'Pending');
+        const statusText = isPassed ? '✓ Passed | Passé' : (isCurrentTarget ? '→ Target | Cible' : 'Pending | En attente');
         
         const icon = L.divIcon({
             className: 'waypoint-marker',
@@ -1334,11 +1480,11 @@ function displayWaypointsOnMap(waypoints, fitToWaypoints = false) {
         
         const marker = L.marker([wp.lat, wp.lon], { icon: icon })
             .bindTooltip(tooltipContent, {
-                permanent: false,
+                permanent: false,  // Only show on hover
                 direction: 'top',
                 offset: [0, -10],
                 className: 'waypoint-tooltip-container',
-                sticky: true  // Keeps tooltip visible while hovering
+                sticky: true  // Keeps tooltip visible while mouse hovers over waypoint
             })
             .addTo(map);
         
@@ -1372,6 +1518,61 @@ function clearWaypointPreview() {
     if (waypointPath) {
         map.removeLayer(waypointPath);
         waypointPath = null;
+    }
+}
+
+// Clear stored waypoints + UI affordances
+function clearWaypoints(reason = '') {
+    missionState.waypoints = [];
+    missionState.totalWaypoints = 0;
+    missionState.currentWaypoint = 0;
+    clearWaypointPreview();
+
+    const wpCount = document.getElementById('waypoint-count');
+    if (wpCount) wpCount.textContent = 'Waypoints: 0';
+    const distEstimate = document.getElementById('estimated-distance');
+    if (distEstimate) distEstimate.textContent = 'Distance: 0m';
+
+    if (reason) {
+        addLog(`Waypoints cleared (${reason})`, 'warning');
+    }
+
+    try {
+        localStorage.removeItem(WAYPOINT_STORAGE_KEY);
+    } catch (err) {
+        console.warn('Failed to clear waypoint cache', err);
+    }
+}
+
+function persistWaypoints() {
+    try {
+        const payload = {
+            waypoints: missionState.waypoints || [],
+            totalWaypoints: missionState.totalWaypoints || 0,
+            startLat: missionState.startLat,
+            startLon: missionState.startLon
+        };
+        localStorage.setItem(WAYPOINT_STORAGE_KEY, JSON.stringify(payload));
+    } catch (err) {
+        console.warn('Failed to persist waypoints', err);
+    }
+}
+
+function restorePersistedWaypoints() {
+    try {
+        const raw = localStorage.getItem(WAYPOINT_STORAGE_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (data.waypoints && data.waypoints.length > 0) {
+            missionState.waypoints = data.waypoints;
+            missionState.totalWaypoints = data.totalWaypoints || data.waypoints.length;
+            missionState.startLat = data.startLat || missionState.startLat;
+            missionState.startLon = data.startLon || missionState.startLon;
+            addLog(`Restored ${missionState.waypoints.length} cached waypoints`, 'info');
+            displayWaypointsOnMap(missionState.waypoints, true);
+        }
+    } catch (err) {
+        console.warn('Failed to restore waypoint cache', err);
     }
 }
 

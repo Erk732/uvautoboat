@@ -37,15 +37,15 @@ import json
 import numpy as np
 from collections import deque
 
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, LaserScan
 from std_msgs.msg import String, Bool
 
 
 class OkoPerception(Node):
     """
-    OKO - "Œil" (Référence au système d'alerte précoce par satellite)
-    Système de perception et détection d'obstacles
-    
+    OKO - Obstacle detection and perception system
+    (Named after the Soviet early warning satellite system)
+
     Enhanced with temporal filtering, clustering, and velocity estimation.
     """
     def __init__(self):
@@ -71,6 +71,24 @@ class OkoPerception(Node):
         self.declare_parameter('water_plane_threshold', 0.5)  # Tolerance for water plane removal
         self.declare_parameter('velocity_history_size', 5)    # Reduced: faster velocity estimate
 
+        # v2.1: VFH Steering parameters (from AllInOneStack)
+        self.declare_parameter('vfh_enabled', True)           # Enable VFH steering
+        self.declare_parameter('vfh_bin_deg', 5.0)            # VFH bin angle (degrees)
+        self.declare_parameter('vfh_block_dist', 15.0)        # VFH blocking distance (m)
+        self.declare_parameter('vfh_clearance_deg', 10.0)     # Inflation clearance (degrees)
+
+        # v2.1: Polar histogram parameters (from AllInOneStack)
+        self.declare_parameter('polar_enabled', True)         # Enable polar histogram bias
+        self.declare_parameter('polar_weight_power', 1.0)     # Weight power for distance
+
+        # v2.1: LaserScan fusion parameters
+        self.declare_parameter('laserscan_enabled', True)     # Enable LaserScan fusion
+        self.declare_parameter('laserscan_topic', '/wamv/sensors/lidars/lidar_wamv_sensor/scan')
+        self.declare_parameter('laserscan_topic_alt', '/wamv/sensors/lidars/lidar_wamv/scan')
+
+        # v2.1: Extended detection horizon (from AllInOneStack)
+        self.declare_parameter('full_clear_distance', 60.0)   # Force avoidance trigger distance
+
         # Get parameters
         self.min_safe_distance = self.get_parameter('min_safe_distance').value
         self.critical_distance = self.get_parameter('critical_distance').value
@@ -88,6 +106,24 @@ class OkoPerception(Node):
         self.min_cluster_size = self.get_parameter('min_cluster_size').value
         self.water_plane_threshold = self.get_parameter('water_plane_threshold').value
         self.velocity_history_size = self.get_parameter('velocity_history_size').value
+
+        # v2.1: VFH parameters
+        self.vfh_enabled = self.get_parameter('vfh_enabled').value
+        self.vfh_bin_deg = self.get_parameter('vfh_bin_deg').value
+        self.vfh_block_dist = self.get_parameter('vfh_block_dist').value
+        self.vfh_clearance_deg = self.get_parameter('vfh_clearance_deg').value
+
+        # v2.1: Polar histogram parameters
+        self.polar_enabled = self.get_parameter('polar_enabled').value
+        self.polar_weight_power = self.get_parameter('polar_weight_power').value
+
+        # v2.1: LaserScan fusion parameters
+        self.laserscan_enabled = self.get_parameter('laserscan_enabled').value
+        laserscan_topic = self.get_parameter('laserscan_topic').value
+        laserscan_topic_alt = self.get_parameter('laserscan_topic_alt').value
+
+        # v2.1: Extended detection horizon
+        self.full_clear_distance = self.get_parameter('full_clear_distance').value
 
         # --- STATE ---
         self.obstacle_detected = False
@@ -126,6 +162,34 @@ class OkoPerception(Node):
         self.obstacle_tracks = {}  # {id: deque of (x, y, timestamp)}
         self.obstacle_velocities = {}  # {id: (vx, vy)}
 
+        # 7. v2.1: VFH steering state
+        self.vfh_best_direction = None  # Best gap direction (radians)
+        self.vfh_blocked_bins = []      # List of blocked bins
+
+        # 8. v2.1: Polar histogram state
+        self.polar_bias = 0.0           # Steering bias [-1, 1]
+
+        # 9. v2.1: LaserScan state
+        self.latest_scan = None         # Latest LaserScan message
+        self.scan_front_clear = float('inf')
+        self.scan_left_clear = float('inf')
+        self.scan_right_clear = float('inf')
+
+        # 10. v2.1: Force avoidance state
+        self.force_avoid_active = False
+
+        # --- PARAMETER CALLBACK ---
+        # Allow runtime parameter updates from web dashboard
+        self.add_on_set_parameters_callback(self.parameter_callback)
+        
+        # Subscribe to config updates from web dashboard
+        self.create_subscription(
+            String,
+            '/sputnik/set_config',
+            self.config_callback,
+            10
+        )
+
         # --- SUBSCRIBER ---
         self.create_subscription(
             PointCloud2,
@@ -142,6 +206,23 @@ class OkoPerception(Node):
             10
         )
 
+        # v2.1: LaserScan fusion (dual topic support like AllInOneStack)
+        if self.laserscan_enabled:
+            self.create_subscription(
+                LaserScan,
+                laserscan_topic,
+                self.laserscan_callback,
+                rclpy.qos.qos_profile_sensor_data
+            )
+            if laserscan_topic_alt and laserscan_topic_alt != laserscan_topic:
+                self.create_subscription(
+                    LaserScan,
+                    laserscan_topic_alt,
+                    self.laserscan_callback,
+                    rclpy.qos.qos_profile_sensor_data
+                )
+            self.get_logger().info(f"LaserScan fusion enabled: {laserscan_topic}")
+
         # --- PUBLISHERS ---
         self.pub_obstacle_info = self.create_publisher(
             String, '/perception/obstacle_info', 10
@@ -154,12 +235,17 @@ class OkoPerception(Node):
         self.create_timer(0.05, self.publish_status)
 
         self.get_logger().info("=" * 60)
-        self.get_logger().info("OKO v2.0 - Enhanced Obstacle Detection System")
+        self.get_logger().info("OKO v2.1 - Enhanced Obstacle Detection System")
         self.get_logger().info("=" * 60)
         self.get_logger().info(f"Safe Distance: {self.min_safe_distance}m | Critical: {self.critical_distance}m")
         self.get_logger().info(f"Height Filter: {self.min_height}m to {self.max_height}m")
         self.get_logger().info(f"Temporal Filter: {self.temporal_threshold}/{self.temporal_history_size} scans")
         self.get_logger().info(f"Clustering: {self.cluster_distance}m eps, {self.min_cluster_size} min points")
+        self.get_logger().info("--- v2.1 Enhancements ---")
+        self.get_logger().info(f"VFH Steering: {'Enabled' if self.vfh_enabled else 'Disabled'} (bin={self.vfh_bin_deg}°, block={self.vfh_block_dist}m)")
+        self.get_logger().info(f"Polar Histogram: {'Enabled' if self.polar_enabled else 'Disabled'}")
+        self.get_logger().info(f"LaserScan Fusion: {'Enabled' if self.laserscan_enabled else 'Disabled'}")
+        self.get_logger().info(f"Full Clear Distance: {self.full_clear_distance}m")
         self.get_logger().info("=" * 60)
     
     def target_callback(self, msg):
@@ -168,13 +254,107 @@ class OkoPerception(Node):
             data = json.loads(msg.data)
             target_heading = data.get('target_heading', 0.0)
             self.target_angle = math.radians(target_heading)
-            
+
             # Adaptive front sector width based on target direction
             # Narrower when heading straight, wider when turning
             heading_diff = abs(self.target_angle)
             self.front_half_width = math.pi/6 + (math.pi/12) * min(1.0, heading_diff / (math.pi/2))
         except:
             pass
+
+    def laserscan_callback(self, msg):
+        """Process LaserScan for fusion with PointCloud2 (v2.1)"""
+        self.latest_scan = msg
+
+        # Analyze scan for sector clearance
+        front_angle = math.pi / 6  # ±30° front
+        side_angle = math.pi / 3   # ±60° sides
+
+        f_min = float('inf')
+        l_min = float('inf')
+        r_min = float('inf')
+
+        angle = msg.angle_min
+        for rng in msg.ranges:
+            if math.isinf(rng) or math.isnan(rng) or rng <= 0.0 or rng < self.min_range:
+                angle += msg.angle_increment
+                continue
+
+            # Front sector
+            if -front_angle <= angle <= front_angle:
+                f_min = min(f_min, rng)
+            # Left sector
+            if 0.0 <= angle <= side_angle:
+                l_min = min(l_min, rng)
+            # Right sector
+            if -side_angle <= angle <= 0.0:
+                r_min = min(r_min, rng)
+
+            angle += msg.angle_increment
+
+        # Store scan results for fusion
+        fallback = msg.range_max if not math.isinf(msg.range_max) else self.max_range
+        self.scan_front_clear = f_min if f_min != float('inf') else fallback
+        self.scan_left_clear = l_min if l_min != float('inf') else fallback
+        self.scan_right_clear = r_min if r_min != float('inf') else fallback
+
+        # v2.1: Calculate VFH steering from scan
+        if self.vfh_enabled:
+            self._calculate_vfh_steering()
+
+        # v2.1: Calculate polar histogram bias from scan
+        if self.polar_enabled:
+            self._calculate_polar_bias()
+
+        # v2.1: Update force avoidance state
+        self._update_force_avoid_state()
+
+    def parameter_callback(self, params):
+        """Handle ROS 2 parameter changes for real-time tuning"""
+        from rcl_interfaces.srv import SetParametersResult
+        
+        for param in params:
+            try:
+                if param.name == 'min_safe_distance':
+                    self.min_safe_distance = param.value
+                    self.get_logger().info(f"✓ Updated min_safe_distance: {self.min_safe_distance}m")
+                elif param.name == 'critical_distance':
+                    self.critical_distance = param.value
+                    self.get_logger().info(f"✓ Updated critical_distance: {self.critical_distance}m")
+                elif param.name == 'hysteresis_distance':
+                    self.hysteresis_distance = param.value
+                    self.get_logger().info(f"✓ Updated hysteresis_distance: {self.hysteresis_distance}m")
+                elif param.name == 'vfh_block_dist':
+                    self.vfh_block_dist = param.value
+                    self.get_logger().info(f"✓ Updated vfh_block_dist: {self.vfh_block_dist}m")
+                elif param.name == 'full_clear_distance':
+                    self.full_clear_distance = param.value
+                    self.get_logger().info(f"✓ Updated full_clear_distance: {self.full_clear_distance}m")
+            except Exception as e:
+                self.get_logger().error(f"Error updating parameter {param.name}: {e}")
+                return SetParametersResult(successful=False)
+        
+        return SetParametersResult(successful=True)
+
+    def config_callback(self, msg):
+        """Handle configuration updates from web dashboard"""
+        try:
+            config = json.loads(msg.data)
+            
+            if 'min_safe_distance' in config:
+                self.min_safe_distance = float(config['min_safe_distance'])
+                self.get_logger().info(f"✓ Config: min_safe_distance = {self.min_safe_distance}m")
+            
+            if 'critical_distance' in config:
+                self.critical_distance = float(config['critical_distance'])
+                self.get_logger().info(f"✓ Config: critical_distance = {self.critical_distance}m")
+            
+            if 'vfh_block_dist' in config:
+                self.vfh_block_dist = float(config['vfh_block_dist'])
+                self.get_logger().info(f"✓ Config: vfh_block_dist = {self.vfh_block_dist}m")
+                
+        except Exception as e:
+            self.get_logger().error(f"Config parse error: {e}")
 
     def lidar_callback(self, msg):
         """Process 3D LIDAR point cloud for obstacle detection (Enhanced v2.0)"""
@@ -518,6 +698,136 @@ class OkoPerception(Node):
             # Linear interpolation
             return 1.0 - (distance - self.critical_distance) / (self.min_safe_distance - self.critical_distance)
 
+    # ==================== v2.1: VFH STEERING ====================
+
+    def _calculate_vfh_steering(self):
+        """
+        VFH-like steering: bin scan, mark blocked bins within vfh_block_dist,
+        find the best clear direction closest to target heading.
+        (Ported from AllInOneStack)
+        """
+        if self.latest_scan is None:
+            self.vfh_best_direction = None
+            return
+
+        scan = self.latest_scan
+        if not scan.ranges:
+            self.vfh_best_direction = None
+            return
+
+        bin_rad = math.radians(max(self.vfh_bin_deg, 1e-3))
+        clearance = math.radians(self.vfh_clearance_deg)
+        num_bins = int(math.ceil((scan.angle_max - scan.angle_min) / bin_rad))
+        blocked = [False] * num_bins
+
+        # Mark blocked bins
+        angle = scan.angle_min
+        for rng in scan.ranges:
+            idx = int((angle - scan.angle_min) / bin_rad)
+            if 0 <= idx < num_bins:
+                if rng > 0.0 and rng < self.vfh_block_dist:
+                    blocked[idx] = True
+            angle += scan.angle_increment
+
+        # Inflate blocked bins by clearance
+        inflate_bins = int(math.ceil(clearance / bin_rad))
+        if inflate_bins > 0:
+            blocked_inf = blocked[:]
+            for i, b in enumerate(blocked):
+                if not b:
+                    continue
+                for k in range(-inflate_bins, inflate_bins + 1):
+                    j = i + k
+                    if 0 <= j < num_bins:
+                        blocked_inf[j] = True
+            blocked = blocked_inf
+
+        self.vfh_blocked_bins = blocked
+
+        # Find best free bin closest to target heading (0 = straight ahead)
+        desired_yaw = self.target_angle  # Target direction
+        best_idx = None
+        best_err = None
+
+        for i, b in enumerate(blocked):
+            if b:
+                continue
+            center_ang = scan.angle_min + (i + 0.5) * bin_rad
+            err = abs(self._normalize_angle(center_ang - desired_yaw))
+            if best_err is None or err < best_err:
+                best_err = err
+                best_idx = i
+
+        if best_idx is not None:
+            self.vfh_best_direction = scan.angle_min + (best_idx + 0.5) * bin_rad
+        else:
+            self.vfh_best_direction = None
+
+    # ==================== v2.1: POLAR HISTOGRAM ====================
+
+    def _calculate_polar_bias(self):
+        """
+        Polar histogram: accumulate weighted free space left vs right.
+        Returns a normalized bias in [-1, 1] (positive => turn left).
+        (Ported from AllInOneStack)
+        """
+        if self.latest_scan is None:
+            self.polar_bias = 0.0
+            return
+
+        scan = self.latest_scan
+        if not scan.ranges:
+            self.polar_bias = 0.0
+            return
+
+        angle = scan.angle_min
+        left_score = 0.0
+        right_score = 0.0
+        power = max(self.polar_weight_power, 0.0)
+
+        for rng in scan.ranges:
+            if rng < self.min_range:
+                rng = self.min_range
+            if math.isinf(rng) or math.isnan(rng):
+                rng = self.max_range
+            w = rng ** power
+            if angle > 0.0:
+                left_score += w
+            else:
+                right_score += w
+            angle += scan.angle_increment
+
+        total = left_score + right_score
+        if total <= 0.0:
+            self.polar_bias = 0.0
+        else:
+            self.polar_bias = (left_score - right_score) / total
+
+    # ==================== v2.1: FORCE AVOIDANCE ====================
+
+    def _update_force_avoid_state(self):
+        """
+        Force avoidance whenever any sector is below full_clear_distance.
+        Resume only when all clear. (Ported from AllInOneStack)
+        """
+        # Use fused clearance values
+        f_val = min(self.front_clear, self.scan_front_clear) if self.laserscan_enabled else self.front_clear
+        l_val = min(self.left_clear, self.scan_left_clear) if self.laserscan_enabled else self.left_clear
+        r_val = min(self.right_clear, self.scan_right_clear) if self.laserscan_enabled else self.right_clear
+
+        if f_val < self.full_clear_distance or l_val < self.full_clear_distance or r_val < self.full_clear_distance:
+            self.force_avoid_active = True
+        elif f_val >= self.full_clear_distance and l_val >= self.full_clear_distance and r_val >= self.full_clear_distance:
+            self.force_avoid_active = False
+
+    def _normalize_angle(self, angle):
+        """Normalize angle to [-pi, pi]"""
+        while angle > math.pi:
+            angle -= 2.0 * math.pi
+        while angle < -math.pi:
+            angle += 2.0 * math.pi
+        return angle
+
     def _get_clearance(self, distances):
         """Get clearance distance using 10th percentile"""
         if not distances:
@@ -576,15 +886,29 @@ class OkoPerception(Node):
                 'distance': float(round(best['distance'], 1))
             }
         
+        # v2.1: Fuse PointCloud2 and LaserScan clearance values (take minimum)
+        fused_front = min(self.front_clear, self.scan_front_clear) if self.laserscan_enabled else self.front_clear
+        fused_left = min(self.left_clear, self.scan_left_clear) if self.laserscan_enabled else self.left_clear
+        fused_right = min(self.right_clear, self.scan_right_clear) if self.laserscan_enabled else self.right_clear
+        fused_min = min(fused_front, fused_left, fused_right)
+
+        # v2.1: Build VFH best gap for BURAN
+        vfh_gap = None
+        if self.vfh_best_direction is not None:
+            vfh_gap = {
+                'direction': float(round(math.degrees(self.vfh_best_direction), 1)),
+                'vfh_blocked_ratio': float(sum(self.vfh_blocked_bins) / max(1, len(self.vfh_blocked_bins)))
+            }
+
         # Publish detailed obstacle info as JSON (enhanced)
         # Convert numpy types to Python native types for JSON serialization
         obstacle_info = {
             'obstacle_detected': bool(self.obstacle_detected),
-            'min_distance': float(round(self.min_obstacle_distance, 2)),
-            'front_clear': float(round(self.front_clear, 2)),
-            'left_clear': float(round(self.left_clear, 2)),
-            'right_clear': float(round(self.right_clear, 2)),
-            'is_critical': bool(self.min_obstacle_distance < self.critical_distance),
+            'min_distance': float(round(min(self.min_obstacle_distance, fused_min), 2)),
+            'front_clear': float(round(fused_front, 2)),
+            'left_clear': float(round(fused_left, 2)),
+            'right_clear': float(round(fused_right, 2)),
+            'is_critical': bool(min(self.min_obstacle_distance, fused_min) < self.critical_distance),
             # BURAN-compatible fields
             'urgency': float(round(self.overall_urgency, 3)),
             'obstacle_count': int(len(self.clusters)),
@@ -598,7 +922,15 @@ class OkoPerception(Node):
             'gaps': gap_info,
             'moving_obstacles': moving_obstacles,
             'water_plane_z': float(round(self.water_plane_z, 2)) if self.water_plane_z else None,
-            'temporal_confidence': float(len(self.detection_history) / self.temporal_history_size)
+            'temporal_confidence': float(len(self.detection_history) / self.temporal_history_size),
+            # v2.1: New fields
+            'vfh_gap': vfh_gap,
+            'polar_bias': float(round(self.polar_bias, 3)),
+            'force_avoid_active': bool(self.force_avoid_active),
+            'laserscan_fused': bool(self.laserscan_enabled and self.latest_scan is not None),
+            'scan_front_clear': float(round(self.scan_front_clear, 2)) if self.laserscan_enabled else None,
+            'scan_left_clear': float(round(self.scan_left_clear, 2)) if self.laserscan_enabled else None,
+            'scan_right_clear': float(round(self.scan_right_clear, 2)) if self.laserscan_enabled else None
         }
         
         info_msg = String()
@@ -631,7 +963,7 @@ class OkoPerception(Node):
                 )
         else:
             self.get_logger().info(
-                f"✅ DÉGAGÉ | CLEAR (F:{self.front_clear:.1f} L:{self.left_clear:.1f} R:{self.right_clear:.1f}) "
+                f"CLEAR (F:{self.front_clear:.1f} L:{self.left_clear:.1f} R:{self.right_clear:.1f}) "
                 f"[{len(self.clusters)} clusters]",
                 throttle_duration_sec=5.0
             )

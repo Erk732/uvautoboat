@@ -25,6 +25,7 @@ import rclpy
 from rclpy.node import Node
 import math
 import json
+import time
 
 from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import String
@@ -32,8 +33,8 @@ from std_msgs.msg import String
 
 class SputnikPlanner(Node):
     """
-    SPUTNIK - "Satellite/Compagnon" (Référence au premier satellite artificiel)
-    Système de planification de trajectoire
+    SPUTNIK - Trajectory planning system
+    (Named after the first artificial satellite)
     """
     def __init__(self):
         super().__init__('sputnik_planner_node')
@@ -45,12 +46,31 @@ class SputnikPlanner(Node):
         self.declare_parameter('waypoint_tolerance', 2.0)
         self.declare_parameter('waypoint_skip_timeout', 45.0)  # Skip waypoint if blocked for this long
 
+        # v2.1: Hazard zone parameters (from AllInOneStack)
+        self.declare_parameter('hazard_enabled', False)
+        self.declare_parameter('hazard_boxes', '')  # Local frame boxes: "xmin,ymin,xmax,ymax;..."
+        self.declare_parameter('hazard_world_boxes', '')  # World frame boxes
+        self.declare_parameter('hazard_origin_world_x', 0.0)
+        self.declare_parameter('hazard_origin_world_y', 0.0)
+        self.declare_parameter('plan_avoid_margin', 5.0)  # Planning detour margin
+        self.declare_parameter('hull_radius', 1.5)  # Boat hull radius for clearance
+
         # Get parameters
         self.scan_length = self.get_parameter('scan_length').value
         self.scan_width = self.get_parameter('scan_width').value
         self.lanes = self.get_parameter('lanes').value
         self.waypoint_tolerance = self.get_parameter('waypoint_tolerance').value
         self.waypoint_skip_timeout = self.get_parameter('waypoint_skip_timeout').value
+
+        # v2.1: Hazard zone parameters
+        self.hazard_enabled = self.get_parameter('hazard_enabled').value
+        hazard_local = self._parse_hazard_boxes(str(self.get_parameter('hazard_boxes').value))
+        hazard_world = self._parse_hazard_boxes(str(self.get_parameter('hazard_world_boxes').value))
+        origin_wx = float(self.get_parameter('hazard_origin_world_x').value)
+        origin_wy = float(self.get_parameter('hazard_origin_world_y').value)
+        self.hazard_boxes = hazard_local + self._world_boxes_to_local(hazard_world, origin_wx, origin_wy)
+        self.plan_avoid_margin = float(self.get_parameter('plan_avoid_margin').value)
+        self.hull_radius = float(self.get_parameter('hull_radius').value)
 
         # --- STATE ---
         self.start_gps = None
@@ -60,6 +80,11 @@ class SputnikPlanner(Node):
         self.state = "INIT"  # INIT -> WAITING_CONFIRM -> DRIVING -> FINISHED
         self.mission_start_time = None
         self.mission_armed = False  # For manual start mode
+        
+        # GPS initialization timeout (for worlds with slow GPS like DEFAULT)
+        self.gps_init_time = None  # When node started waiting for GPS
+        self.gps_timeout = 30.0  # Give GPS 30 seconds to initialize
+        self.gps_timeout_warned = False  # Flag to warn once about GPS timeout
         
         # Waypoint skip tracking (for obstacles blocking waypoint)
         self.waypoint_start_time = None  # When we started trying to reach current waypoint
@@ -127,10 +152,15 @@ class SputnikPlanner(Node):
         self.create_timer(0.2, self.publish_mission_status_timer)
 
         self.get_logger().info("=" * 50)
-        self.get_logger().info("SPUTNIK - Systeme de Planification de Trajectoire")
-        self.get_logger().info("Sputnik Planner - Waypoint Navigation")
+        self.get_logger().info("SPUTNIK v2.1 - Trajectory Planning System")
+        self.get_logger().info("=" * 50)
         self.get_logger().info(f"Zone de balayage | Scan Area: {self.scan_length}m × {self.scan_width * self.lanes}m")
         self.get_logger().info(f"Lanes: {self.lanes}, Width: {self.scan_width}m")
+        if self.hazard_enabled:
+            self.get_logger().info(f"Hazard Zones: {len(self.hazard_boxes)} boxes loaded")
+            self.get_logger().info(f"Planning Margin: {self.plan_avoid_margin}m, Hull: {self.hull_radius}m")
+        else:
+            self.get_logger().info("Hazard Zones: Disabled")
         self.get_logger().info("Waiting for GPS signal...")
         self.get_logger().info("Commands: ros2 run plan vostok1_cli --help")
         self.get_logger().info("=" * 50)
@@ -174,6 +204,9 @@ class SputnikPlanner(Node):
                 if self.waypoints and self.state in ["READY", "WAITING_CONFIRM", "PAUSED", "FINISHED"]:
                     if self.state == "FINISHED":
                         self.current_wp_index = 0
+                        # CRITICAL: Reset all home-mode and finish-related state when restarting from FINISHED
+                        self.go_home_mode = False  # Clear home mode flag
+                        self.detour_waypoint_inserted = False
                     self.state = "DRIVING"
                     self.mission_armed = True
                     self.mission_start_time = self.get_clock().now()
@@ -191,8 +224,11 @@ class SputnikPlanner(Node):
                 self.state = "PAUSED"
                 self.mission_armed = False
                 self.get_logger().info(f"🛑 MISSION STOPPED (was {prev_state} → now PAUSED)")
-                # Force immediate status publish so BURAN stops quickly
+                # Force immediate status publish so BURAN stops quickly and processes state change
                 self.publish_mission_status_timer()
+                # Also publish once more after a brief delay to ensure BURAN receives it
+                # (helps with timing issues where BURAN checks mission status between publishes)
+                self.get_logger().info("📡 Publishing PAUSED state - BURAN should stop immediately")
                 
             elif command == 'resume_mission':
                 if self.state == "PAUSED" and self.waypoints:
@@ -216,7 +252,7 @@ class SputnikPlanner(Node):
                 self.state = "INIT"
                 self.mission_armed = False
                 self.go_home_mode = False
-                self.get_logger().info("Waypoints ANNULÉS | CANCELLED")
+                self.get_logger().info("Waypoints CANCELLED")
                 self.publish_mission_status_timer()
                     
             elif command == 'reset_mission':
@@ -233,29 +269,52 @@ class SputnikPlanner(Node):
                 # Enable joystick override mode
                 self.state = "JOYSTICK"
                 self.mission_armed = False
-                self.get_logger().info("🎮 JOYSTICK ACTIVÉ | JOYSTICK MODE ENABLED")
+                self.get_logger().info("JOYSTICK MODE ENABLED")
                 self.publish_mission_status_timer()
                 
             elif command == 'joystick_disable':
                 # Disable joystick mode
                 self.state = "INIT" if not self.waypoints else "WAITING_CONFIRM"
-                self.get_logger().info("🎮 JOYSTICK DÉSACTIVÉ | JOYSTICK MODE DISABLED")
+                self.get_logger().info("JOYSTICK MODE DISABLED")
                 self.publish_mission_status_timer()
             
             elif command == 'go_home':
                 # Navigate back to spawn point (one-click return home)
                 if self.start_gps is not None:
-                    # Clear current waypoints and set home as only waypoint
+                    # Get current position and home position
+                    if self.current_gps:
+                        curr_x, curr_y = self.latlon_to_meters(self.current_gps[0], self.current_gps[1])
+                    else:
+                        curr_x, curr_y = 0.0, 0.0
                     home_x, home_y = self.latlon_to_meters(self.start_gps[0], self.start_gps[1])
-                    self.waypoints = [(home_x, home_y)]
+
+                    # v2.1: Use hazard-aware planning for go_home
+                    if self.hazard_enabled:
+                        self.waypoints = self.plan_detour_around_hazard(curr_x, curr_y, home_x, home_y)
+                    else:
+                        self.waypoints = [(home_x, home_y)]
                     self.current_wp_index = 0
+                    
+                    # CRITICAL FIX: If already DRIVING, need to force state transition
+                    # to reset BURAN's SASS escape mode. Set to READY first, then DRIVING.
+                    if self.state == "DRIVING":
+                        # Temporarily transition through READY to reset BURAN controller
+                        self.state = "READY"
+                        self.mission_armed = False
+                        self.publish_mission_status_timer()  # Publish READY state
+                        # Brief wait for BURAN to process state change
+                        time.sleep(0.1)
+                        self.get_logger().info("🏠 GOING HOME! (Transitioning from DRIVING)")
+                    else:
+                        self.get_logger().info("🏠 GOING HOME!")
+                    
+                    # Now transition to DRIVING
                     self.state = "DRIVING"
                     self.mission_armed = True
                     self.mission_start_time = self.get_clock().now()
                     self.go_home_mode = True  # Enable home mode for smarter obstacle handling
                     self.obstacle_blocking_time = 0.0
                     self.detour_waypoint_inserted = False
-                    self.get_logger().info("🏠 RETOUR MAISON | GOING HOME!")
                     self.get_logger().info(f"   Destination: {self.start_gps[0]:.6f}, {self.start_gps[1]:.6f}")
                     self.get_logger().info(f"   Position locale: ({home_x:.1f}m, {home_y:.1f}m)")
                     # Publish updated waypoints
@@ -446,7 +505,7 @@ class SputnikPlanner(Node):
         """
         Check if we should skip waypoint due to persistent obstacle blocking.
         In go_home_mode: Insert detour waypoints instead of skipping.
-        In normal mode: Skip to next waypoint after timeout.
+        In normal mode: Skip to next waypoint after timeout or repeated obstruction.
         """
         now = self.get_clock().now()
         
@@ -457,11 +516,15 @@ class SputnikPlanner(Node):
             self.last_obstacle_check = now
             return
         
-        # Only track obstacle blocking time if we're close to waypoint
-        if dist < 20.0 and self.obstacle_detected:
+        # Track obstacle blocking time if we're getting close to waypoint
+        if dist < 30.0 and self.obstacle_detected:
             if self.last_obstacle_check is not None:
                 dt = (now - self.last_obstacle_check).nanoseconds / 1e9
                 self.obstacle_blocking_time += dt
+        else:
+            # Reset blocking time if no obstacle detected at close range
+            if dist < 30.0:
+                self.obstacle_blocking_time = 0.0
         
         self.last_obstacle_check = now
         
@@ -477,15 +540,22 @@ class SputnikPlanner(Node):
             return  # Don't skip in home mode
         
         # NORMAL MODE: Check if we should skip
-        if self.obstacle_blocking_time >= self.waypoint_skip_timeout:
+        # Skip condition 1: Timeout exceeded (reduced timeout for faster response)
+        timeout_exceeded = self.obstacle_blocking_time >= self.waypoint_skip_timeout
+        
+        # Skip condition 2: Obstacle detected AND we're very close (cluster of buoys)
+        in_obstacle_cluster = dist < 8.0 and self.obstacle_detected
+        
+        if timeout_exceeded or in_obstacle_cluster:
             wp_num = self.current_wp_index + 1
             total_wp = len(self.waypoints)
             target_x, target_y = self.waypoints[self.current_wp_index]
             
+            reason = "timeout" if timeout_exceeded else "obstacle_cluster"
             self.get_logger().warn(
-                f"⏭️ SAUT PT {wp_num}/{total_wp} | SKIP WP - "
-                f"Obstacle blocking for {self.obstacle_blocking_time:.0f}s "
-                f"(target was {dist:.1f}m away at ({target_x:.1f}, {target_y:.1f}))"
+                f"⏭️ SKIP WP {wp_num}/{total_wp} | Reason: {reason} | "
+                f"Distance: {dist:.1f}m, Blocking: {self.obstacle_blocking_time:.1f}s "
+                f"(target: ({target_x:.1f}, {target_y:.1f}))"
             )
             self.advance_to_next_waypoint()
 
@@ -510,7 +580,7 @@ class SputnikPlanner(Node):
         self.detour_waypoint_inserted = True
         
         self.get_logger().warn(
-            f"DÉTOUR! Inserting detour waypoint at ({detour_x:.1f}, {detour_y:.1f})"
+            f"DETOUR! Inserting detour waypoint at ({detour_x:.1f}, {detour_y:.1f})"
         )
         
         # Publish updated waypoints
@@ -528,13 +598,13 @@ class SputnikPlanner(Node):
         
         self.get_logger().info("=" * 60)
         if was_going_home:
-            self.get_logger().info("🏠 ARRIVÉ À LA MAISON! (ARRIVED HOME!)")
+            self.get_logger().info("ARRIVED HOME!")
         else:
-            self.get_logger().info("MISSION TERMINÉE! (MISSION COMPLETE!)")
+            self.get_logger().info("MISSION COMPLETE!")
         self.get_logger().info("=" * 60)
-        self.get_logger().info(f"Position finale | Final Position: ({final_x:.1f}m, {final_y:.1f}m)")
-        self.get_logger().info(f"Points de trajet | Waypoints: {len(self.waypoints)}")
-        self.get_logger().info(f"Durée de mission | Mission Time: {elapsed_min:.1f} minutes/min")
+        self.get_logger().info(f"Final Position: ({final_x:.1f}m, {final_y:.1f}m)")
+        self.get_logger().info(f"Waypoints: {len(self.waypoints)}")
+        self.get_logger().info(f"Mission Time: {elapsed_min:.1f} minutes")
         self.get_logger().info("=" * 60)
 
     def publish_waypoints(self):
@@ -567,6 +637,26 @@ class SputnikPlanner(Node):
         if self.mission_start_time:
             elapsed = (self.get_clock().now() - self.mission_start_time).nanoseconds / 1e9
 
+        # Check GPS ready status with timeout fallback
+        gps_ready = self.current_gps is not None
+        
+        # Initialize GPS timeout tracking
+        if self.gps_init_time is None and self.current_gps is None:
+            self.gps_init_time = self.get_clock().now()
+        
+        # GPS timeout: if no GPS after 30 seconds, assume ready anyway (fallback)
+        if self.gps_init_time is not None and not gps_ready:
+            gps_wait_time = (self.get_clock().now() - self.gps_init_time).nanoseconds / 1e9
+            if gps_wait_time >= self.gps_timeout:
+                gps_ready = True  # Fallback: consider GPS ready after timeout
+                if not self.gps_timeout_warned:
+                    self.get_logger().warn(
+                        f"⚠️  GPS NOT RECEIVED after {self.gps_timeout}s - assuming GPS ready anyway (fallback mode)\n"
+                        f"   Check: 'ros2 topic echo /wamv/sensors/gps/gps/fix --once'\n"
+                        f"   Issue may be: wrong world file, Gazebo plugin problem, or VRX setup issue"
+                    )
+                    self.gps_timeout_warned = True
+
         msg = String()
         msg.data = json.dumps({
             'state': self.state,
@@ -576,7 +666,7 @@ class SputnikPlanner(Node):
             'elapsed_time': round(elapsed, 1),
             'position': [round(curr_x, 2), round(curr_y, 2)],
             'mission_armed': self.mission_armed,
-            'gps_ready': self.current_gps is not None,
+            'gps_ready': gps_ready,
             'joystick_override': self.state == "JOYSTICK"
         })
         self.pub_mission_status.publish(msg)
@@ -593,12 +683,139 @@ class SputnikPlanner(Node):
         """Immediately publish current target (called on resume/go_home for instant BURAN response)"""
         if self.current_gps is None or not self.waypoints or self.current_wp_index >= len(self.waypoints):
             return
-        
+
         curr_x, curr_y = self.latlon_to_meters(self.current_gps[0], self.current_gps[1])
         target_x, target_y = self.waypoints[self.current_wp_index]
         dist = math.hypot(target_x - curr_x, target_y - curr_y)
         self.publish_current_target(curr_x, curr_y, target_x, target_y, dist)
         self.get_logger().info(f"📍 Target published: ({target_x:.1f}, {target_y:.1f}) - {dist:.1f}m away")
+
+    # ==================== v2.1: HAZARD ZONE METHODS ====================
+
+    def _parse_hazard_boxes(self, spec: str):
+        """Parse hazard box specification: "xmin,ymin,xmax,ymax;..." """
+        boxes = []
+        if not spec:
+            return boxes
+        parts = spec.split(';')
+        for p in parts:
+            p = p.strip()
+            if not p:
+                continue
+            vals = p.split(',')
+            if len(vals) != 4:
+                continue
+            try:
+                xmin, ymin, xmax, ymax = map(float, vals)
+                if xmin > xmax:
+                    xmin, xmax = xmax, xmin
+                if ymin > ymax:
+                    ymin, ymax = ymax, ymin
+                boxes.append((xmin, ymin, xmax, ymax))
+            except ValueError:
+                continue
+        return boxes
+
+    def _world_boxes_to_local(self, boxes, origin_x: float, origin_y: float):
+        """Convert world-frame hazard boxes to local ENU by subtracting origin."""
+        local = []
+        for xmin, ymin, xmax, ymax in boxes:
+            local.append((
+                xmin - origin_x,
+                ymin - origin_y,
+                xmax - origin_x,
+                ymax - origin_y,
+            ))
+        return local
+
+    def in_hazard_zone(self, x: float, y: float) -> bool:
+        """Check if position is inside any hazard zone."""
+        if not self.hazard_enabled or not self.hazard_boxes:
+            return False
+        for xmin, ymin, xmax, ymax in self.hazard_boxes:
+            if xmin <= x <= xmax and ymin <= y <= ymax:
+                return True
+        return False
+
+    def _segment_intersects_hazard(self, x1, y1, x2, y2, margin=0.0) -> bool:
+        """Check if a line segment intersects any hazard zone (with optional margin)."""
+        if not self.hazard_enabled or not self.hazard_boxes:
+            return False
+
+        def _expand_box(box, m):
+            xmin, ymin, xmax, ymax = box
+            return (xmin - m, ymin - m, xmax + m, ymax + m)
+
+        def _point_in_box(px, py, box):
+            xmin, ymin, xmax, ymax = box
+            return xmin <= px <= xmax and ymin <= py <= ymax
+
+        def _segments_intersect(p1, p2, p3, p4):
+            def orient(a, b, c):
+                return (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0])
+            o1 = orient(p1, p2, p3)
+            o2 = orient(p1, p2, p4)
+            o3 = orient(p3, p4, p1)
+            o4 = orient(p3, p4, p2)
+            if o1 == 0 and o2 == 0 and o3 == 0 and o4 == 0:
+                def between(a,b,c):
+                    return min(a,b) <= c <= max(a,b)
+                return (between(p1[0], p2[0], p3[0]) or between(p1[0], p2[0], p4[0]) or
+                        between(p1[1], p2[1], p3[1]) or between(p1[1], p2[1], p4[1]))
+            return (o1 * o2 <= 0) and (o3 * o4 <= 0)
+
+        for box in self.hazard_boxes:
+            exp_box = _expand_box(box, margin)
+            if _point_in_box(x1, y1, exp_box) or _point_in_box(x2, y2, exp_box):
+                return True
+            xmin, ymin, xmax, ymax = exp_box
+            corners = [(xmin, ymin), (xmax, ymin), (xmax, ymax), (xmin, ymax)]
+            edges = [(corners[i], corners[(i+1) % 4]) for i in range(4)]
+            for e1, e2 in edges:
+                if _segments_intersect((x1, y1), (x2, y2), e1, e2):
+                    return True
+        return False
+
+    def plan_detour_around_hazard(self, start_x, start_y, goal_x, goal_y):
+        """
+        Plan a detour path if direct segment intersects hazard zones.
+        Returns list of waypoints including detours, or just [goal] if clear.
+        (Ported from AllInOneStack)
+        """
+        margin = max(self.plan_avoid_margin, self.hull_radius * 2.0)
+
+        # If direct path is clear, return just the goal
+        if not self._segment_intersects_hazard(start_x, start_y, goal_x, goal_y, margin):
+            return [(goal_x, goal_y)]
+
+        # Calculate perpendicular direction for offset
+        dx = goal_x - start_x
+        dy = goal_y - start_y
+        dist = math.hypot(dx, dy)
+        if dist < 1e-3:
+            return [(goal_x, goal_y)]
+
+        nx = -dy / dist  # Perpendicular unit vector
+        ny = dx / dist
+
+        # Try both sides to find a clear detour
+        for side in (1.0, -1.0):
+            cand1 = (start_x + side * margin * nx, start_y + side * margin * ny)
+            cand2 = (goal_x + side * margin * nx, goal_y + side * margin * ny)
+
+            # Check if detour path is clear
+            if (not self._segment_intersects_hazard(start_x, start_y, cand1[0], cand1[1], margin) and
+                not self._segment_intersects_hazard(cand1[0], cand1[1], cand2[0], cand2[1], margin) and
+                not self._segment_intersects_hazard(cand2[0], cand2[1], goal_x, goal_y, margin)):
+
+                self.get_logger().info(
+                    f"Hazard detour: {'left' if side > 0 else 'right'} offset by {margin:.1f}m"
+                )
+                return [cand1, cand2, (goal_x, goal_y)]
+
+        # If no clear detour found, return direct path anyway (rely on real-time avoidance)
+        self.get_logger().warn("No clear hazard detour found, using direct path")
+        return [(goal_x, goal_y)]
 
 
 def main(args=None):

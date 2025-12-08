@@ -38,10 +38,10 @@ from std_msgs.msg import Float64, String
 # =============================================================================
 # CONTROL CONSTANTS
 # =============================================================================
-MAX_THRUST = 1000.0          # Newtons - hardware limit
+MAX_THRUST = 2000.0          # Newtons - hardware limit (v2.1: increased from 1000)
 SAFE_THRUST = 800.0          # Newtons - operational limit
 INTEGRAL_LIMIT = 0.5         # radians - prevent integral windup
-TURN_POWER_LIMIT = 800.0     # Newtons - max differential thrust
+TURN_POWER_LIMIT = 1600.0     # Newtons - max differential thrust (v2.1: increased from 800)
 SENSOR_TIMEOUT = 2.0         # seconds
 
 
@@ -135,8 +135,8 @@ class KalmanDriftEstimator:
 
 class BuranController(Node):
     """
-    BURAN - "Tempête de neige" (Référence à la navette spatiale soviétique)
-    Soviet space shuttle program reference
+    BURAN - Boat controller with PID navigation
+    (Named after the Soviet space shuttle program)
     Enhanced with Smart Anti-Stuck System (SASS)
     """
     def __init__(self):
@@ -379,13 +379,15 @@ class BuranController(Node):
             if was_active != self.mission_active:
                 self.get_logger().info(f"🔄 Mission status changed: {was_active} → {self.mission_active} (state={state})")
             
-            # If mission just became inactive, clear target and stop
+            # If mission just became inactive, clear target and stop IMMEDIATELY
             if was_active and not self.mission_active:
                 self.target_x = None
                 self.target_y = None
                 self._reset_all_escape_state()
+                # CRITICAL: Stop immediately and multiple times to ensure thrusters cut off
                 self.stop()
-                self.get_logger().info(f"🛑 Mission inactive (state={state}) - stopping & resetting all states")
+                self.send_thrust(0.0, 0.0)  # Double-stop - zero thrust explicitly
+                self.get_logger().info(f"🛑 Mission IMMEDIATELY inactive (state={state}) - stopping & resetting all states")
             
             # If mission just became active (e.g., go_home, resume), reset escape state for fresh start
             elif not was_active and self.mission_active:
@@ -442,6 +444,9 @@ class BuranController(Node):
             if 'critical_distance' in config:
                 self.critical_distance = float(config['critical_distance'])
                 updated.append(f"critical_dist={self.critical_distance}")
+            if 'min_safe_distance' in config:
+                self.min_safe_distance = float(config['min_safe_distance'])
+                updated.append(f"safe_dist={self.min_safe_distance}")
                 
             if updated:
                 self.get_logger().info(f"⚙️ Config updated: {', '.join(updated)}")
@@ -451,9 +456,10 @@ class BuranController(Node):
 
     def control_loop(self):
         """Main control loop - PID heading control with obstacle avoidance and smart anti-stuck"""
-        # Check if mission is active
+        # Check if mission is active - CRITICAL: Check every control loop to catch stops
         if not self.mission_active:
             self.stop()
+            self.send_thrust(0.0, 0.0)  # Ensure thrust is zero if mission became inactive
             return
             
         # Check if we have a target
@@ -484,8 +490,7 @@ class BuranController(Node):
                 self.reverse_start_time = self.get_clock().now()
                 self.integral_error = 0.0
                 self.get_logger().warn(
-                    f"🚨 OBSTACLE CRITIQUE {self.min_obstacle_distance:.1f}m - Marche arrière! | "
-                    f"CRITICAL OBSTACLE - Reversing!"
+                    f"CRITICAL OBSTACLE {self.min_obstacle_distance:.1f}m - Reversing!"
                 )
 
             elapsed = (self.get_clock().now() - self.reverse_start_time).nanoseconds / 1e9
@@ -493,7 +498,7 @@ class BuranController(Node):
                 self.get_logger().warn("Reverse timeout - switching to turn mode")
                 self.reverse_start_time = None
             else:
-                self.send_thrust(-800.0, -800.0)
+                self.send_thrust(-1600.0, -1600.0)  # Increased reverse thrust (v2.1: was -800)
                 self.publish_status("REVERSING")
                 return
         else:
@@ -505,7 +510,7 @@ class BuranController(Node):
                 self.integral_error = 0.0
                 self.previous_error = 0.0
                 self.avoidance_mode = True
-                self.get_logger().info("⚠️ Mode évitement - PID réinitialisé | Avoidance mode - PID reset")
+                self.get_logger().info("Avoidance mode - PID reset")
 
             # OKO v2.0: Use best_gap for smarter navigation if available
             if self.best_gap and self.best_gap.get('width', 0) > 20:
@@ -535,7 +540,7 @@ class BuranController(Node):
         else:
             # --- NORMAL WAYPOINT NAVIGATION ---
             if self.avoidance_mode:
-                self.get_logger().info("✅ Voie dégagée - Reprise navigation | Path CLEAR - Resuming navigation")
+                self.get_logger().info("Path CLEAR - Resuming navigation")
                 self.avoidance_mode = False
                 self.integral_error = 0.0
                 self.previous_error = 0.0
@@ -686,7 +691,7 @@ class BuranController(Node):
                     self.calculate_adaptive_escape_duration()
                     
                     self.get_logger().warn(
-                        f"🚨 BLOQUÉ! | STUCK! Smart escape initiating "
+                        f"STUCK! Smart escape initiating "
                         f"(Attempt {self.consecutive_stuck_count}, Duration: {self.adaptive_escape_duration:.1f}s)"
                     )
                     

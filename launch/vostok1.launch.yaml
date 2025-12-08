@@ -1,12 +1,11 @@
 # ============================================================================
 # PROJET-17 — Vostok1 Modular Navigation System
-# Système de Navigation Modulaire - French Academic Edition
 # ============================================================================
 #
 # Launches the modular Vostok1-based navigation system:
-#   - oko_perception (ŒIL) - 3D LIDAR obstacle detection
-#   - sputnik_planner (SPOUTNIK) - GPS waypoint planning
-#   - buran_controller (BOURANE) - PID control with obstacle avoidance
+#   - oko_perception (OKO) - 3D LIDAR obstacle detection
+#   - sputnik_planner (SPUTNIK) - GPS waypoint planning
+#   - buran_controller (BURAN) - PID control with obstacle avoidance
 #
 # Prerequisites:
 #   # Kill any old Gazebo processes (Optional but recommended)
@@ -15,20 +14,40 @@
 #   # Build workspace (If the package is not yet built or after changes)
 #   cd ~/seal_ws && colcon build --merge-install && source install/setup.bash
 #
-# Usage (4 terminals):
-#   T1: ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
-#   T2: ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
-#   T3: ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml
-#   T4: cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1 && python3 -m http.server 8000
+# Usage (multi-terminal) - IMPORTANT: Follow timing order!
 #
-# Then open: http://localhost:8000
+#   T1: Gazebo (VRX): ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_smoke_wildlife
+#       Wait 15–20s for physics to start.
+#
+#   T2: Rosbridge (for web dashboard): ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
+#       Wait 2–3s for rosbridge to initialize.
+#
+#   T3: Navigation stack (this file): ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml
+#       Wait ~5s for OKO/SPUTNIK/BURAN to initialize.
+#
+#   T4: Web video server (camera stream for dashboard):
+#       Install once if missing: sudo apt install ros-${ROS_DISTRO}-web-video-server
+#       Run: ros2 run web_video_server web_video_server   # defaults to http://localhost:8080
+#
+#   T5: RViz (optional visualization): ros2 launch vrx_gz rviz.launch.py
+#
+#   T6: Web dashboard: cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1 && python3 -m http.server 8000
+#       Browser: open http://localhost:8000 (wait for GPS to publish first fix)
+#
+# NOTE: GPS can take 10–30s to initialize in VRX. If the dashboard shows "waiting for GPS",
+#       wait longer or check with: ros2 topic echo /wamv/sensors/gps/gps/fix --once
+#
+# Supported worlds:
+#   - sydney_regatta_smoke_wildlife ✓ GPS working (recommended)
+#   - sydney_regatta_smoke ✓ GPS working
+#   - sydney_regatta_DEFAULT ✓ GPS working, for cleaner testing
 #
 # ============================================================================
 
 launch:
 
 # ============================================================================
-# ŒIL - Perception Node (3D LIDAR Processing)
+# OKO - Perception Node (3D LIDAR Processing)
 # Tuned for lake bank and harbour detection
 # Height reference: LiDAR mounted ~2-3m above water
 #   - Water surface:     Z ≈ -3m (below LiDAR)
@@ -43,9 +62,9 @@ launch:
     output: screen
     param:
     - name: min_safe_distance
-      value: 12.0
+      value: 12.0       # Safer but not overly conservative
     - name: critical_distance
-      value: 4.0
+      value: 5.0        # Distance to trigger critical avoidance (m)
     - name: hysteresis_distance
       value: 1.5
     - name: min_height
@@ -53,9 +72,9 @@ launch:
     - name: max_height
       value: 10.0       # Catch tall structures
     - name: min_range
-      value: 5.0        # Ignore spawn dock and boat structure
+      value: 3.0        # Detect closer obstacles to avoid late reactions
     - name: max_range
-      value: 50.0
+      value: 60.0       # Match v2.1 extended horizon
     - name: sample_rate
       value: 1          # Process ALL points for maximum detection
     # Enhanced OKO v2.0 parameters (tuned for faster response)
@@ -71,9 +90,30 @@ launch:
       value: 0.5        # Tolerance for water plane removal (m)
     - name: velocity_history_size
       value: 10         # Frames for velocity estimation
+    # OKO v2.1 Enhanced Perception (VFH, Polar Histogram, LaserScan Fusion)
+    - name: vfh_enabled
+      value: true       # Vector Field Histogram steering (true = enhanced gap detection)
+    - name: vfh_bin_deg
+      value: 5.0        # VFH sector width (degrees) - 72 sectors for 5°
+    - name: vfh_block_dist
+      value: 15.0       # VFH blocking distance (m)
+    - name: vfh_clearance_deg
+      value: 10.0       # Clearance inflation angle (deg)
+    - name: polar_enabled
+      value: true       # Polar histogram bias calculation
+    - name: polar_weight_power
+      value: 1.0        # Polar histogram weighting power
+    - name: laserscan_enabled
+      value: true       # LaserScan + PointCloud2 fusion
+    - name: laserscan_topic
+      value: /wamv/sensors/lidars/lidar_wamv_sensor/scan
+    - name: laserscan_topic_alt
+      value: /wamv/sensors/lidars/lidar_wamv/scan
+    - name: full_clear_distance
+      value: 60.0       # Extended detection horizon (m)
 
 # ============================================================================
-# SPOUTNIK - Planner Node (GPS Waypoint Navigation)
+# SPUTNIK - Planner Node (GPS Waypoint Navigation)
 # ============================================================================
 - node:
     pkg: plan
@@ -88,12 +128,25 @@ launch:
     - name: lanes
       value: 10
     - name: waypoint_tolerance
-      value: 2.0
+      value: 2.0        # Balanced tolerance (was 1.0)
     - name: waypoint_skip_timeout
-      value: 45.0       # Skip waypoint if obstacle blocks for this many seconds
+      value: 45.0       # Allow more time to clear obstacles before skipping
+    # Hazard Zone Avoidance (v2.1)
+    - name: hazard_enabled
+      value: false      # Set to true to enable world-frame hazard zone avoidance
+    - name: hazard_origin_world_x
+      value: -530.6717  # World frame origin X coordinate
+    - name: hazard_origin_world_y
+      value: 161.6251   # World frame origin Y coordinate
+    - name: plan_avoid_margin
+      value: 5.0        # Detour margin (m) around hazard boxes
+    - name: hull_radius
+      value: 1.5        # Boat hull radius for clearance (m)
+    - name: hazard_world_boxes
+      value: "795.0,-325.0,925.0,-315.0;935.0,-325.0,1205.0,-315.0;655.0,-315.0,675.0,-305.0;765.0,-315.0,1205.0,-305.0;-15.0,-305.0,5.0,-295.0;535.0,-305.0,555.0,-295.0;645.0,-305.0,675.0,-295.0;735.0,-305.0,1215.0,-295.0;-25.0,-295.0,65.0,-285.0;285.0,-295.0,315.0,-285.0;525.0,-295.0,565.0,-285.0;625.0,-295.0,685.0,-285.0;725.0,-295.0,1215.0,-285.0;-25.0,-285.0,145.0,-275.0;275.0,-285.0,345.0,-275.0;415.0,-285.0,445.0,-275.0;515.0,-285.0,575.0,-275.0;615.0,-285.0,685.0,-275.0;705.0,-285.0,1225.0,-275.0;835.0,-345.0,865.0,-335.0;1005.0,-345.0,1065.0,-335.0;1145.0,-345.0,1165.0,-335.0;805.0,-335.0,895.0,-325.0;995.0,-335.0,1185.0,-325.0;-35.0,-275.0,155.0,-265.0;265.0,-275.0,585.0,-265.0;605.0,-275.0,1245.0,-265.0;-75.0,-265.0,175.0,-255.0;255.0,-265.0,1265.0,-255.0;-215.0,-255.0,185.0,-245.0;215.0,-255.0,1265.0,-245.0;-365.0,-245.0,-335.0,-235.0;-225.0,-245.0,1275.0,-235.0;-455.0,-235.0,-295.0,-225.0;-245.0,-235.0,1275.0,-225.0;-475.0,-225.0,1285.0,-215.0;-655.0,-215.0,-605.0,-205.0;-495.0,-215.0,1285.0,-205.0;-705.0,-205.0,1295.0,-195.0;-1015.0,-195.0,-995.0,-185.0;-885.0,-195.0,-855.0,-185.0;-755.0,-195.0,1295.0,-185.0;-1015.0,-185.0,-985.0,-175.0"
 
 # ============================================================================
-# BOURANE - Controller Node (PID Control with Obstacle Avoidance)
+# BURAN - Controller Node (PID Control with Obstacle Avoidance)
 # ============================================================================
 - node:
     pkg: control
@@ -110,14 +163,14 @@ launch:
       value: 100.0
     # Speed Settings
     - name: base_speed
-      value: 500.0
+      value: 500.0      # Proven stable thrust for VRX
     - name: max_speed
-      value: 800.0
+      value: 800.0      # Proven stable thrust for VRX
     # Obstacle Avoidance
     - name: obstacle_slow_factor
       value: 0.3
     - name: critical_distance
-      value: 5.0
+      value: 8.0        # Earlier hard-stop without over-triggering
     - name: reverse_timeout
       value: 5.0
     # Smart Anti-Stuck System (SASS)
@@ -126,6 +179,15 @@ launch:
     - name: stuck_threshold
       value: 0.5          # Minimum movement in meters to not be stuck
     - name: no_go_zone_radius
-      value: 8.0          # Radius of no-go zones around stuck locations
+      value: 10.0         # Radius of no-go zones around stuck locations (v2.1: was 8.0)
     - name: detour_distance
-      value: 12.0         # Distance for detour waypoints
+      value: 12.0         # Distance for detour waypoints (v2.1: was 12.0)
+    - name: drift_compensation_gain
+      value: 0.3          # Compensation gain for estimated drift/current
+    - name: kalman_process_noise
+      value: 0.01         # Kalman filter process noise (drift estimator)
+    - name: kalman_measurement_noise
+      value: 0.5          # Kalman filter measurement noise (drift estimator)
+    # BURAN v2.1 Enhanced Control
+    - name: dead_zone_threshold
+      value: 0.5          # Dead zone for minor thrust adjustments

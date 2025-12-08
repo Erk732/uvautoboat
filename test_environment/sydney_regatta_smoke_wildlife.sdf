@@ -7,14 +7,20 @@
   Based on: sydney_regatta_DEFAULT.sdf (VRX Official World)
 
   Modifications:
-    - Added 3 custom particle emitters for realistic sea pollution/fire smoke
+    - Added 6 smoke generators (3 general + 1 per wildlife animal)
     - Added wildlife animals (crocodile, turtle, platypus) with trajectory following
     - Added wildlife scoring plugin
-    - Intense wind (10 m/s) and waves for challenging conditions
-    - Wind and wave direction aligned at 240 degrees (from SW)
+    - Added dead_zone_plugin (wildlife dies when entering smoke zones)
+    - Wind (3 m/s from SW) and wave effects
 
   Usage:
     ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_smoke_wildlife
+
+  Debug (filter DeadZonePlugin messages):
+    ros2 launch vrx_gz competition.launch.py world:=sydney_regatta_smoke_wildlife 2>&1 | grep -E "DeadZonePlugin|dead_zone|Error|error"
+
+  Monitor death events (Gazebo transport):
+    gz topic -e -t /vrx/wildlife/death
 
   ============================================================================
 -->
@@ -461,9 +467,10 @@
       </link>
     </model>
 
-    <!-- Smoke Generator D (Wildlife Zone - Yellow marker) -->
-    <model name="smoke_generator_wildlife">
-      <pose>-512 185 0.5 0 0 0</pose>
+    <!-- Smoke Generator D (Platypus Zone - Yellow marker) -->
+    <!-- Relocated northeast, away from wildlife patrol zones -->
+    <model name="smoke_generator_platypus">
+      <pose>-400 280 0.5 0 0 0</pose>
       <static>true</static>
       <link name="smoke_link">
         <visual name="marker_visual">
@@ -478,6 +485,64 @@
           <min_velocity>0.12</min_velocity>
           <max_velocity>0.30</max_velocity>
           <rate>9</rate>
+          <scale_rate>0.18</scale_rate>
+          <pose>0 0 0 0.10 -1.4707 0.10</pose>
+          <material>
+            <diffuse>0.5 0.5 0.5 0.28</diffuse>
+            <specular>0.1 0.1 0.1 1.0</specular>
+          </material>
+          <particle_scatter_ratio>0.11</particle_scatter_ratio>
+        </particle_emitter>
+      </link>
+    </model>
+
+    <!-- Smoke Generator E (Crocodile Zone - Cyan marker) -->
+    <!-- Relocated northeast, away from wildlife patrol zones -->
+    <model name="smoke_generator_crocodile">
+      <pose>-420 290 0.5 0 0 0</pose>
+      <static>true</static>
+      <link name="smoke_link">
+        <visual name="marker_visual">
+          <geometry><sphere><radius>0.25</radius></sphere></geometry>
+          <material><ambient>0 1 1 1</ambient><diffuse>0 1 1 1</diffuse></material>
+        </visual>
+        <particle_emitter name="smoke_emitter" type="box">
+          <emitting>true</emitting>
+          <size>7 7 1</size>
+          <particle_size>0.5 0.5 0.5</particle_size>
+          <lifetime>160</lifetime>
+          <min_velocity>0.12</min_velocity>
+          <max_velocity>0.30</max_velocity>
+          <rate>8</rate>
+          <scale_rate>0.18</scale_rate>
+          <pose>0 0 0 0.10 -1.4707 0.10</pose>
+          <material>
+            <diffuse>0.5 0.5 0.5 0.28</diffuse>
+            <specular>0.1 0.1 0.1 1.0</specular>
+          </material>
+          <particle_scatter_ratio>0.11</particle_scatter_ratio>
+        </particle_emitter>
+      </link>
+    </model>
+
+    <!-- Smoke Generator F (Turtle Zone - Magenta marker) -->
+    <!-- Relocated northeast, away from wildlife patrol zones -->
+    <model name="smoke_generator_turtle">
+      <pose>-440 300 0.5 0 0 0</pose>
+      <static>true</static>
+      <link name="smoke_link">
+        <visual name="marker_visual">
+          <geometry><sphere><radius>0.25</radius></sphere></geometry>
+          <material><ambient>1 0 1 1</ambient><diffuse>1 0 1 1</diffuse></material>
+        </visual>
+        <particle_emitter name="smoke_emitter" type="box">
+          <emitting>true</emitting>
+          <size>7 7 1</size>
+          <particle_size>0.5 0.5 0.5</particle_size>
+          <lifetime>160</lifetime>
+          <min_velocity>0.12</min_velocity>
+          <max_velocity>0.30</max_velocity>
+          <rate>8</rate>
           <scale_rate>0.18</scale_rate>
           <pose>0 0 0 0.10 -1.4707 0.10</pose>
           <material>
@@ -619,34 +684,6 @@
         </waypoints>
       </plugin>
     </include>
-
-    <!-- Local smoke hazard near platypus -->
-    <model name="smoke_generator_wildlife">
-      <pose>-510 169 0.5 0 0 0</pose>
-      <static>true</static>
-      <link name="smoke_link">
-        <visual name="marker_visual">
-          <geometry><sphere><radius>0.2</radius></sphere></geometry>
-          <material><ambient>0.8 0.3 0.8 1</ambient><diffuse>0.8 0.3 0.8 1</diffuse></material>
-        </visual>
-        <particle_emitter name="smoke_emitter" type="box">
-          <emitting>true</emitting>
-          <size>4 4 1</size>
-          <particle_size>0.5 0.5 0.5</particle_size>
-          <lifetime>160</lifetime>
-          <min_velocity>0.1</min_velocity>
-          <max_velocity>0.25</max_velocity>
-          <rate>6</rate>
-          <scale_rate>0.18</scale_rate>
-          <pose>0 0 0 0.05 -1.47 0.05</pose>
-          <material>
-            <diffuse>0.6 0.6 0.6 0.28</diffuse>
-            <specular>0.1 0.1 0.1 1.0</specular>
-          </material>
-          <particle_scatter_ratio>0.1</particle_scatter_ratio>
-        </particle_emitter>
-      </link>
-    </model>
 
     <!-- ============================================================================
          MARKER BUOYS (from DEFAULT)
@@ -883,7 +920,30 @@
     </include>
 
     <!-- ============================================================================
-         WIND PLUGIN (Intense - 10 m/s from SW)
+         WIND PLUGIN (Moderate - 3 m/s base velocity from SW)
+         ============================================================================
+
+         How it works:
+           Force applied = wind_velocity × coeff_vector
+
+         Parameters:
+           - wind_direction: 240° means wind blows FROM southwest (compass bearing)
+           - wind_mean_velocity: Base wind speed in m/s (3.0 = light breeze)
+           - coeff_vector: Drag coefficients [X, Y, Z] that scale the wind force
+             - Current: .1 .1 .05 = only 10% of wind force applied (very gentle)
+             - Higher values (e.g., .5 .5 .2) = stronger effect on boat
+           - var_wind_gain_constants: Wind gust intensity (0 = no gusts, stable wind)
+           - var_wind_time_constants: How quickly wind varies (lower = faster changes)
+           - random_seed: Set to 0 for random wind each run, or fixed value for reproducibility
+
+         To increase wind effect:
+           1. Increase wind_mean_velocity (e.g., 8-10 m/s for strong wind)
+           2. Increase coeff_vector values (e.g., .5 .5 .2 for more drag)
+           3. Set var_wind_gain_constants > 0 for gusty conditions
+
+         Debug topics:
+           gz topic -e -t /vrx/debug/wind/speed
+           gz topic -e -t /vrx/debug/wind/direction
          ============================================================================ -->
     <plugin
       filename="libUSVWind.so"
@@ -891,13 +951,12 @@
       <wind_obj>
         <name>wamv</name>
         <link_name>wamv/base_link</link_name>
-        <coeff_vector>.5 .5 .33</coeff_vector>
+        <coeff_vector>.1 .1 .05</coeff_vector>
       </wind_obj>
-      <!-- Wind from SW (240 degrees) - INTENSE -->
       <wind_direction>240</wind_direction>
-      <wind_mean_velocity>10.0</wind_mean_velocity>
+      <wind_mean_velocity>3.0</wind_mean_velocity>
       <var_wind_gain_constants>0</var_wind_gain_constants>
-      <var_wind_time_constants>2</var_wind_time_constants>
+      <var_wind_time_constants>0.02</var_wind_time_constants>
       <random_seed>10</random_seed>
       <update_rate>10</update_rate>
       <topic_wind_speed>/vrx/debug/wind/speed</topic_wind_speed>
@@ -940,11 +999,41 @@
     </plugin>
 
     <!-- ============================================================================
-         WAVE FIELD PLUGIN (Aligned with wind - 240 degrees, with steepness)
+         WAVE FIELD PLUGIN (Aligned with wind - 240 degrees)
+         ============================================================================
+
+         How it works:
+           Publishes wave parameters to /vrx/wavefield/parameters every 2 seconds.
+           All buoyant objects (boats, buoys, wildlife) subscribe to this topic
+           via their <wavefield><topic>...</topic></wavefield> configuration.
+
+         Parameters:
+           - direction: Wave propagation direction in degrees (0° = North, 90° = East)
+             - Current: 240° = waves come FROM southwest (aligned with wind)
+             - Should match wind_direction for realistic simulation
+           - gain: Wave height multiplier (0.0 = flat, 1.0 = full height)
+             - Current: 0.3 = gentle waves (30% of max height)
+             - Range: 0.0 (calm) to 1.0+ (stormy)
+           - period: Time between wave peaks in seconds
+             - Current: 5 seconds = moderate frequency
+             - Lower = choppy, Higher = long swells
+           - steepness: Wave sharpness (0 = smooth sine, higher = sharper peaks)
+             - Current: 0 = smooth rolling waves
+             - Higher values create more realistic breaking waves
+
+         Wave conditions reference:
+           Calm:    gain=0.1, period=8, steepness=0
+           Moderate: gain=0.3, period=5, steepness=0
+           Rough:   gain=0.6, period=4, steepness=0.5
+           Storm:   gain=1.0, period=3, steepness=1.0
+
+         Debug topic:
+           gz topic -e -t /vrx/wavefield/parameters
          ============================================================================ -->
     <plugin filename="libPublisherPlugin.so" name="vrx::PublisherPlugin">
       <message type="gz.msgs.Param" topic="/vrx/wavefield/parameters"
                every="2.0">
+        <!-- direction: 240° = waves from SW (aligned with wind) -->
         params {
           key: "direction"
           value {
@@ -952,6 +1041,7 @@
             double_value: 240.0
           }
         }
+        <!-- gain: wave height multiplier (0.3 = gentle, 30% of max) -->
         params {
           key: "gain"
           value {
@@ -959,6 +1049,7 @@
             double_value: 0.3
           }
         }
+        <!-- period: seconds between wave peaks (5 = moderate frequency) -->
         params {
           key: "period"
           value {
@@ -966,6 +1057,7 @@
             double_value: 5
           }
         }
+        <!-- steepness: wave sharpness (0 = smooth rolling waves) -->
         params {
           key: "steepness"
           value {
@@ -985,7 +1077,9 @@
         <name>smoke_generator</name>
         <name>smoke_generator_east</name>
         <name>smoke_generator_north</name>
-        <name>smoke_generator_wildlife</name>
+        <name>smoke_generator_platypus</name>
+        <name>smoke_generator_crocodile</name>
+        <name>smoke_generator_turtle</name>
       </smoke_models>
       <wildlife_models>
         <name>crocodile</name>

@@ -15,7 +15,7 @@
 #   cd ~/seal_ws && colcon build --merge-install && source install/setup.bash
 #
 # Usage (4 terminals):
-#   T1: ros2 launch vrx_gz competition.launch.py world:=sydney_regatta
+#   T1: ros2 launch vrx_gz competition.launch.py world:=sydney_regatta (or any other world you create)
 #   T2: ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
 #   T3: ros2 launch ~/seal_ws/src/uvautoboat/launch/atlantis.launch.yaml
 #   T4: cd ~/seal_ws/src/uvautoboat/web_dashboard/atlantis && python3 -m http.server 8080

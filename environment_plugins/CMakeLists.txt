@@ -19,6 +19,8 @@ target_include_directories(dead_zone_plugin PRIVATE
   ${gz-plugin2_INCLUDE_DIRS}
   ${gz-math7_INCLUDE_DIRS}
   ${gz-common5_INCLUDE_DIRS}
+  ${gz-transport13_INCLUDE_DIRS}
+  ${gz-msgs10_INCLUDE_DIRS}
 )
 
 # Link libraries (critical for proper linking)
@@ -27,6 +29,8 @@ target_link_libraries(dead_zone_plugin
   gz-plugin2::gz-plugin2
   gz-math7::gz-math7
   gz-common5::gz-common5
+  gz-transport13::gz-transport13
+  gz-msgs10::gz-msgs10
 )
 
 # Set C++ standard

@@ -29,6 +29,7 @@ test_results/
 *.swp
 *~
 .claude/
+compile_commands.json
 
 # OS Generated
 .DS_Store
