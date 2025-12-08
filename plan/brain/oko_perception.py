@@ -230,7 +230,7 @@ class OkoPerception(Node):
             Bool, '/perception/obstacle_detected', 10
         )
 
-        # Publish at 20Hz
+        # Publish at 20Hz tune it 
         self.create_timer(0.05, self.publish_status)
 
         self.get_logger().info("=" * 60)
