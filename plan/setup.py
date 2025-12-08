@@ -27,11 +27,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'simple_perception = brain.simple_perception:main',
             'mission_trigger = brain.mission_trigger:main',
-            'tf_broadcaster = brain.tf_broadcaster:main',
-            'tf_broadcaster_gps = brain.tf_broadcaster_gps:main',
-            'tf_broadcaster_gazebo = brain.tf_broadcaster_gazebo:main',
             # Vostok1 - integrated navigation node
             'vostok1 = brain.vostok1:main',
             'waypoint_visualizer = brain.waypoint_visualizer:main',
@@ -39,11 +35,9 @@ setup(
             'vostok1_cli = brain.vostok1_cli:main',
             # Modular nodes (TNO style names)
             'oko_perception = brain.oko_perception:main',
-            'sputnik_planner = brain.sputnik_planner:main',
             # Atlantis - separated control and planning
             'atlantis_planner = brain.atlantis_planner:main',
-            'pollutant_planner = brain.pollutant_planner:main',
-            'atlantis_a_planner = plan.brain.atlantis_a_planner:main',
+ 
         ],
     },
 )
