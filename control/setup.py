@@ -1,4 +1,6 @@
 from setuptools import find_packages, setup
+import os
+from glob import glob
 
 package_name = 'control'
 
@@ -8,14 +10,11 @@ setup(
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',
-         ['resource/' + package_name]),
+            ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/launch', [
-            'launch/all_in_one_bringup.launch.py',
-        ]),
-        ('share/' + package_name + '/config', [
-            'config/hazard_world_boxes.yaml',
-        ]),
+        # Uses glob to find all launch files (prevents errors if specific files are missing)
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
     ],
     install_requires=[
         'setuptools',
@@ -33,29 +32,21 @@ setup(
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
     ],
-    extras_require={
-        'test': [
-            'pytest',
-        ],
-    },
     entry_points={
         'console_scripts': [
-            # Modular controller (TNO style name)
-            'buran_controller = control.buran_controller:main',
-
-            #NEW CODE FOR SEPERATED CONTROL AND PLANNING
+            # Atlantis Controller
             'atlantis_controller = control.atlantis_controller:main',
-            # Keyboard teleop for manual control
-            'keyboard_teleop = control.keyboard_teleop:main',
+            
+            # Helper for Obstacle Avoidance (if run standalone)
+            'lidar_obstacle_avoidance = control.lidar_obstacle_avoidance:main',
 
+            # Other Controllers (Preserved from your code)
+            'buran_controller = control.buran_controller:main',
+            'keyboard_teleop = control.keyboard_teleop:main',
             'all_in_one_stack = control.all_in_one_stack:main',
             'gps_imu_pose = control.gps_imu_pose:main',
             'pose_filter = control.pose_filter:main',
-            # If you want you can comment its additional test
             'buran_controller_fixed = control.buran_controller_fixed:main',
-            'atlantis_controller = control.atlantis_controller:main',
-            'lidar_obstacle_avoidance = brain.lidar_obstacle_avoidance:main',
-
         ],
     },
 )

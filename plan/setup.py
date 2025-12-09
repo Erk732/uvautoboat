@@ -13,7 +13,6 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         # Install launch files
-        #(os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')), old launch file config
         (os.path.join('share', package_name, 'launch'), glob('launch/*')),
         # Install rviz config files
         (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
@@ -36,27 +35,29 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'mission_trigger = brain.mission_trigger:main',
-            # Vostok1 - integrated navigation node
-            'vostok1 = brain.vostok1:main',
-            'waypoint_visualizer = brain.waypoint_visualizer:main',
-            # Vostok1 CLI - terminal control for Vostok1/Sputnik
-            'vostok1_cli = brain.vostok1_cli:main',
-            # Modular nodes (TNO style names)
-            'oko_perception = brain.oko_perception:main',
-            'sputnik_planner = brain.sputnik_planner:main',
-            'tf_broadcaster = brain.tf_broadcaster:main',
-            'tf_broadcaster_gazebo = brain.tf_broadcaster_gazebo:main',
-            'tf_broadcaster_gps = brain.tf_broadcaster_gps:main',
-            'simple_perception = brain.simple_perception:main',
-            'pollutant_planner = brain.pollutant_planner:main',
-            # Atlantis - separated control and planning for testing
-            'atlantis_planner_fixed = brain.atlantis_planner_fixed:main',
-            'atlantis_controller = brain.atlantis_controller:main',
-            'oko_perception_fixed = brain.oko_perception_fixed:main',
-            'atlantis_planner = brain.atlantis_planner:main',
-            'lidar_obstacle_avoidance = brain.lidar_obstacle_avoidance:main',
- 
+            # Atlantis Planner
+            'atlantis_planner = plan.atlantis_planner:main',
+            
+            # Vostok / Sputnik Logic
+            'vostok1 = plan.vostok1:main',
+            'vostok1_cli = plan.vostok1_cli:main',
+            'sputnik_planner = plan.sputnik_planner:main',
+            
+            # Perception & Utilities
+            'mission_trigger = plan.mission_trigger:main',
+            'waypoint_visualizer = plan.waypoint_visualizer:main',
+            'oko_perception = plan.oko_perception:main',
+            'tf_broadcaster = plan.tf_broadcaster:main',
+            'tf_broadcaster_gazebo = plan.tf_broadcaster_gazebo:main',
+            'tf_broadcaster_gps = plan.tf_broadcaster_gps:main',
+            'simple_perception = plan.simple_perception:main',
+            'pollutant_planner = plan.pollutant_planner:main',
+            'lidar_obstacle_avoidance = plan.lidar_obstacle_avoidance:main',
+
+            # Testing / Fixed versions
+            'atlantis_planner_fixed = plan.atlantis_planner_fixed:main',
+            'atlantis_controller = plan.atlantis_controller:main', # Note: Verify this file exists in 'plan' package
+            'oko_perception_fixed = plan.oko_perception_fixed:main',
         ],
     },
 )
