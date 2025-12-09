@@ -174,6 +174,8 @@ class SputnikPlanner(Node):
         self.declare_parameter('lanes', 10)
         self.declare_parameter('waypoint_tolerance', 2.0)
         self.declare_parameter('waypoint_skip_timeout', 45.0)  # Skip waypoint if blocked for this long
+        # World metadata (for dashboards)
+        self.declare_parameter('world_name', 'unknown')
 
         # v2.1: Hazard zone parameters (from AllInOneStack)
         self.declare_parameter('hazard_enabled', False)
@@ -190,6 +192,7 @@ class SputnikPlanner(Node):
         self.lanes = self.get_parameter('lanes').value
         self.waypoint_tolerance = self.get_parameter('waypoint_tolerance').value
         self.waypoint_skip_timeout = self.get_parameter('waypoint_skip_timeout').value
+        self.world_name = str(self.get_parameter('world_name').value)
 
         # v2.1: Hazard zone parameters
         self.hazard_enabled = self.get_parameter('hazard_enabled').value
@@ -618,6 +621,7 @@ class SputnikPlanner(Node):
             'astar_max_expansions': self.astar.max_expansions,
             # Pollutant sources
             'pollutant_sources': self.pollutant_sources,
+            'world_name': self.world_name
         }
         msg = String()
         msg.data = json.dumps(config)
