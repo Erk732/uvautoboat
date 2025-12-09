@@ -34,14 +34,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-<<<<<<< HEAD
             # Atlantis Controller
-=======
-            # Modular controller (TNO style name)
-            'buran_controller = control.buran_controller:main',
-            'lidar_obstacle_avoidance = control.lidar_obstacle_avoidance:main',
-            #NEW CODE FOR SEPERATED CONTROL AND PLANNING
->>>>>>> 303ec332d513a90ecf193727c6aabb7282386082
             'atlantis_controller = control.atlantis_controller:main',
             
             # Helper for Obstacle Avoidance (if run standalone)
@@ -54,10 +47,6 @@ setup(
             'gps_imu_pose = control.gps_imu_pose:main',
             'pose_filter = control.pose_filter:main',
             'buran_controller_fixed = control.buran_controller_fixed:main',
-<<<<<<< HEAD
-=======
-
->>>>>>> 303ec332d513a90ecf193727c6aabb7282386082
         ],
     },
 )
