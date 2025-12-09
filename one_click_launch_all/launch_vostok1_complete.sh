@@ -153,6 +153,18 @@ print_error() {
     echo -e "${RED}✗${NC} $1"
 }
 
+# Recheck if a launched tab/process is still alive and report status
+recheck() {
+    local pid="$1"
+    local label="$2"
+    sleep 2
+    if kill -0 "$pid" 2>/dev/null; then
+        print_status "$label is running (PID: $pid)"
+    else
+        print_warning "$label appears to have exited. Check the tab for errors; consider stopping this script."
+    fi
+}
+
 # Check prerequisites
 print_header "Checking Prerequisites"
 
@@ -216,6 +228,7 @@ ros2 launch vrx_gz competition.launch.py world:=$WORLD
 GAZEBO_PID=$!
 sleep 28  # Wait for Gazebo to start and physics to initialize
 print_status "Gazebo launched (PID: $GAZEBO_PID)"
+recheck "$GAZEBO_PID" "Gazebo"
 
 # T2: Launch ROS Bridge (WebSocket for dashboard)
 print_status "Launching ROS Bridge (WebSocket on ws://localhost:9090)..."
@@ -227,6 +240,7 @@ ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messag
 ROSBRIDGE_PID=$!
 sleep 8  # Wait for rosbridge to initialize
 print_status "ROS Bridge launched (PID: $ROSBRIDGE_PID)"
+recheck "$ROSBRIDGE_PID" "ROS Bridge"
 
 # T3: Launch Navigation Stack (OKO-SPUTNIK-BURAN)
 print_status "Launching Navigation Stack (OKO-SPUTNIK-BURAN)..."
@@ -239,6 +253,7 @@ ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml
 NAV_PID=$!
 sleep 8  # Wait for navigation stack to initialize
 print_status "Navigation stack launched (PID: $NAV_PID)"
+recheck "$NAV_PID" "Navigation stack"
 
 # T4: Launch Web Video Server (camera stream)
 if [ "$LAUNCH_CAMERA" = true ]; then
@@ -252,6 +267,7 @@ ros2 run web_video_server web_video_server
     CAMERA_PID=$!
     sleep 8
     print_status "Web Video Server launched (PID: $CAMERA_PID)"
+    recheck "$CAMERA_PID" "Web Video Server"
 fi
 
 # T5: Launch RViz (optional visualization)
@@ -267,6 +283,7 @@ ros2 launch vrx_gazebo rviz.launch.py
     RVIZ_PID=$!
     sleep 8
     print_status "RViz launched (PID: $RVIZ_PID)"
+    recheck "$RVIZ_PID" "RViz"
 fi
 
 # T6: Launch Web Dashboard
