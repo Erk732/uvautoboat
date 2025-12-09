@@ -192,7 +192,7 @@ class AtlantisPlanner(Node):
         if not self.start_gps: 
             self.start_gps = (msg.latitude, msg.longitude)
         
-        R = 6371000.0  # Earth radius
+        R = 6371000.0  # Earth radius by meters
         dx = math.radians(msg.latitude - self.start_gps[0]) * R
         dy = math.radians(msg.longitude - self.start_gps[1]) * R * math.cos(math.radians(self.start_gps[0]))
         self.local_pos = (dx, dy)
@@ -237,7 +237,7 @@ class AtlantisPlanner(Node):
         try:
             data = json.loads(msg.data)
             if data.get('type') == 'replan' and self.state == "DRIVING":
-                self.get_logger().info("🔄 Replan requested by controller")
+                self.get_logger().info("Replan requested by controller")
                 self.replan_current_segment()
         except Exception as e:
             self.get_logger().warn(f"Replan request parse error: {e}")
@@ -255,7 +255,7 @@ class AtlantisPlanner(Node):
         # Check if mission complete
         if self.wp_index >= len(self.waypoints):
             self.state = "FINISHED"
-            self.get_logger().info("🎉 Mission Complete!")
+            self.get_logger().info("Mission Complete!")
             return
 
         # Publish current target
@@ -299,7 +299,7 @@ class AtlantisPlanner(Node):
         path_blocked = self._is_path_blocked(current, target)
         
         if path_blocked and self.obstacles_changed:
-            self.get_logger().warn("⚠️ Path blocked detected! Replanning...")
+            self.get_logger().warn("Path blocked detected! Replanning...")
             self.replan_current_segment()
             self.obstacles_changed = False
 
@@ -342,7 +342,7 @@ class AtlantisPlanner(Node):
         current = self.local_pos
         target = self.waypoints[self.wp_index]
         
-        self.get_logger().info(f"🔍 A* planning from ({current[0]:.1f}, {current[1]:.1f}) to ({target[0]:.1f}, {target[1]:.1f})")
+        self.get_logger().info(f"A* planning from ({current[0]:.1f}, {current[1]:.1f}) to ({target[0]:.1f}, {target[1]:.1f})")
         
         # Get bounds
         min_x = self.get_parameter('geo_min_x').value
@@ -376,9 +376,9 @@ class AtlantisPlanner(Node):
                 remaining_waypoints
             )
             
-            self.get_logger().info(f"✅ A* path found! Added {len(new_path)} waypoints")
+            self.get_logger().info(f"A* path found! Added {len(new_path)} waypoints")
         else:
-            self.get_logger().error("❌ A* failed to find path! Continuing with original waypoint")
+            self.get_logger().error(" A* failed to find path! Continuing with original waypoint")
 
     def plan_initial_path(self):
         """Generate initial lawnmower pattern with A* for blocked segments"""
@@ -431,7 +431,7 @@ class AtlantisPlanner(Node):
                 self.waypoints.append(start)
                 self.waypoints.append(end)
         
-        self.get_logger().info(f"✅ Path generated: {len(self.waypoints)} waypoints ({len(self.astar_segments)} A* segments)")
+        self.get_logger().info(f"Path generated: {len(self.waypoints)} waypoints ({len(self.astar_segments)} A* segments)")
 
 
 def main(args=None):

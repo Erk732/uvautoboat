@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Buran Controller - Motion Control System 
+Buran Controller - Motion Control System (Fixed Version with A* Integration)
 
 Part of the modular Vostok1 architecture.
 Subscribes to planner targets and perception data, outputs thruster commands.
@@ -10,21 +10,7 @@ Features:
 - Smart Anti-Stuck System (SASS) with Kalman-filtered drift estimation
 - Multi-phase escape maneuvers
 - No-go zone memory
-- Path-aware navigation (A* path following vs reactive avoidance)
-
-Topics:
-    Subscribes:
-        /wamv/sensors/gps/gps/fix (NavSatFix) - GPS position
-        /wamv/sensors/imu/imu/data (Imu) - Heading orientation
-        /planning/current_target (String) - Current navigation target
-        /perception/obstacle_info (String) - Obstacle detection data
-    
-    Publishes:
-        /wamv/thrusters/left/thrust (Float64) - Left thruster command
-        /wamv/thrusters/right/thrust (Float64) - Right thruster command
-        /control/status (String) - Controller status
-        /control/anti_stuck_status (String) - Anti-stuck system status
-        /control/replan_request (String) - Request replanning from planner
+- Path-aware navigation (A* integration)
 """
 
 import rclpy
@@ -40,79 +26,27 @@ from std_msgs.msg import Float64, String
 # =============================================================================
 # CONTROL CONSTANTS
 # =============================================================================
-MAX_THRUST = 2000.0          # Newtons - hardware limit (v2.1: increased from 1000)
-SAFE_THRUST = 800.0          # Newtons - operational limit
-INTEGRAL_LIMIT = 0.5         # radians - prevent integral windup
-TURN_POWER_LIMIT = 1600.0     # Newtons - max differential thrust (v2.1: increased from 800)
-SENSOR_TIMEOUT = 2.0         # seconds
+MAX_THRUST = 2000.0
+SAFE_THRUST = 800.0
+INTEGRAL_LIMIT = 0.5
+TURN_POWER_LIMIT = 1600.0
+SENSOR_TIMEOUT = 2.0
 
 
-# =============================================================================
-# BAYESIAN STATE ESTIMATION FUNDAMENTALS
-# =============================================================================
-#
-# ┌─────────────────────────────────────────────────────────────────────────┐
-# │                        BAYES' THEOREM                                       │
-# │                                                                             │
-# │   P(State | Data) = P(Data | State) × P(State) / P(Data)                    │
-# │                                                                             │
-# │   In robotics terms:                                                        │
-# │     Posterior   = Likelihood × Prior / Evidence                             │
-# │     (new belief)   (sensor)    (old belief)                                 │
-# │                                                                             │
-# │   Example: "What is the drift/current affecting my boat?"                   │
-# │     Prior:      Previous estimate of water current velocity                 │
-# │     Likelihood: Observed velocity vs expected velocity (the difference)     │
-# │     Posterior:  Updated drift estimate combining prediction + observation   │
-# │                                                                             │
-# │   This is the foundation of ALL probabilistic robotics!                     │
-# └─────────────────────────────────────────────────────────────────────────┘
-#
-# ┌─────────────────────────────────────────────────────────────────────────┐
-# │                   KALMAN FILTER = BAYESIAN + GAUSSIAN                       │
-# │                                                                             │
-# │   For continuous states with Gaussian (bell curve) distributions:           │
-# │     - State described by mean μ (best estimate) and variance σ² (uncertainty)│
-# │     - Multiplying two Gaussians → another Gaussian (closed-form solution)   │
-# │                                                                             │
-# │   Predict-Update Cycle:                                                     │
-# │     PREDICT: x̂⁻ = F×x̂, P⁻ = F×P×Fᵀ+Q   (uncertainty grows)                │
-# │     UPDATE:  K = P⁻Hᵀ(HP⁻Hᵀ+R)⁻¹        (Kalman Gain)                       │
-# │              x̂ = x̂⁻ + K(z-Hx̂⁻)          (correct with measurement)       │
-# │              P = (I-KH)P⁻                (uncertainty shrinks)              │
-# │                                                                             │
-# │   Kalman Gain K: How much to trust the measurement vs prediction            │
-# │     K→0: High R (noisy sensor) → trust prediction more                      │
-# │     K→1: High Q (unstable model) → trust measurement more                   │
-# └─────────────────────────────────────────────────────────────────────────┘
-#
 # =============================================================================
 # KALMAN FILTER FOR DRIFT ESTIMATION
 # =============================================================================
 class KalmanDriftEstimator:
-    """
-    2D Kalman Filter for estimating water/wind drift.
-    
-    BAYESIAN INTERPRETATION:
-        Prior:      Previous drift estimate with uncertainty P
-        Likelihood: How well observed velocity matches predicted velocity
-        Posterior:  Updated drift estimate after measurement
-    
-    State: [drift_x, drift_y] - velocity components (m/s)
-    
-    Tuning:
-        High Q, Low R → Trust measurements, respond quickly
-        Low Q, High R → Trust model, smooth out noise
-    """
+    """2D Kalman Filter for estimating water/wind drift."""
     
     def __init__(self, process_noise=0.01, measurement_noise=0.5):
         self.n = 2
-        self.x = np.zeros((self.n, 1))  # State estimate
-        self.P = np.eye(self.n) * 1.0   # Error covariance
-        self.F = np.eye(self.n)         # State transition (random walk)
-        self.H = np.eye(self.n)         # Measurement model
-        self.Q = np.eye(self.n) * process_noise    # Process noise
-        self.R = np.eye(self.n) * measurement_noise  # Measurement noise
+        self.x = np.zeros((self.n, 1))
+        self.P = np.eye(self.n) * 1.0
+        self.F = np.eye(self.n)
+        self.H = np.eye(self.n)
+        self.Q = np.eye(self.n) * process_noise
+        self.R = np.eye(self.n) * measurement_noise
         self.last_kalman_gain = np.zeros((self.n, self.n))
         
     def predict(self):
@@ -136,10 +70,8 @@ class KalmanDriftEstimator:
 
 
 class BuranController(Node):
-    """
-    BURAN - Boat controller with PID navigation
-    Enhanced with Smart Anti-Stuck System (SASS) and path-aware navigation
-    """
+    """BURAN - Boat controller with PID navigation and A* path awareness"""
+    
     def __init__(self):
         super().__init__('buran_controller_node')
 
@@ -152,17 +84,14 @@ class BuranController(Node):
         self.declare_parameter('base_speed', 500.0)
         self.declare_parameter('max_speed', 800.0)
         self.declare_parameter('obstacle_slow_factor', 0.3)
-        # Approach slowdown near waypoint
         self.declare_parameter('approach_slow_distance', 5.0)
         self.declare_parameter('approach_slow_factor', 0.7)
-        # Smoothness controls
-        self.declare_parameter('slew_rate_limit', 80.0)       # Max thrust change per cycle (N)
-        self.declare_parameter('turn_deadband_deg', 2.0)      # Ignore tiny heading errors
+        self.declare_parameter('slew_rate_limit', 80.0)
+        self.declare_parameter('turn_deadband_deg', 2.0)
 
         # Obstacle avoidance
         self.declare_parameter('critical_distance', 5.0)
         self.declare_parameter('reverse_timeout', 5.0)
-        self.declare_parameter('path_blocked_threshold', 8.0)  # Distance to consider path blocked
         
         # Smart anti-stuck parameters
         self.declare_parameter('stuck_timeout', 3.0)
@@ -188,7 +117,6 @@ class BuranController(Node):
         self.turn_deadband_deg = float(self.get_parameter('turn_deadband_deg').value)
         self.critical_distance = self.get_parameter('critical_distance').value
         self.reverse_timeout = self.get_parameter('reverse_timeout').value
-        self.path_blocked_threshold = self.get_parameter('path_blocked_threshold').value
         
         # Smart anti-stuck parameters
         self.stuck_timeout = self.get_parameter('stuck_timeout').value
@@ -201,34 +129,31 @@ class BuranController(Node):
         self.current_yaw = 0.0
         self.previous_error = 0.0
         self.integral_error = 0.0
-        self.dt = 0.05  # 20Hz
+        self.dt = 0.05
 
-        # Target state (from planner)
+        # Target state
         self.target_x = None
         self.target_y = None
         self.current_x = 0.0
         self.current_y = 0.0
         self.distance_to_target = float('inf')
         
-        # Path awareness
-        self.following_astar_path = False  # True when following A* planned path
-        self.replan_cooldown = 0  # Prevent excessive replan requests
+        # Path awareness (NEW for A* integration)
+        self.following_astar_path = False
         
-        # Mission state (from planner)
-        self.mission_active = False  # True only when planner is in DRIVING state
+        # Mission state
+        self.mission_active = False
 
-        # Obstacle state (from perception)
+        # Obstacle state
         self.obstacle_detected = False
         self.min_obstacle_distance = float('inf')
         self.front_clear = float('inf')
         self.left_clear = float('inf')
         self.right_clear = float('inf')
         self.is_critical = False
-        # OKO v2.0 enhanced state
-        self.urgency = 0.0  # Distance-weighted urgency (0.0-1.0)
-        self.best_gap = None  # Best navigation gap direction
-        self.obstacle_count = 0  # Number of detected clusters
-        self.obstacle_clusters = []  # Raw cluster data for path checking
+        self.urgency = 0.0
+        self.best_gap = None
+        self.obstacle_count = 0
 
         # Avoidance state
         self.avoidance_mode = False
@@ -236,7 +161,7 @@ class BuranController(Node):
         self.prev_left_thrust = 0.0
         self.prev_right_thrust = 0.0
 
-        # GPS for local coordinate conversion
+        # GPS
         self.start_gps = None
         self.current_gps = None
         
@@ -250,8 +175,8 @@ class BuranController(Node):
         self.consecutive_stuck_count = 0
         self.adaptive_escape_duration = 12.0
         
-        # No-go zones (obstacle memory)
-        self.no_go_zones = []  # List of (x, y, radius)
+        # No-go zones
+        self.no_go_zones = []
         
         # Drift compensation with Kalman filter
         self.position_history = []
@@ -261,79 +186,31 @@ class BuranController(Node):
             process_noise=kalman_process,
             measurement_noise=kalman_measurement
         )
-        self.drift_vector = (0.0, 0.0)  # Updated by Kalman filter
+        self.drift_vector = (0.0, 0.0)
         
         # Escape learning
         self.escape_history = []
         self.best_escape_direction = None
         self.probe_results = {'left': 0.0, 'right': 0.0, 'back': 0.0}
         self.last_escape_position = None
-        
-        # Detour waypoints
-        self.detour_requested = False
 
         # --- SUBSCRIBERS ---
-        self.create_subscription(
-            NavSatFix,
-            '/wamv/sensors/gps/gps/fix',
-            self.gps_callback,
-            10
-        )
-        self.create_subscription(
-            Imu,
-            '/wamv/sensors/imu/imu/data',
-            self.imu_callback,
-            10
-        )
-        self.create_subscription(
-            String,
-            '/planning/current_target',
-            self.target_callback,
-            10
-        )
-        self.create_subscription(
-            String,
-            '/perception/obstacle_info',
-            self.obstacle_callback,
-            10
-        )
-        
-        # Subscribe to mission status to know when to stop
-        self.create_subscription(
-            String,
-            '/planning/mission_status',
-            self.mission_status_callback,
-            10
-        )
-        
-        # Subscribe to runtime config updates (PID, speed)
-        self.create_subscription(
-            String,
-            '/vostok1/set_config',
-            self.config_callback,
-            10
-        )
-        # Also listen to modular config topic
-        self.create_subscription(
-            String,
-            '/sputnik/set_config',
-            self.config_callback,
-            10
-        )
+        self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, 10)
+        self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_callback, 10)
+        self.create_subscription(String, '/planning/current_target', self.target_callback, 10)
+        self.create_subscription(String, '/perception/obstacle_info', self.obstacle_callback, 10)
+        self.create_subscription(String, '/planning/mission_status', self.mission_status_callback, 10)
+        self.create_subscription(String, '/vostok1/set_config', self.config_callback, 10)
+        self.create_subscription(String, '/sputnik/set_config', self.config_callback, 10)
 
         # --- PUBLISHERS ---
         self.pub_left = self.create_publisher(Float64, '/wamv/thrusters/left/thrust', 10)
         self.pub_right = self.create_publisher(Float64, '/wamv/thrusters/right/thrust', 10)
         self.pub_status = self.create_publisher(String, '/control/status', 10)
         self.pub_anti_stuck = self.create_publisher(String, '/control/anti_stuck_status', 10)
-        
-        # Request replanning from planner
-        self.pub_replan_request = self.create_publisher(String, '/control/replan_request', 10)
 
         # Control loop at 20Hz
         self.create_timer(self.dt, self.control_loop)
-        
-        # Anti-stuck status publisher at 2Hz
         self.create_timer(0.5, self.publish_anti_stuck_status)
 
         self.get_logger().info("=" * 50)
@@ -343,7 +220,6 @@ class BuranController(Node):
         self.get_logger().info("+ Path-Aware Navigation (A* Integration)")
         self.get_logger().info(f"PID Gains: Kp={self.kp}, Ki={self.ki}, Kd={self.kd}")
         self.get_logger().info(f"Speed: {self.base_speed} (max: {self.max_speed})")
-        self.get_logger().info(f"Anti-Stuck: timeout={self.stuck_timeout}s, threshold={self.stuck_threshold}m")
         self.get_logger().info("=" * 50)
 
     def gps_callback(self, msg):
@@ -366,57 +242,45 @@ class BuranController(Node):
             self.current_x, self.current_y = data['current_position']
             self.target_x, self.target_y = data['target_waypoint']
             self.distance_to_target = data['distance_to_target']
-            # Check if we're following an A* path
+            # NEW: Check if following A* path
             self.following_astar_path = data.get('astar_path', False)
         except (json.JSONDecodeError, KeyError) as e:
             self.get_logger().warn(f"Invalid target message: {e}")
 
     def obstacle_callback(self, msg):
-        """Receive obstacle information from perception (OKO v2.0 compatible)"""
+        """Receive obstacle information from perception"""
         try:
             data = json.loads(msg.data)
             self.obstacle_detected = data.get('obstacle_detected', False)
             self.min_obstacle_distance = data.get('min_distance', float('inf'))
-            # OKO v2.0: front_clear, left_clear, right_clear are distances in meters
             self.front_clear = data.get('front_clear', float('inf'))
             self.left_clear = data.get('left_clear', float('inf'))
             self.right_clear = data.get('right_clear', float('inf'))
             self.is_critical = data.get('is_critical', False)
-            # OKO v2.0 enhanced fields (backward compatible)
             self.urgency = data.get('urgency', 0.0)
             self.best_gap = data.get('best_gap', None)
             self.obstacle_count = data.get('obstacle_count', 0)
-            self.obstacle_clusters = data.get('clusters', [])
         except (json.JSONDecodeError, KeyError) as e:
             self.get_logger().warn(f"Invalid obstacle message: {e}")
 
     def mission_status_callback(self, msg):
-        """Receive mission status from planner - stop if not DRIVING"""
+        """Receive mission status from planner"""
         try:
             data = json.loads(msg.data)
             state = data.get('state', '')
-            # Only active when planner is in DRIVING state
             was_active = self.mission_active
             self.mission_active = (state == "DRIVING")
             
-            # Debug log every status change
-            if was_active != self.mission_active:
-                self.get_logger().info(f"📋 Mission status changed: {was_active} → {self.mission_active} (state={state})")
-            
-            # If mission just became inactive, clear target and stop IMMEDIATELY
             if was_active and not self.mission_active:
                 self.target_x = None
                 self.target_y = None
                 self._reset_all_escape_state()
-                # CRITICAL: Stop immediately and multiple times to ensure thrusters cut off
                 self.stop()
-                self.send_thrust(0.0, 0.0)  # Double-stop - zero thrust explicitly
-                self.get_logger().info(f"🛑 Mission IMMEDIATELY inactive (state={state}) - stopping & resetting all states")
-            
-            # If mission just became active (e.g., go_home, resume), reset escape state for fresh start
+                self.send_thrust(0.0, 0.0)
+                self.get_logger().info(f"🛑 Mission inactive - stopping")
             elif not was_active and self.mission_active:
                 self._reset_all_escape_state()
-                self.get_logger().info(f"✅ Mission active (state={state}) - escape state reset for fresh start")
+                self.get_logger().info(f"✅ Mission active")
                 
         except (json.JSONDecodeError, KeyError) as e:
             self.get_logger().warn(f"Invalid mission status: {e}")
@@ -432,17 +296,15 @@ class BuranController(Node):
         self.best_escape_direction = None
         self.probe_results = {'left': 0.0, 'right': 0.0, 'back': 0.0}
         self.consecutive_stuck_count = 0
-        # Reset stuck detection timing
         self.last_position = None
         self.stuck_check_time = None
 
     def config_callback(self, msg):
-        """Handle runtime configuration changes for PID and speed"""
+        """Handle runtime configuration changes"""
         try:
             config = json.loads(msg.data)
             updated = []
             
-            # PID gains
             if 'kp' in config:
                 self.kp = float(config['kp'])
                 updated.append(f"Kp={self.kp}")
@@ -452,22 +314,9 @@ class BuranController(Node):
             if 'kd' in config:
                 self.kd = float(config['kd'])
                 updated.append(f"Kd={self.kd}")
-                
-            # Speed parameters
             if 'base_speed' in config:
                 self.base_speed = float(config['base_speed'])
                 updated.append(f"base_speed={self.base_speed}")
-            if 'max_speed' in config:
-                self.max_speed = float(config['max_speed'])
-                updated.append(f"max_speed={self.max_speed}")
-                
-            # Obstacle avoidance
-            if 'obstacle_slow_factor' in config:
-                self.obstacle_slow_factor = float(config['obstacle_slow_factor'])
-                updated.append(f"slow_factor={self.obstacle_slow_factor}")
-            if 'critical_distance' in config:
-                self.critical_distance = float(config['critical_distance'])
-                updated.append(f"critical_dist={self.critical_distance}")
                 
             if updated:
                 self.get_logger().info(f"⚙️ Config updated: {', '.join(updated)}")
@@ -475,124 +324,47 @@ class BuranController(Node):
         except Exception as e:
             self.get_logger().error(f"Config parse error: {e}")
 
-    def check_path_blocked(self):
-        """Check if direct path to target is blocked by obstacles"""
-        if not self.obstacle_clusters or self.target_x is None:
-            return False
-        
-        # Check if any obstacle cluster is near the direct line to target
-        for cluster in self.obstacle_clusters:
-            # Convert cluster from local to global coordinates
-            cx = self.current_x + cluster['x'] * math.cos(self.current_yaw) - cluster['y'] * math.sin(self.current_yaw)
-            cy = self.current_y + cluster['x'] * math.sin(self.current_yaw) + cluster['y'] * math.cos(self.current_yaw)
-            
-            # Calculate distance from obstacle to line segment (current -> target)
-            dist = self._point_to_segment_distance(
-                (cx, cy),
-                (self.current_x, self.current_y),
-                (self.target_x, self.target_y)
-            )
-            
-            if dist < self.path_blocked_threshold:
-                return True
-        
-        return False
-    
-    def _point_to_segment_distance(self, point, seg_start, seg_end):
-        """Calculate minimum distance from point to line segment"""
-        px, py = point
-        sx, sy = seg_start
-        ex, ey = seg_end
-        
-        dx = ex - sx
-        dy = ey - sy
-        
-        if dx == 0 and dy == 0:
-            return math.hypot(px - sx, py - sy)
-        
-        t = max(0, min(1, ((px - sx) * dx + (py - sy) * dy) / (dx * dx + dy * dy)))
-        
-        proj_x = sx + t * dx
-        proj_y = sy + t * dy
-        
-        return math.hypot(px - proj_x, py - proj_y)
-    
-    def request_replanning(self):
-        """Request planner to replan around obstacles"""
-        if self.replan_cooldown > 0:
-            return
-        
-        self.replan_cooldown = 40  # Wait 2 seconds (40 cycles at 20Hz) before next request
-        
-        msg = String()
-        msg.data = json.dumps({
-            'type': 'replan',
-            'current_position': [self.current_x, self.current_y],
-            'target': [self.target_x, self.target_y],
-            'reason': 'path_blocked'
-        })
-        self.pub_replan_request.publish(msg)
-        self.get_logger().warn("🔄 Requesting A* replanning - path blocked!")
-
     def control_loop(self):
-        """Main control loop - PID heading control with obstacle avoidance and smart anti-stuck"""
-        # Decrement replan cooldown
-        if self.replan_cooldown > 0:
-            self.replan_cooldown -= 1
-        
-        # Check if mission is active - CRITICAL: Check every control loop to catch stops
+        """Main control loop"""
         if not self.mission_active:
             self.stop()
-            self.send_thrust(0.0, 0.0)  # Ensure thrust is zero if mission became inactive
+            self.send_thrust(0.0, 0.0)
             return
             
-        # Check if we have a target
         if self.target_x is None or self.target_y is None:
             self.stop()
             return
         
-        # Initialize stuck detection on first run
         if self.last_position is None:
             self.last_position = (self.current_x, self.current_y)
             self.stuck_check_time = self.get_clock().now()
         
-        # Update position history for drift estimation
         self.update_position_history()
         
-        # Check for stuck condition (if not already in escape mode)
         if not self.escape_mode:
             self.check_stuck_condition()
         
-        # --- SMART ESCAPE MODE ---
         if self.is_stuck and self.escape_mode:
             self.execute_smart_escape()
             return
-        
-        # --- PATH BLOCKED CHECK (only if not following A* path) ---
-        if not self.following_astar_path and self.check_path_blocked():
-            self.request_replanning()
 
-        # --- CRITICAL OBSTACLE - REVERSE ---
         if self.is_critical and self.min_obstacle_distance < self.critical_distance:
             if self.reverse_start_time is None:
                 self.reverse_start_time = self.get_clock().now()
                 self.integral_error = 0.0
-                self.get_logger().warn(
-                    f"CRITICAL OBSTACLE {self.min_obstacle_distance:.1f}m - Reversing!"
-                )
+                self.get_logger().warn(f"CRITICAL OBSTACLE {self.min_obstacle_distance:.1f}m - Reversing!")
 
             elapsed = (self.get_clock().now() - self.reverse_start_time).nanoseconds / 1e9
             if elapsed > self.reverse_timeout:
-                self.get_logger().warn("Reverse timeout - switching to turn mode")
                 self.reverse_start_time = None
             else:
-                self.send_thrust(-1600.0, -1600.0)  # Increased reverse thrust (v2.1: was -800)
+                self.send_thrust(-1600.0, -1600.0)
                 self.publish_status("REVERSING")
                 return
         else:
             self.reverse_start_time = None
 
-        # --- OBSTACLE AVOIDANCE MODE (only if not following A* path) ---
+        # NEW: Only use reactive avoidance if NOT on A* path
         if self.obstacle_detected and not self.following_astar_path:
             if not self.avoidance_mode:
                 self.integral_error = 0.0
@@ -600,41 +372,405 @@ class BuranController(Node):
                 self.avoidance_mode = True
                 self.get_logger().info("Avoidance mode - PID reset")
 
-            # OKO v2.0: Use best_gap for smarter navigation if available
             if self.best_gap and self.best_gap.get('width', 0) > 20:
-                # Navigate towards the best gap direction
                 gap_direction_deg = self.best_gap.get('direction', 0)
-                gap_width = self.best_gap.get('width', 0)
                 avoidance_heading = self.current_yaw + math.radians(gap_direction_deg)
-                direction = f"GAP {gap_direction_deg:.0f}° ({gap_width:.0f}° wide)"
+                direction = f"GAP {gap_direction_deg:.0f}°"
             elif self.left_clear > self.right_clear:
-                # Fallback: Turn towards clearer side
-                # Use urgency to scale turn angle: higher urgency = sharper turn
-                turn_angle = math.pi / 4 + (self.urgency * math.pi / 4)  # 45° to 90°
+                turn_angle = math.pi / 4 + (self.urgency * math.pi / 4)
                 avoidance_heading = self.current_yaw + turn_angle
-                direction = "GAUCHE/LEFT"
+                direction = "LEFT"
             else:
-                turn_angle = math.pi / 4 + (self.urgency * math.pi / 4)  # 45° to 90°
+                turn_angle = math.pi / 4 + (self.urgency * math.pi / 4)
                 avoidance_heading = self.current_yaw - turn_angle
-                direction = "DROITE/RIGHT"
+                direction = "RIGHT"
 
             angle_error = self.normalize_angle(avoidance_heading - self.current_yaw)
-
             self.get_logger().warn(
-                f"🚨 OBSTACLE {self.min_obstacle_distance:.1f}m (urgency:{self.urgency*100:.0f}%) - "
-                f"Virage {direction} (G:{self.left_clear:.1f}m D:{self.right_clear:.1f}m)",
+                f"🚨 OBSTACLE {self.min_obstacle_distance:.1f}m - {direction}",
                 throttle_duration_sec=1.0
             )
         else:
-            # --- NORMAL WAYPOINT NAVIGATION ---
             if self.avoidance_mode:
                 self.get_logger().info("Path CLEAR - Resuming navigation")
                 self.avoidance_mode = False
                 self.integral_error = 0.0
                 self.previous_error = 0.0
 
-            # Calculate desired heading to waypoint
             dx = self.target_x - self.current_x
             dy = self.target_y - self.current_y
             target_angle = math.atan2(dy, dx)
-            angle
+            angle_error = self.normalize_angle(target_angle - self.current_yaw)
+
+        # PID Controller
+        self.integral_error += angle_error * self.dt
+        self.integral_error = max(-INTEGRAL_LIMIT, min(INTEGRAL_LIMIT, self.integral_error))
+        derivative_error = (angle_error - self.previous_error) / self.dt
+        turn_power = (self.kp * angle_error + self.ki * self.integral_error + self.kd * derivative_error)
+        self.previous_error = angle_error
+        turn_power = max(-TURN_POWER_LIMIT, min(TURN_POWER_LIMIT, turn_power))
+
+        # Speed calculation
+        angle_error_deg = abs(math.degrees(angle_error))
+        if angle_error_deg < self.turn_deadband_deg:
+            turn_power = 0.0
+            angle_error_deg = 0.0
+
+        if angle_error_deg > 45:
+            speed = self.base_speed * 0.5
+        elif angle_error_deg > 20:
+            speed = self.base_speed * 0.75
+        else:
+            speed = self.base_speed
+
+        if math.isfinite(self.distance_to_target) and self.distance_to_target < self.approach_slow_distance:
+            frac = max(0.0, min(1.0, self.distance_to_target / self.approach_slow_distance))
+            speed *= (self.approach_slow_factor + (1.0 - self.approach_slow_factor) * frac)
+
+        if self.obstacle_detected:
+            if self.urgency > 0.0:
+                speed_factor = 1.0 - (self.urgency * (1.0 - self.obstacle_slow_factor))
+                speed *= speed_factor
+            else:
+                speed *= self.obstacle_slow_factor
+
+        left_thrust = speed - turn_power
+        right_thrust = speed + turn_power
+        left_thrust = max(-SAFE_THRUST, min(SAFE_THRUST, left_thrust))
+        right_thrust = max(-SAFE_THRUST, min(SAFE_THRUST, right_thrust))
+        left_thrust = self._slew_limit(self.prev_left_thrust, left_thrust)
+        right_thrust = self._slew_limit(self.prev_right_thrust, right_thrust)
+        self.prev_left_thrust = left_thrust
+        self.prev_right_thrust = right_thrust
+
+        self.send_thrust(left_thrust, right_thrust)
+        
+        # NEW: Show A* mode in status
+        mode = "A*_PATH" if self.following_astar_path else ("AVOIDANCE" if self.avoidance_mode else "NAVIGATION")
+        self.publish_status(mode)
+
+    def normalize_angle(self, angle):
+        """Normalize angle to [-pi, pi]"""
+        while angle > math.pi:
+            angle -= 2.0 * math.pi
+        while angle < -math.pi:
+            angle += 2.0 * math.pi
+        return angle
+
+    def _slew_limit(self, previous: float, target: float) -> float:
+        """Limit thrust change per cycle"""
+        delta = target - previous
+        delta = max(-self.slew_rate_limit, min(self.slew_rate_limit, delta))
+        return previous + delta
+
+    def send_thrust(self, left, right):
+        """Publish thruster commands"""
+        if not self.mission_active:
+            left = 0.0
+            right = 0.0
+        
+        left_msg = Float64()
+        left_msg.data = left
+        self.pub_left.publish(left_msg)
+
+        right_msg = Float64()
+        right_msg.data = right
+        self.pub_right.publish(right_msg)
+
+    def stop(self):
+        """Stop the boat"""
+        self.send_thrust(0.0, 0.0)
+
+    def publish_status(self, mode):
+        """Publish controller status"""
+        msg = String()
+        msg.data = json.dumps({
+            'mode': mode,
+            'avoidance_active': self.avoidance_mode,
+            'obstacle_detected': bool(self.obstacle_detected),
+            'obstacle_distance': round(float(self.min_obstacle_distance), 2),
+            'current_yaw': round(math.degrees(self.current_yaw), 1),
+            'integral_error': round(float(self.integral_error), 4),
+            'urgency': round(float(self.urgency), 2),
+            'obstacle_count': int(self.obstacle_count),
+            'is_critical': bool(self.is_critical),
+            'following_astar': bool(self.following_astar_path)
+        })
+        self.pub_status.publish(msg)
+
+    # ==================== SMART ANTI-STUCK SYSTEM ====================
+    
+    def update_position_history(self):
+        """Update position history for drift estimation"""
+        self.position_history.append((self.current_x, self.current_y, self.get_clock().now()))
+        if len(self.position_history) > 100:
+            self.position_history.pop(0)
+        self.estimate_drift()
+    
+    def check_stuck_condition(self):
+        """Detect if boat is stuck"""
+        if self.escape_mode:
+            return
+        
+        dx = self.current_x - self.last_position[0]
+        dy = self.current_y - self.last_position[1]
+        distance_moved = math.hypot(dx, dy)
+        
+        elapsed = (self.get_clock().now() - self.stuck_check_time).nanoseconds / 1e9
+        
+        if elapsed >= self.stuck_timeout:
+            if distance_moved < self.stuck_threshold:
+                if not self.is_stuck:
+                    self.is_stuck = True
+                    self.escape_mode = True
+                    self.escape_start_time = self.get_clock().now()
+                    self.escape_phase = 0
+                    self.integral_error = 0.0
+                    self.last_escape_position = (self.current_x, self.current_y)
+                    self.best_escape_direction = None
+                    self.probe_results = {'left': 0.0, 'right': 0.0, 'back': 0.0}
+                    self.consecutive_stuck_count += 1
+                    self.add_no_go_zone(self.current_x, self.current_y)
+                    self.calculate_adaptive_escape_duration()
+                    self.get_logger().warn(f"STUCK! Smart escape initiating (Attempt {self.consecutive_stuck_count})")
+                    
+                    if self.consecutive_stuck_count >= 4:
+                        self.consecutive_stuck_count = 0
+                        self.is_stuck = False
+                        self.escape_mode = False
+            else:
+                if self.is_stuck:
+                    self.record_escape_result(success=True)
+                    self.get_logger().info("✅ Escape successful!")
+                self.is_stuck = False
+                self.escape_mode = False
+                self.escape_phase = 0
+            
+            self.last_position = (self.current_x, self.current_y)
+            self.stuck_check_time = self.get_clock().now()
+    
+    def execute_smart_escape(self):
+        """Execute smart escape maneuver"""
+        if not self.mission_active:
+            self._reset_all_escape_state()
+            self.stop()
+            return
+        
+        elapsed = (self.get_clock().now() - self.escape_start_time).nanoseconds / 1e9
+        
+        probe_end = 2.0
+        reverse_end = probe_end + self.adaptive_escape_duration * 0.4
+        turn_end = reverse_end + self.adaptive_escape_duration * 0.35
+        forward_end = turn_end + self.adaptive_escape_duration * 0.25
+        
+        drift_comp_left, drift_comp_right = self.calculate_drift_compensation()
+        
+        if elapsed < probe_end:
+            self.escape_phase = 0
+            probe_time = elapsed
+            
+            if probe_time < 0.6:
+                self.send_thrust(-200.0, 200.0)
+                self.probe_results['left'] = max(self.probe_results['left'], self.left_clear)
+            elif probe_time < 1.2:
+                self.send_thrust(200.0, -200.0)
+                self.probe_results['right'] = max(self.probe_results['right'], self.right_clear)
+            else:
+                self.send_thrust(0.0, 0.0)
+                self.probe_results['back'] = self.min_obstacle_distance
+                
+                if self.best_escape_direction is None:
+                    self.best_escape_direction = self.determine_best_escape_direction()
+            return
+        
+        elif elapsed < reverse_end:
+            self.escape_phase = 1
+            reverse_power = -700.0 - min(300.0, 100.0 / max(0.5, self.min_obstacle_distance))
+            self.send_thrust(reverse_power + drift_comp_left, reverse_power + drift_comp_right)
+            return
+        
+        elif elapsed < turn_end:
+            self.escape_phase = 2
+            turn_power = 600.0 + (self.consecutive_stuck_count * 100.0)
+            turn_power = min(900.0, turn_power)
+            
+            if self.best_escape_direction == 'LEFT':
+                self.send_thrust(-turn_power + drift_comp_left, turn_power + drift_comp_right)
+            else:
+                self.send_thrust(turn_power + drift_comp_left, -turn_power + drift_comp_right)
+            return
+        
+        elif elapsed < forward_end:
+            self.escape_phase = 3
+            if self.is_heading_toward_no_go_zone():
+                self.send_thrust(-400.0, 400.0)
+            else:
+                self.send_thrust(400.0 + drift_comp_left, 400.0 + drift_comp_right)
+            return
+        
+        else:
+            self.escape_mode = False
+            self.is_stuck = False
+            self.escape_phase = 0
+            self.integral_error = 0.0
+            self.previous_error = 0.0
+            self.last_position = (self.current_x, self.current_y)
+            self.stuck_check_time = self.get_clock().now()
+    
+    def calculate_adaptive_escape_duration(self):
+        """Calculate escape duration based on situation"""
+        base_duration = 10.0
+        
+        if self.min_obstacle_distance < self.critical_distance:
+            base_duration += 4.0
+        elif self.min_obstacle_distance < 15.0:
+            base_duration += 2.0
+        
+        base_duration += self.consecutive_stuck_count * 2.0
+        self.adaptive_escape_duration = min(20.0, base_duration)
+    
+    def add_no_go_zone(self, x, y):
+        """Add no-go zone around stuck location"""
+        for i, zone in enumerate(self.no_go_zones):
+            if math.hypot(x - zone[0], y - zone[1]) < self.no_go_zone_radius:
+                self.no_go_zones[i] = (zone[0], zone[1], zone[2] + 2.0)
+                return
+        
+        self.no_go_zones.append((x, y, self.no_go_zone_radius))
+        
+        if len(self.no_go_zones) > 20:
+            self.no_go_zones.pop(0)
+    
+    def is_in_no_go_zone(self, x, y):
+        """Check if position is in any no-go zone"""
+        for zone_x, zone_y, radius in self.no_go_zones:
+            if math.hypot(x - zone_x, y - zone_y) < radius:
+                return True
+        return False
+    
+    def is_heading_toward_no_go_zone(self):
+        """Check if current heading leads to no-go zone"""
+        look_ahead = 10.0
+        future_x = self.current_x + look_ahead * math.cos(self.current_yaw)
+        future_y = self.current_y + look_ahead * math.sin(self.current_yaw)
+        return self.is_in_no_go_zone(future_x, future_y)
+    
+    def determine_best_escape_direction(self):
+        """Determine best escape direction from probe results"""
+        left = self.probe_results['left']
+        right = self.probe_results['right']
+        
+        threshold = 3.0
+        if left > right + threshold:
+            return 'LEFT'
+        elif right > left + threshold:
+            return 'RIGHT'
+        else:
+            return self.get_learned_escape_direction()
+    
+    def estimate_drift(self):
+        """Estimate drift using Kalman filter"""
+        if len(self.position_history) < 20:
+            self.drift_kalman.predict()
+            self.drift_vector = self.drift_kalman.get_drift()
+            return
+        
+        self.drift_kalman.predict()
+        
+        recent = self.position_history[-20:]
+        total_dx = recent[-1][0] - recent[0][0]
+        total_dy = recent[-1][1] - recent[0][1]
+        time_diff = (recent[-1][2] - recent[0][2]).nanoseconds / 1e9
+        
+        if time_diff > 0.5:
+            measured_drift_x = total_dx / time_diff
+            measured_drift_y = total_dy / time_diff
+            self.drift_kalman.update([measured_drift_x, measured_drift_y])
+        
+        self.drift_vector = self.drift_kalman.get_drift()
+    
+    def calculate_drift_compensation(self):
+        """Calculate thrust compensation for drift"""
+        drift_magnitude = math.hypot(self.drift_vector[0], self.drift_vector[1])
+        
+        if drift_magnitude < 0.1:
+            return 0.0, 0.0
+        
+        drift_angle = math.atan2(self.drift_vector[1], self.drift_vector[0])
+        relative_drift = self.normalize_angle(drift_angle - self.current_yaw)
+        
+        compensation = min(150.0, drift_magnitude * self.drift_compensation_gain * 100.0)
+        
+        if relative_drift > 0:
+            return compensation, -compensation
+        else:
+            return -compensation, compensation
+    
+    def record_escape_result(self, success):
+        """Record escape result for learning"""
+        if self.last_escape_position is None:
+            return
+        
+        self.escape_history.append({
+            'direction': self.best_escape_direction,
+            'success': success
+        })
+        
+        if len(self.escape_history) > 50:
+            self.escape_history.pop(0)
+    
+    def get_learned_escape_direction(self):
+        """Get best escape direction from history"""
+        if not self.escape_history:
+            return 'LEFT'
+        
+        left_success = sum(1 for r in self.escape_history if r['direction'] == 'LEFT' and r['success'])
+        right_success = sum(1 for r in self.escape_history if r['direction'] == 'RIGHT' and r['success'])
+        
+        return 'LEFT' if left_success >= right_success else 'RIGHT'
+    
+    def publish_anti_stuck_status(self):
+        """Publish anti-stuck system status"""
+        drift_uncertainty = self.drift_kalman.get_uncertainty()
+        
+        msg = String()
+        msg.data = json.dumps({
+            'is_stuck': self.is_stuck,
+            'escape_mode': self.escape_mode,
+            'escape_phase': self.escape_phase,
+            'consecutive_attempts': self.consecutive_stuck_count,
+            'adaptive_duration': round(self.adaptive_escape_duration, 1),
+            'no_go_zones': len(self.no_go_zones),
+            'drift_vector': [round(self.drift_vector[0], 3), round(self.drift_vector[1], 3)],
+            'drift_uncertainty': [round(drift_uncertainty[0], 3), round(drift_uncertainty[1], 3)],
+            'drift_kalman_gain': [
+                round(float(self.drift_kalman.last_kalman_gain[0, 0]), 3),
+                round(float(self.drift_kalman.last_kalman_gain[1, 1]), 3)
+            ],
+            'escape_history_count': len(self.escape_history),
+            'best_direction': self.best_escape_direction,
+            'probe_results': {
+                'left': round(self.probe_results['left'], 1),
+                'right': round(self.probe_results['right'], 1),
+                'back': round(self.probe_results['back'], 1)
+            },
+            'following_astar': self.following_astar_path
+        })
+        self.pub_anti_stuck.publish(msg)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = BuranController()
+    
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
