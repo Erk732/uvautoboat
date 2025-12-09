@@ -36,7 +36,7 @@
 #   - rosbridge-suite: sudo apt install ros-jazzy-rosbridge-suite
 #   - web_video_server: sudo apt install ros-jazzy-web-video-server
 #   - GNOME Terminal available for multi-tab launch
-#
+#   - Install once if missing: sudo apt install ros-${ROS_DISTRO}-web-video-server
 # ============================================================================
 
 set -e  # Exit on error
