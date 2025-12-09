@@ -53,6 +53,7 @@ setup(
             'pose_filter = control.pose_filter:main',
             # If you want you can comment its additional test
             'buran_controller_fixed = control.buran_controller_fixed:main',
+            'controller = control.controller:main',
 
         ],
     },

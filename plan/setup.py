@@ -54,6 +54,8 @@ setup(
             'atlantis_planner_fixed = brain.atlantis_planner_fixed:main',
             'atlantis_controller = brain.atlantis_controller:main',
             'oko_perception_fixed = brain.oko_perception_fixed:main',
+            'planner = brain.planner:main',
+            'lidar_obstacle_avoidance = brain.lidar_obstacle_avoidance:main',
  
         ],
     },
