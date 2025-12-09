@@ -30,6 +30,8 @@
 11. [Waypoint Skip Strategy](#waypoint-skip-strategy)
 12. [Terminal Mission Control (CLI)](#terminal-mission-control)
 13. [Technical Documentation](#technical-documentation)
+    - [SPUTNIK Planner](#sputnik-planner)
+    - [A* Path Planning](#a-path-planning)
 14. [Troubleshooting](#troubleshooting)
 15. [Command Cheatsheet](#command-cheatsheet)
 16. [Future Roadmap](#future-roadmap)
@@ -150,6 +152,7 @@ uvautoboat/
 | **Bilingual Interface** | French/English terminal output |
 | **Path Priority Logic** | Feature that prioritizes GPS trajectory over obstacle panic when the direct path is clear |
 | **Z-Node Interpolation** | Feature that prioritizes GPS trajectory over obstacle panic when the direct path is clear |
+| **A* Path Planning** | Grid-based pathfinding algorithm with obstacle inflation and pre-defined hazard zones |
 
 ---
 
@@ -1236,37 +1239,76 @@ gz service -s /world/sydney_regatta/set_pose \
 
 | Feature | Priority | Description |
 |:--------|:---------|:------------|
-| **A* Path Planning** | High | Pre-compute obstacle-free paths to any destination |
+| **A* Path Planning** | Implemented | Grid-based pathfinding in SPUTNIK |
+| **Hybrid Mode** | Implemented | Pre-compute routes between waypoints with lawnmower algorithm|
+| **Hazard Zone Avoidance** | Implemented | Pre determined rectangular no-go zones |
 | **Dynamic Replanning** | High | Replan path when new obstacles detected |
 | **Coverage Planning** | Medium | Boustrophedon pattern for area coverage |
 | **Multi-Goal Navigation** | Medium | Navigate through sequence of random points |
 
-### A* Path Planning (Proposed)
+### A* Path Planning 
 
-For navigating to arbitrary points through obstacle fields:
+Sputnik now has A* path planning algorithm for navigating to points that are blocked by obstacle fields:
 
+**How it works?**
 ```text
-1. Create occupancy grid (10m cells) from LIDAR data
-2. Mark known obstacles (buoys, docks) on grid
-3. Use A* algorithm to find optimal path
-4. Generate waypoints along path
-5. If new obstacle detected → replan dynamically
+1. Create occupancy grid (3m cells by default) from LIDAR/obstacle data
+2. Inflate obstacles by safety margin + hull radius for clearance
+3. Block rectangular hazard zones (no-go areas)
+4. A* algorithm use 8-connected A*(8 directions to go) to find optimal path
+5. Insert detour waypoints or pre-plan routes between lawnmower points
 ```
 
 **Proposed Architecture:**
 
 ```text
-/goal_point ──────┐
-                  ├──→ [pathfinder.py] ──→ /planned_waypoints ──→ [vostok1/sputnik]
-/oko/obstacles ───┘
+
+/oko/obstacles ────>┌─────────────────────┐                                   
+                    │  AStarSolver        │──> Detour waypoints inserted
+Hazard boxes ──────>│  (in SPUTNIK)       │    into /planning/waypoints
+                    │                     │
+Current position ──>└─────────────────────┘
+
 ```
+**Two Operating Modes for Better User Experience:**
+
+| Mode | Parameter | Description |
+|:-----|:----------|:------------|
+| **Hybrid** | `astar_hybrid_mode: true` | Pre-plans A* routes between lawnmower waypoints at generation time |
+| **Runtime** | `astar_enabled: true` | Plans detours on-the-voyage when WAMV-boat gets stuck |
+
+**Configuration:**
+
+| Parameter | Default | Description |
+|:----------|:--------|:------------|
+| `astar_resolution` | 3.0m | Grid cell size |
+| `astar_safety_margin` | 12.0m | Buffer around obstacles |
+| `astar_max_expansions` | 20000 | Max search iterations |
 
 **Benefits:**
-
 - Works for any destination point
 - Avoids obstacles from the start
 - No circling behavior
 - Efficient paths through complex environments
+- Integrated directly in SPUTNIK (no separate node needed)
+- Handles both circular obstacles (buoys) and rectangular hazard zones
+- 8-direction movement for smoother paths
+- Automatic obstacle inflation for safe clearance
+- Fails gracefully if no path found (falls back to waypoint skip)
+
+**Example:**
+```text
+Without A*:              With A*:
+
+S ──────X──────> G       S ─────┐
+        ↑                       ↓
+    blocked!              ┌─────┘
+                          └────> G
+
+S = Start, G = Goal, X = Obstacle
+```
+
+
 
 ### Technical Debt
 
