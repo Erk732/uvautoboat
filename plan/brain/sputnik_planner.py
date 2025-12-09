@@ -228,23 +228,31 @@ class SputnikPlanner(Node):
         self.state = "INIT"  # INIT -> WAITING_CONFIRM -> DRIVING -> FINISHED
         self.mission_start_time = None
         self.mission_armed = False  # For manual start mode
-        
+
         # GPS initialization timeout (for worlds with slow GPS like DEFAULT)
         self.gps_init_time = None  # When node started waiting for GPS
         self.gps_timeout = 30.0  # Give GPS 30 seconds to initialize
         self.gps_timeout_warned = False  # Flag to warn once about GPS timeout
-        
+
         # Waypoint skip tracking (for obstacles blocking waypoint)
         self.waypoint_start_time = None  # When we started trying to reach current waypoint
         self.obstacle_detected = False
         self.obstacle_clusters = []  # Latest OKO clusters for A* detours
+        self.front_clear = float('inf')
+        self.left_clear = float('inf')
+        self.right_clear = float('inf')
+        self.min_obstacle_distance = float('inf')
         self.obstacle_blocking_time = 0.0  # Cumulative time obstacle detected near waypoint
         self.last_obstacle_check = None
         self.go_home_mode = False  # Track if we're in return-home mode
         self.home_detour_timeout = 15.0  # Insert detour after this many seconds in home mode
         self.detour_waypoint_inserted = False
-        self.detour_distance = 12.0  # Distance for detour waypoints
+        self.detour_distance = 14.0  # Lateral distance for detour waypoints
+        self.detour_forward_offset = 10.0  # Forward offset when inserting side detour
+        self.detour_start_time = None
         self.pollutant_sources = []  # {name, world:[x,y,z], local:[x,y]}
+        self.detected_pollutants = set()  # Track which pollutants have been detected
+        self.pollutant_detection_distance = 25.0  # Detection radius in meters (smoke plumes)
 
         # --- SUBSCRIBERS ---
         self.create_subscription(
@@ -497,9 +505,15 @@ class SputnikPlanner(Node):
         try:
             data = json.loads(msg.data)
             self.obstacle_detected = data.get('obstacle_detected', False)
+            self.min_obstacle_distance = float(data.get('min_distance', float('inf')))
+            self.front_clear = float(data.get('front_clear', float('inf')))
+            self.left_clear = float(data.get('left_clear', float('inf')))
+            self.right_clear = float(data.get('right_clear', float('inf')))
             # Capture clusters for A* detours
             clusters = data.get('clusters', [])
             self.obstacle_clusters = [(c.get('x', 0.0), c.get('y', 0.0)) for c in clusters if 'x' in c and 'y' in c]
+            if not self.obstacle_detected:
+                self.detour_waypoint_inserted = False  # allow new detour once clear
         except:
             pass
     
@@ -734,6 +748,9 @@ class SputnikPlanner(Node):
         # Get current position
         curr_x, curr_y = self.latlon_to_meters(self.current_gps[0], self.current_gps[1])
 
+        # Check for pollutant sources nearby
+        self.detect_pollutant_sources(curr_x, curr_y)
+
         # Check if mission complete
         if self.current_wp_index >= len(self.waypoints):
             self.state = "FINISHED"
@@ -750,14 +767,42 @@ class SputnikPlanner(Node):
         dy = target_y - curr_y
         dist = math.hypot(dx, dy)
 
+        # Opportunistic side detour for close obstacles (buoy clusters)
+        if (self.obstacle_detected and not self.detour_waypoint_inserted and
+                self.front_clear < 8.0 and self.min_obstacle_distance < 10.0):
+            heading = math.atan2(dy, dx)
+            side = 'left' if self.left_clear > self.right_clear else 'right'
+            self.insert_side_detour(curr_x, curr_y, heading, side)
+
         # Check if waypoint reached
         if dist < self.waypoint_tolerance:
             self.get_logger().info(
                 f"🎯 PT {self.current_wp_index + 1}/{len(self.waypoints)} ATTEINT! | "
                 f"WP REACHED! ({target_x:.1f}, {target_y:.1f})"
             )
+            if self.detour_waypoint_inserted:
+                # Clear detour state when any waypoint is reached
+                self.detour_waypoint_inserted = False
+                self.detour_start_time = None
             self.advance_to_next_waypoint()
         else:
+            # If stuck on a detour too long, skip it
+            if self.detour_waypoint_inserted and self.detour_start_time is not None:
+                elapsed = (self.get_clock().now() - self.detour_start_time).nanoseconds / 1e9
+                if elapsed > 15.0:  # seconds
+                    self.get_logger().warn(
+                        f"⏭️ Detour timeout ({elapsed:.1f}s) - skipping detour waypoint"
+                    )
+                    self.detour_waypoint_inserted = False
+                    self.detour_start_time = None
+                    self.advance_to_next_waypoint()
+                    # Recompute distance after skipping
+                    if self.current_wp_index < len(self.waypoints):
+                        target_x, target_y = self.waypoints[self.current_wp_index]
+                        dx = target_x - curr_x
+                        dy = target_y - curr_y
+                        dist = math.hypot(dx, dy)
+
             # Waypoint skip logic - skip if obstacle blocking for too long
             self.check_waypoint_skip(curr_x, curr_y, dist)
 
@@ -887,6 +932,23 @@ class SputnikPlanner(Node):
         # Publish updated waypoints
         self.publish_waypoints()
 
+    def insert_side_detour(self, curr_x, curr_y, heading, side='left'):
+        """Insert a perpendicular + forward detour based on obstacle side."""
+        import math
+        lateral = self.detour_distance
+        forward = self.detour_forward_offset
+        angle = heading + (math.pi / 2 if side == 'left' else -math.pi / 2)
+        detour_x = curr_x + lateral * math.cos(angle) + forward * math.cos(heading)
+        detour_y = curr_y + lateral * math.sin(angle) + forward * math.sin(heading)
+        self.waypoints.insert(self.current_wp_index, (detour_x, detour_y))
+        self.detour_waypoint_inserted = True
+        self.detour_start_time = self.get_clock().now()
+        self.get_logger().warn(
+            f"📍 Side detour ({side.upper()}): ({detour_x:.1f}, {detour_y:.1f}) | "
+            f"Front={self.front_clear:.1f}m L={self.left_clear:.1f}m R={self.right_clear:.1f}m"
+        )
+        self.publish_waypoints()
+
     def plan_astar_detour(self, curr_x, curr_y, target_x, target_y):
         """Run A* to replace the current leg with a detour path."""
         # Inflate hazards by margin+hull to keep clearance
@@ -1013,6 +1075,7 @@ class SputnikPlanner(Node):
             'position': [round(curr_x, 2), round(curr_y, 2)],
             'mission_armed': self.mission_armed,
             'gps_ready': gps_ready,
+            'detour_active': self.detour_waypoint_inserted,
             'joystick_override': self.state == "JOYSTICK"
         })
         self.pub_mission_status.publish(msg)
@@ -1095,21 +1158,29 @@ class SputnikPlanner(Node):
         sources = []
         # Locate repo root containing test_environment
         base = Path(__file__).resolve()
-        root = None
-        for _ in range(6):
+        roots = []
+        # Walk up to find test_environment when running from source
+        for _ in range(8):
             if (base / 'test_environment').exists():
-                root = base
+                roots.append(base)
                 break
             base = base.parent
-        if root is None:
-            self.get_logger().warn("Cannot locate test_environment folder for pollutant scan.")
-            self.pollutant_sources = []
-            return
+        # Also try CWD and workspace-style path
+        roots.append(Path.cwd())
+        roots.append(Path.cwd() / 'test_environment')
 
         patterns = [p.strip() for p in self.pollutant_sdf_glob.split(';') if p.strip()]
         sdf_files = []
         for pat in patterns:
-            sdf_files.extend(glob.glob(str(root / pat)))
+            # Absolute glob
+            if pat.startswith('/'):
+                sdf_files.extend(glob.glob(pat))
+                continue
+            # Relative glob against candidate roots
+            for root in roots:
+                if root is None:
+                    continue
+                sdf_files.extend(glob.glob(str(root / pat)))
 
         for sdf in sdf_files:
             try:
@@ -1125,8 +1196,15 @@ class SputnikPlanner(Node):
                     pose_vals = [float(x) for x in pose_elem.text.strip().split()]
                     wx, wy = pose_vals[0], pose_vals[1]
                     wz = pose_vals[2] if len(pose_vals) > 2 else 0.0
-                    lx = wx - float(self.get_parameter('hazard_origin_world_x').value)
-                    ly = wy - float(self.get_parameter('hazard_origin_world_y').value)
+                    # Default to world coords as local; apply hazard-origin offset if available
+                    lx, ly = wx, wy
+                    try:
+                        hx = float(self.get_parameter('hazard_origin_world_x').value)
+                        hy = float(self.get_parameter('hazard_origin_world_y').value)
+                        lx = wx - hx
+                        ly = wy - hy
+                    except Exception:
+                        pass
                     sources.append({
                         'name': name,
                         'world': [round(wx, 2), round(wy, 2), round(wz, 2)],
@@ -1137,19 +1215,64 @@ class SputnikPlanner(Node):
 
         self.pollutant_sources = sources
         if sources:
-            self.get_logger().info(f"Pollutant sources detected: {len(sources)}")
-            for s in sources:
+            self.get_logger().info("=" * 70)
+            self.get_logger().info(f"🌫️ POLLUTANT SOURCES DETECTED | SOURCES DE POLLUANTS DÉTECTÉES: {len(sources)}")
+            self.get_logger().info("=" * 70)
+            for i, s in enumerate(sources, 1):
                 self.get_logger().info(
-                    f"  - {s['name']}: world=({s['world'][0]}, {s['world'][1]}), local=({s['local'][0]}, {s['local'][1]})"
+                    f"  [{i}] {s['name']}: World({s['world'][0]:7.1f}, {s['world'][1]:7.1f})m → "
+                    f"Local({s['local'][0]:7.1f}, {s['local'][1]:7.1f})m"
                 )
+            self.get_logger().info("=" * 70)
+        else:
+            self.get_logger().info("=" * 70)
+            self.get_logger().info("✅ NO POLLUTANT SOURCES | AUCUNE SOURCE DE POLLUANT DÉTECTÉE")
+            self.get_logger().info("   (World loaded without smoke generators | Monde chargé sans générateurs de fumée)")
+            self.get_logger().info("=" * 70)
 
     def publish_pollutant_sources(self):
         """Publish pollutant sources for dashboard/minimap."""
+        # Always publish count, even if no sources found
+        msg = String()
+        msg.data = json.dumps({
+            'sources': self.pollutant_sources,
+            'count': len(self.pollutant_sources),
+            'status': 'detected' if self.pollutant_sources else 'none'
+        })
+        self.pub_pollutants.publish(msg)
+
+    def detect_pollutant_sources(self, curr_x, curr_y):
+        """
+        Check if boat is near any pollutant source (smoke generator).
+        Log detection when boat comes within detection_distance of a source.
+        """
         if not self.pollutant_sources:
             return
-        msg = String()
-        msg.data = json.dumps({'sources': self.pollutant_sources})
-        self.pub_pollutants.publish(msg)
+
+        for source in self.pollutant_sources:
+            source_name = source.get('name', 'Unknown')
+            local_pos = source.get('local') or source.get('world') or [0, 0]
+            source_x, source_y = local_pos[0], local_pos[1]
+
+            # Calculate distance to this pollutant source
+            distance = math.hypot(curr_x - source_x, curr_y - source_y)
+
+            # Check if detected and log if within range
+            if distance <= self.pollutant_detection_distance:
+                if source_name not in self.detected_pollutants:
+                    # First detection - log it
+                    self.get_logger().warn(
+                        f"🌫️ POLLUTANT SOURCE DETECTED | SOURCE DE POLLUANT DÉTECTÉE: "
+                        f"{source_name} at ({source_x:.1f}m, {source_y:.1f}m), "
+                        f"Distance: {distance:.2f}m"
+                    )
+                    self.detected_pollutants.add(source_name)
+            else:
+                # Clear detection if we move away
+                if source_name in self.detected_pollutants:
+                    # Check if we've moved far enough away to reset detection
+                    if distance > self.pollutant_detection_distance + 2.0:  # Hysteresis
+                        self.detected_pollutants.discard(source_name)
 
     def _segment_intersects_hazard(self, x1, y1, x2, y2, margin=0.0) -> bool:
         """Check if a line segment intersects any hazard zone (with optional margin)."""

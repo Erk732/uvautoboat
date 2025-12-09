@@ -37,6 +37,10 @@
                         <span class="label">Distance:</span>
                         <span id="distance" class="value">-</span>
                     </div>
+                    <div class="info-item">
+                        <span class="label">Detour:</span>
+                        <span id="detour-badge" class="value badge" style="display:none;background:#f39c12;color:#fff;">Active</span>
+                    </div>
                 </div>
             </div>
 
@@ -98,6 +102,24 @@
                     <div class="info-item full-width">
                         <span class="label">Status:</span>
                         <span id="obstacle-status" class="value badge">Clear</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Smoke Generator Detection Panel -->
+            <div class="panel">
+                <h2>Pollutant Sources Detection | Détection de Sources de Polluants</h2>
+                <div class="info-grid">
+                    <div class="info-item full-width">
+                        <span class="label">Status | Statut:</span>
+                        <span id="pollutant-status" class="value badge">Scanning...</span>
+                    </div>
+                    <div class="info-item full-width">
+                        <span class="label">Detection Count | Détectés:</span>
+                        <span id="pollutant-count" class="value">0 sources</span>
+                    </div>
+                    <div class="info-item full-width">
+                        <span id="pollutant-list" class="value" style="font-size: 0.9em; line-height: 1.6; color: #aaa;"></span>
                     </div>
                 </div>
             </div>

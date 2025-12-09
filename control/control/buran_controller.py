@@ -162,6 +162,7 @@ class BuranController(Node):
         self.declare_parameter('min_safe_distance', 12.0)
         self.declare_parameter('reverse_timeout', 5.0)
         self.declare_parameter('avoid_diff_gain', 40.0)  # VFH/polar differential steering gain
+        self.declare_parameter('use_vfh_bias', False)    # Enable/disable VFH/polar steering bias
         
         # Smart anti-stuck parameters
         self.declare_parameter('stuck_timeout', 3.0)
@@ -189,6 +190,7 @@ class BuranController(Node):
         self.min_safe_distance = self.get_parameter('min_safe_distance').value
         self.reverse_timeout = self.get_parameter('reverse_timeout').value
         self.avoid_diff_gain = float(self.get_parameter('avoid_diff_gain').value)
+        self.use_vfh_bias = bool(self.get_parameter('use_vfh_bias').value)
         
         # Smart anti-stuck parameters
         self.stuck_timeout = self.get_parameter('stuck_timeout').value
@@ -479,6 +481,10 @@ class BuranController(Node):
             if 'min_safe_distance' in config:
                 self.min_safe_distance = float(config['min_safe_distance'])
                 updated.append(f"safe_dist={self.min_safe_distance}")
+            # Toggle VFH/polar bias
+            if 'use_vfh_bias' in config:
+                self.use_vfh_bias = bool(config['use_vfh_bias'])
+                updated.append(f"use_vfh_bias={self.use_vfh_bias}")
                 
             if updated:
                 self.get_logger().info(f"⚙️ Config updated: {', '.join(updated)}")
@@ -638,31 +644,47 @@ class BuranController(Node):
         right_thrust = speed + turn_power
 
         # v2.1: Apply VFH/polar bias for fine-tuned steering (from AllInOneStack)
-        # Only apply when avoiding obstacles or force_avoid_active
-        if self.obstacle_detected or self.force_avoid_active:
+        # Only apply when enabled and avoiding obstacles
+        if self.use_vfh_bias and (self.obstacle_detected or self.force_avoid_active):
             diff_bias = 0.0
+            vfh_dir = None
 
-            # 1. Left/right clearance bias (steer toward clearer side)
-            if self.left_clear < float('inf') and self.right_clear < float('inf'):
-                norm = max(self.left_clear + self.right_clear, 1.0)
-                diff_bias += (self.right_clear - self.left_clear) / norm * self.avoid_diff_gain
+            # Skip steering bias if we're seeing only phantom/self hits (far min distance + low urgency)
+            allow_bias = (self.min_obstacle_distance <= self.min_safe_distance) or (self.urgency > 0.1) or self.is_critical
 
-            # 2. VFH steering bias (toward best gap direction)
-            if self.vfh_gap is not None:
-                vfh_direction_deg = self.vfh_gap.get('direction', 0.0)
-                # Normalize VFH direction to [-1, 1] range (positive = turn left)
-                # Assuming VFH direction is relative to forward (0 = straight)
-                vfh_normalized = max(-1.0, min(1.0, vfh_direction_deg / 45.0))
-                diff_bias += vfh_normalized * self.avoid_diff_gain
+            if allow_bias:
+                # 1. Left/right clearance bias (steer toward clearer side)
+                if self.left_clear < float('inf') and self.right_clear < float('inf'):
+                    norm = max(self.left_clear + self.right_clear, 1.0)
+                    diff_bias += (self.right_clear - self.left_clear) / norm * self.avoid_diff_gain
 
-            # 3. Polar histogram bias (free space comparison)
-            # polar_bias: +1 = left wide open, -1 = right wide open
-            if self.force_avoid_active:
-                diff_bias += self.polar_bias * self.avoid_diff_gain
+                # 2. VFH steering bias (toward best gap direction) - only if not extreme
+                if self.vfh_gap is not None:
+                    vfh_direction_deg = self.vfh_gap.get('direction', 0.0)
+                    if abs(vfh_direction_deg) <= 90.0:  # ignore wild spins
+                        vfh_dir = vfh_direction_deg
+                        vfh_normalized = max(-1.0, min(1.0, vfh_direction_deg / 45.0))
+                        diff_bias += vfh_normalized * self.avoid_diff_gain
 
-            # Apply differential bias: positive bias = turn left
-            left_thrust -= diff_bias
-            right_thrust += diff_bias
+                # 3. Polar histogram bias (free space comparison) gated by urgency
+                # polar_bias: +1 = left wide open, -1 = right wide open
+                if self.force_avoid_active and self.urgency > 0.2:
+                    diff_bias += self.polar_bias * self.avoid_diff_gain
+
+                # Clamp bias to avoid over-steering
+                diff_bias = max(-self.avoid_diff_gain, min(self.avoid_diff_gain, diff_bias))
+
+                # Apply differential bias: positive bias = turn left
+                left_thrust -= diff_bias
+                right_thrust += diff_bias
+
+            # Debug VFH/polar application (throttled)
+            self.get_logger().info(
+                f"VFH steer={vfh_dir if vfh_dir is not None else 'none'} deg | "
+                f"polar_bias={self.polar_bias:.2f} | diff_bias={diff_bias:.1f} | "
+                f"urgency={self.urgency:.2f} | min={self.min_obstacle_distance:.1f}",
+                throttle_duration_sec=1.0
+            )
 
         # Clamp to safe limits
         left_thrust = max(-SAFE_THRUST, min(SAFE_THRUST, left_thrust))

@@ -284,10 +284,10 @@ function subscribeToTopics() {
         updateThruster('right', message.data);
     });
     
-    // Mission status
+    // Mission status (integrated and modular)
     const missionStatusTopic = new ROSLIB.Topic({
         ros: ros,
-        name: '/vostok1/mission_status',
+        name: '/planning/mission_status',
         messageType: 'std_msgs/String'
     });
     
@@ -295,6 +295,7 @@ function subscribeToTopics() {
         const data = JSON.parse(message.data);
         console.log('Mission status:', data);
         updateMissionStatus(data);
+        updateDetourBadge(data.detour_active || false);
     });
     
     // Obstacle status
@@ -456,7 +457,7 @@ function subscribeToTopics() {
         // Can be used for additional status display if needed
     });
 
-    // Pollutant sources (smoke generators) for minimap markers
+    // Pollutant sources (smoke generators) for minimap markers and UI status
     const pollutantTopic = new ROSLIB.Topic({
         ros: ros,
         name: '/perception/pollutant_sources',
@@ -465,9 +466,12 @@ function subscribeToTopics() {
 
     pollutantTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
+        console.log('Pollutant sources update:', data);
         if (data.sources) {
             updatePollutantSources(data.sources);
         }
+        // Update UI status panel with count and status
+        updatePollutantStatusUI(data.count || 0, data.status || 'unknown', data.sources || []);
     });
 
     console.log('Subscribed to all topics (integrated + modular)');
@@ -701,6 +705,8 @@ function updateThruster(side, value) {
 function updateMissionStatus(data) {
     currentState.mission.state = data.state || 'UNKNOWN';
     currentState.mission.waypoint = data.waypoint || 0;
+    // Detour badge
+    updateDetourBadge(!!data.detour_active);
     // Guard against missing distance fields to avoid crashes on refresh
     const distance = (data.distance_to_waypoint !== undefined && data.distance_to_waypoint !== null)
         ? data.distance_to_waypoint
@@ -731,6 +737,13 @@ function updateMissionStatus(data) {
     document.getElementById('state').textContent = (data.state || 'UNKNOWN').replace(/_/g, ' ');
     document.getElementById('waypoint').textContent = `${data.waypoint || 0}/${data.total_waypoints || missionState.totalWaypoints || 0}`;
     document.getElementById('distance').textContent = distance.toFixed(1) + 'm';
+}
+
+// Show/hide detour badge
+function updateDetourBadge(isActive) {
+    const badge = document.getElementById('detour-badge');
+    if (!badge) return;
+    badge.style.display = isActive ? 'inline-block' : 'none';
 }
 
 // Simulate obstacle data (would parse from PointCloud2 or custom topic)
@@ -1626,39 +1639,6 @@ function clearPollutantMarkers() {
     pollutantMarkers = [];
 }
 
-function updatePollutantSources(sources) {
-    clearPollutantMarkers();
-    if (!sources || sources.length === 0) return;
-
-    // Need a reference GPS to convert local->GPS
-    let refLat = missionState.startLat || currentState.gps.lat;
-    let refLon = missionState.startLon || currentState.gps.lon;
-    if (!refLat || !refLon || refLat === 0) return;
-
-    sources.forEach(src => {
-        const lx = src.local ? src.local[0] : 0.0;
-        const ly = src.local ? src.local[1] : 0.0;
-        const latLng = localToGPS(lx, ly, refLat, refLon);
-        const icon = L.divIcon({
-            className: 'pollutant-marker',
-            html: `<div style="
-                background: radial-gradient(circle, rgba(200,50,50,0.9) 0%, rgba(120,0,0,0.8) 60%);
-                width: 14px; height: 14px; border-radius: 50%; border: 2px solid white;
-                box-shadow: 0 0 6px rgba(0,0,0,0.6);
-            "></div>`,
-            iconSize: [14, 14],
-            iconAnchor: [7, 7]
-        });
-        const marker = L.marker([latLng[0], latLng[1]], { icon: icon })
-            .bindTooltip(
-                `<strong>Pollutant</strong><br>${src.name || 'smoke'}<br>Local: (${lx.toFixed(1)}, ${ly.toFixed(1)})`,
-                { direction: 'top', offset: [0, -8], permanent: false, sticky: true }
-            )
-            .addTo(map);
-        pollutantMarkers.push(marker);
-    });
-}
-
 // Clear stored waypoints + UI affordances
 function clearWaypoints(reason = '') {
     missionState.waypoints = [];
@@ -1718,13 +1698,143 @@ function restorePersistedWaypoints() {
 function localToGPS(x, y, refLat, refLon) {
     const R = 6371000.0;  // Earth radius in meters
     const refLatRad = refLat * Math.PI / 180;
-    
+
     // x = East, y = North
     const dLat = y / R;
     const dLon = x / (R * Math.cos(refLatRad));
-    
+
     const lat = refLat + dLat * 180 / Math.PI;
     const lon = refLon + dLon * 180 / Math.PI;
-    
+
     return [lat, lon];
+}
+
+// Update pollutant sources (smoke generators) on minimap
+function updatePollutantSources(sources) {
+    // Clear existing pollutant markers
+    pollutantMarkers.forEach(marker => map.removeLayer(marker));
+    pollutantMarkers = [];
+
+    if (!sources || sources.length === 0) {
+        return;
+    }
+
+    // Get reference point for coordinate conversion
+    let refLat = missionState.startLat || currentState.gps.lat;
+    let refLon = missionState.startLon || currentState.gps.lon;
+
+    if (!refLat || !refLon || refLat === 0) {
+        // No reference point yet, skip display
+        return;
+    }
+
+    // Create markers for each pollutant source
+    sources.forEach((source, idx) => {
+        try {
+            const sourceName = source.name || `Pollutant ${idx + 1}`;
+            const localPos = source.local || [0, 0];
+            const worldPos = source.world || [0, 0, 0];
+            const x = localPos[0];
+            const y = localPos[1];
+
+            // Convert local coordinates to GPS
+            const [lat, lon] = localToGPS(x, y, refLat, refLon);
+
+            // Create pollutant marker icon (smoke/warning symbol)
+            const icon = L.divIcon({
+                className: 'pollutant-marker',
+                html: `<div style="
+                    background-color: #ff6b6b;
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 50%;
+                    border: 3px solid #8b0000;
+                    box-shadow: 0 0 8px rgba(255, 107, 107, 0.8);
+                    cursor: pointer;
+                    position: relative;
+                ">
+                    <span style="position: absolute; font-size: 20px; left: -2px; top: -6px;">🌫️</span>
+                </div>`,
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+            });
+
+            // Tooltip content
+            const tooltipContent = `
+                <div class="pollutant-tooltip" style="max-width: 200px;">
+                    <strong>🌫️ ${sourceName}</strong><br>
+                    <hr style="margin: 4px 0; border-color: #ddd;">
+                    <b>Local:</b> (${x.toFixed(1)}, ${y.toFixed(1)}) m<br>
+                    <b>GPS:</b> ${lat.toFixed(6)}°, ${lon.toFixed(6)}°<br>
+                    <b>World:</b> (${worldPos[0].toFixed(1)}, ${worldPos[1].toFixed(1)})
+                </div>
+            `;
+
+            // Create and add marker
+            const marker = L.marker([lat, lon], { icon: icon })
+                .bindTooltip(tooltipContent, {
+                    permanent: false,
+                    direction: 'top',
+                    offset: [0, -10],
+                    className: 'pollutant-tooltip-container',
+                    sticky: true
+                })
+                .addTo(map);
+
+            pollutantMarkers.push(marker);
+        } catch (e) {
+            console.warn(`Failed to display pollutant source ${idx}:`, e);
+        }
+    });
+
+    addLog(`Displayed ${sources.length} pollutant sources on map | Affichage de ${sources.length} sources de polluants sur la carte`, 'info');
+}
+
+// Update UI status panel for pollutant sources/smoke generators
+function updatePollutantStatusUI(count, status, sources) {
+    const statusEl = document.getElementById('pollutant-status');
+    const countEl = document.getElementById('pollutant-count');
+    const listEl = document.getElementById('pollutant-list');
+
+    if (!statusEl || !countEl || !listEl) return;
+
+    // Update count display
+    if (count > 0) {
+        countEl.textContent = `${count} source${count !== 1 ? 's' : ''} detected | détecté${count !== 1 ? 's' : ''}`;
+    } else {
+        countEl.textContent = '0 sources';
+    }
+
+    // Update status badge and list
+    if (status === 'detected' && count > 0) {
+        statusEl.textContent = `✅ DETECTED | DÉTECTÉ (${count})`;
+        statusEl.className = 'value badge';
+        statusEl.style.backgroundColor = '#2ecc71';
+        statusEl.style.color = '#fff';
+
+        // Build source list
+        if (sources && sources.length > 0) {
+            let listHtml = '<strong>Detected Sources:</strong><br>';
+            sources.forEach((src, idx) => {
+                const name = src.name || `Smoke Generator ${idx + 1}`;
+                const localX = (src.local ? src.local[0] : 0).toFixed(1);
+                const localY = (src.local ? src.local[1] : 0).toFixed(1);
+                listHtml += `<span style="display: block; margin: 4px 0;">🌫️ [${idx + 1}] ${name}</span>`;
+                listHtml += `<span style="display: block; margin-left: 20px; font-size: 0.85em; color: #999;">Local: (${localX}, ${localY})m</span>`;
+            });
+            listEl.innerHTML = listHtml;
+        }
+    } else if (status === 'none' || count === 0) {
+        statusEl.textContent = '✅ NONE | AUCUNE';
+        statusEl.className = 'value badge';
+        statusEl.style.backgroundColor = '#3498db';
+        statusEl.style.color = '#fff';
+        listEl.innerHTML = '<span style="color: #aaa; font-style: italic;">World loaded without smoke generators | Monde chargé sans générateurs de fumée</span>';
+    } else {
+        statusEl.textContent = '⏳ Scanning... | Analyse...';
+        statusEl.className = 'value badge';
+        statusEl.style.backgroundColor = '#95a5a6';
+        statusEl.style.color = '#fff';
+        listEl.innerHTML = '';
+    }
 }
