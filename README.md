@@ -64,8 +64,8 @@ The project implements a hierarchical autonomous navigation framework combining 
 
 | Phase | Description | Status |
 |:------|:------------|:------:|
-| Phase 1 | Architecture & MVP | ✅ 100% |
-| Phase 2 | Obstacle Avoidance | ✅ 100% |
+| Phase 1 | Architecture & MVP | DONE |
+| Phase 2 | Obstacle Avoidance | DONE |
 | Phase 3 | Coverage & Search | ⏸️ Planned |
 | Phase 4 | Integration & Testing | 🔄 80% |
 
@@ -438,7 +438,7 @@ The modular system uses below programs to work:
 |:-----|:-----|:---------|
 | **Perception** | `lidar_obstacle_avoidance.py` | Zero-latency 3D PointCloud2 processing & Sector Analysis |
 | **Planner** | `atlantis_planner` | checks between waypoints |
-| **Controller** | `atlantis_controller` | Smart Anti Stuck System|
+| **Controller** | `atlantis_controller` | TO BE CHANGED|
 
 The additional feauture for Atlantis method is that' unlike distributed architectures, Atlantis embeds the LidarObstacleDetector class directly within the controller loop. This ensures zero-latency obstacle reaction, allowing the boat to make steering decisions in the exact same millisecond that the Lidar scan is received.
 
@@ -1363,8 +1363,8 @@ Sputnik now has A* path planning algorithm for navigating to points that are blo
 ```text
 
 /oko/obstacles ────>┌─────────────────────┐                                   
-                    │  AStarSolver        │──> Detour waypoints inserted
-Hazard boxes ──────>│  (in SPUTNIK)       │    into /planning/waypoints
+                    │  AStarSolver        │ 
+Hazard boxes ──────>│  (in SPUTNIK)       │────> Detour waypoints inserted into /planning/waypoints
                     │                     │
 Current position ──>└─────────────────────┘
 
@@ -1477,7 +1477,8 @@ Open an issue on [GitHub](https://github.com/Erk732/uvautoboat/issues) with:
 
 - Planning Team: Atlantis Planner
 - Control Team: Atlantis Controller
-
+by IMT NORD EUROPE DNM DMI-2026
+Last updated at 09.12.2025 
 ---
 
 ## License
