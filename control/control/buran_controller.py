@@ -170,6 +170,9 @@ class BuranController(Node):
         self.declare_parameter('no_go_zone_radius', 8.0)
         self.declare_parameter('drift_compensation_gain', 0.3)
         self.declare_parameter('detour_distance', 12.0)
+        # Shoreline/bank protection: slow down when very close to obstacles (e.g., banks)
+        self.declare_parameter('bank_slow_distance', 6.0)
+        self.declare_parameter('bank_slow_factor', 0.25)
         
         # Kalman filter parameters
         self.declare_parameter('kalman_process_noise', 0.01)
@@ -198,6 +201,8 @@ class BuranController(Node):
         self.no_go_zone_radius = self.get_parameter('no_go_zone_radius').value
         self.drift_compensation_gain = self.get_parameter('drift_compensation_gain').value
         self.detour_distance = self.get_parameter('detour_distance').value
+        self.bank_slow_distance = float(self.get_parameter('bank_slow_distance').value)
+        self.bank_slow_factor = float(self.get_parameter('bank_slow_factor').value)
 
         # --- STATE ---
         self.current_yaw = 0.0
@@ -481,6 +486,13 @@ class BuranController(Node):
             if 'min_safe_distance' in config:
                 self.min_safe_distance = float(config['min_safe_distance'])
                 updated.append(f"safe_dist={self.min_safe_distance}")
+            # Bank protection slowdown
+            if 'bank_slow_distance' in config:
+                self.bank_slow_distance = float(config['bank_slow_distance'])
+                updated.append(f"bank_dist={self.bank_slow_distance}")
+            if 'bank_slow_factor' in config:
+                self.bank_slow_factor = float(config['bank_slow_factor'])
+                updated.append(f"bank_factor={self.bank_slow_factor}")
             # Toggle VFH/polar bias
             if 'use_vfh_bias' in config:
                 self.use_vfh_bias = bool(config['use_vfh_bias'])
@@ -638,6 +650,12 @@ class BuranController(Node):
                 speed *= speed_factor
             else:
                 speed *= self.obstacle_slow_factor
+
+        # Shoreline/bank protection: clamp speed when very close to obstacles
+        if math.isfinite(self.min_obstacle_distance) and self.min_obstacle_distance < self.bank_slow_distance:
+            # Linear ramp: at 0m → bank_slow_factor, at bank_slow_distance → 1.0
+            frac = max(0.0, min(1.0, self.min_obstacle_distance / self.bank_slow_distance))
+            speed *= (self.bank_slow_factor + (1.0 - self.bank_slow_factor) * frac)
 
         # Differential thrust
         left_thrust = speed - turn_power

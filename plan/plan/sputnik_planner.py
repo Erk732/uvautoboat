@@ -771,6 +771,11 @@ class SputnikPlanner(Node):
         dy = target_y - curr_y
         dist = math.hypot(dx, dy)
 
+        # Allow looser tolerance when returning home to avoid lingering near home
+        effective_tol = self.waypoint_tolerance
+        if self.go_home_mode and (self.current_wp_index >= len(self.waypoints) - 1):
+            effective_tol = max(self.waypoint_tolerance, 5.0)
+
         # Opportunistic side detour for close obstacles (buoy clusters)
         if (self.obstacle_detected and not self.detour_waypoint_inserted and
                 self.front_clear < 8.0 and self.min_obstacle_distance < 10.0):
@@ -779,7 +784,7 @@ class SputnikPlanner(Node):
             self.insert_side_detour(curr_x, curr_y, heading, side)
 
         # Check if waypoint reached
-        if dist < self.waypoint_tolerance:
+        if dist < effective_tol:
             self.get_logger().info(
                 f"🎯 PT {self.current_wp_index + 1}/{len(self.waypoints)} ATTEINT! | "
                 f"WP REACHED! ({target_x:.1f}, {target_y:.1f})"

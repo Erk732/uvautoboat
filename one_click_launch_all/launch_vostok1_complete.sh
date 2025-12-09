@@ -15,7 +15,7 @@
 #   - Optional: ----------------------------------------------
 # Default options
 # ----------------------------------------------------------------------------
-WORLD="sydney_regatta_smoke"
+# Author: UVAutoBoat Team
 #
 # Usage:
 #   chmod +x launch_vostok1_complete.sh
@@ -76,7 +76,7 @@ cleanup() {
 trap cleanup INT TERM
 
 # Default options
-WORLD="sydney_regatta_smoke_wildlife"
+WORLD="sydney_regatta_smoke"
 LAUNCH_RVIZ=true
 LAUNCH_DASHBOARD=true
 LAUNCH_CAMERA=true
