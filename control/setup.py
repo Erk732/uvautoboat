@@ -54,6 +54,7 @@ setup(
             # If you want you can comment its additional test
             'buran_controller_fixed = control.buran_controller_fixed:main',
             'controller = control.controller:main',
+            'lidar_obstacle_avoidance = brain.lidar_obstacle_avoidance:main',
 
         ],
     },
