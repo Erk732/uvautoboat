@@ -1,5 +1,4 @@
 # AutoBoat — Autonomous Navigation for Unmanned Surface Vehicles
-
 [![ROS 2](https://img.shields.io/badge/ROS_2-Jazzy-blue)](https://docs.ros.org/en/jazzy/)
 [![Gazebo](https://img.shields.io/badge/Gazebo-Harmonic-orange)](https://gazebosim.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
@@ -55,6 +54,8 @@ The project implements a hierarchical autonomous navigation framework combining 
 - **Smart Anti-Stuck System (SASS)**: Intelligent recovery with Kalman-filtered drift compensation
 - **Web Dashboard**: Real-time monitoring with better visualization
 - **Waypoint Skip Strategy**: Automatic skip for blocked waypoints ensuring mission completion
+- **A-star Planner Algorithm**: Whenever path is blocked by an obstacle thanks to this algorithm it will avoid it 
+
 
 ---
 
@@ -71,7 +72,7 @@ The project implements a hierarchical autonomous navigation framework combining 
 
 See [Board.md](Board.md) for detailed milestones and progress tracking.
 
-### Project Structure
+### Project Structure !DONT FORGET TO CHANGE!
 
 ```text
 uvautoboat/
@@ -424,7 +425,7 @@ AutoBoat provides multiple navigation systems:
 | **Anti-Stuck** | SASS v2.0 | SASS v2.0 | Adaptive Escape with SASS (Work in progress) |
 | **Best For** | Production use | Custom tuning | Robust Path Validation |
 
-### Modular Architecture (TNO Style)
+### Modular Architecture (TNO Style) !DONT FORGET TO CHANGE!
 
 The modular system uses below programs to work:
 
@@ -1478,7 +1479,7 @@ Open an issue on [GitHub](https://github.com/Erk732/uvautoboat/issues) with:
 - Planning Team: Atlantis Planner
 - Control Team: Atlantis Controller
 by IMT NORD EUROPE DNM DMI-2026
-Last updated at 09.12.2025 
+Last update at 09.12.2025 
 ---
 
 ## License
