@@ -1158,6 +1158,7 @@ GPS Input → SPUTNIK Planner → Waypoints/Targets → BURAN Controller
 ### Lawnmower Pattern Generation
 
 SPUTNIK creates systematic zigzag coverage patterns:
+
 ```text
 Lane 0: Start ────────────────> End
                                  │
@@ -1306,6 +1307,7 @@ cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1 && python3 -m http.server 8000
 ```
 
 ### A* Path Planning
+
 ```bash
 # Enable A* runtime detours
 ros2 topic pub /sputnik/set_config std_msgs/String "data: '{\"astar_enabled\": true}'" --once
@@ -1346,11 +1348,12 @@ gz service -s /world/sydney_regatta/set_pose \
 | **Coverage Planning** | Medium | Boustrophedon pattern for area coverage |
 | **Multi-Goal Navigation** | Medium | Navigate through sequence of random points |
 
-### A* Path Planning 
+### A* Path Planning
 
 Sputnik now has A* path planning algorithm for navigating to points that are blocked by obstacle fields:
 
 **How it works?**
+
 ```text
 1. Create occupancy grid (3m cells by default) from LIDAR/obstacle data
 2. Inflate obstacles by safety margin + hull radius for clearance
@@ -1370,6 +1373,7 @@ Hazard boxes ──────>│  (in SPUTNIK)       │────> Detour 
 Current position ──>└─────────────────────┘
 
 ```
+
 **Two Operating Modes for Better User Experience:**
 
 | Mode | Parameter | Description |
@@ -1386,6 +1390,7 @@ Current position ──>└─────────────────�
 | `astar_max_expansions` | 20000 | Max search iterations |
 
 **Benefits:**
+
 - Works for any destination point
 - Avoids obstacles from the start
 - No circling behavior
@@ -1397,6 +1402,7 @@ Current position ──>└─────────────────�
 - Fails gracefully if no path found (falls back to waypoint skip)
 
 **Example:**
+
 ```text
 Without A*:              With A*:
 
@@ -1407,8 +1413,6 @@ S ──────X──────> G       S ─────┐
 
 S = Start, G = Goal, X = Obstacle
 ```
-
-
 
 ### Technical Debt
 
@@ -1479,7 +1483,8 @@ Open an issue on [GitHub](https://github.com/Erk732/uvautoboat/issues) with:
 - Planning Team: Atlantis Planner
 - Control Team: Atlantis Controller
 by IMT NORD EUROPE DNM DMI-2026
-Last update at 09.12.2025 
+Last updated at 09.12.2025
+
 ---
 
 ## License
