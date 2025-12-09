@@ -59,7 +59,7 @@ class OkoPerception(Node):
         self.declare_parameter('hysteresis_distance', 1.5) # Prevent oscillation
         self.declare_parameter('min_height', -15.0)  # Lake bank is ~2-3m below LiDAR
         self.declare_parameter('max_height', 10.0)   # Include terrain above water
-        self.declare_parameter('min_range', 5.0)     # Ignore spawn dock and boat structure
+        self.declare_parameter('min_range', 2.0)     # Ignore points closer than 2m
         self.declare_parameter('max_range', 50.0)    # Focus on nearby obstacles
         self.declare_parameter('sample_rate', 1)     # Process ALL points
         
