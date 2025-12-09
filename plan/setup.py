@@ -50,8 +50,10 @@ setup(
             'tf_broadcaster_gps = brain.tf_broadcaster_gps:main',
             'simple_perception = brain.simple_perception:main',
             'pollutant_planner = brain.pollutant_planner:main',
-            # Atlantis - separated control and planning
-            'atlantis_planner = brain.atlantis_planner:main',
+            # Atlantis - separated control and planning for testing
+            'atlantis_planner_fixed = brain.atlantis_planner_fixed:main',
+            'atlantis_controller = brain.atlantis_controller:main',
+            'oko_perception_fixed = brain.oko_perception_fixed:main',
  
         ],
     },
