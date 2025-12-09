@@ -12,14 +12,17 @@
 #   - BURAN Controller (PID control with obstacle avoidance)
 #   - Web Video Server (camera stream for dashboard)
 #   - Web Dashboard (real-time monitoring interface)
-#   - Optional: RViz visualization
+#   - Optional: ----------------------------------------------
+# Default options
+# ----------------------------------------------------------------------------
+WORLD="sydney_regatta_smoke"
 #
 # Usage:
 #   chmod +x launch_vostok1_complete.sh
 #   ./launch_vostok1_complete.sh [OPTIONS]
 #
 # Options:
-#   --world <world_name>       Gazebo world (default: sydney_regatta_smoke_wildlife)
+#   --world <world_name>       Gazebo world (default: sydney_regatta_smoke)
 #   For example: ./launch_vostok1_complete.sh --world sydney_regatta_DEFAULT
 #
 #   --skip-rviz                Skip RViz launch (default: launch RViz)
@@ -184,15 +187,22 @@ if ! command -v gz &> /dev/null; then
 fi
 print_status "Gazebo found"
 
-# Check workspace
-if [ ! -d "$HOME/seal_ws/install" ]; then
-    print_error "AutoBoat workspace not built. Run: cd ~/seal_ws && colcon build --merge-install"
+# Detect workspace root dynamically
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+WS_ROOT="$SCRIPT_DIR"
+while [ "$WS_ROOT" != "/" ]; do
+    if [ -f "$WS_ROOT/install/setup.bash" ]; then break; fi
+    WS_ROOT="$(dirname "$WS_ROOT")"
+done
+INSTALL_DIR="$WS_ROOT/install"
+if [ ! -f "$INSTALL_DIR/setup.bash" ]; then
+    print_error "AutoBoat workspace not built or install/setup.bash not found. Run: colcon build --merge-install"
     exit 1
 fi
-print_status "AutoBoat workspace found"
+print_status "AutoBoat workspace found at $WS_ROOT"
 
 # Source environment
-source $HOME/seal_ws/install/setup.bash
+source "$INSTALL_DIR/setup.bash"
 print_status "Sourced AutoBoat environment"
 
 # Check if VRX is available
@@ -220,7 +230,7 @@ sleep 4
 # T1: Launch Gazebo (VRX Simulation)
 print_status "Launching Gazebo (Sydney Regatta - $WORLD)..."
 gnome-terminal --tab --title="gazebo" -- bash -i -c "
-source $HOME/seal_ws/install/setup.bash
+source \"$INSTALL_DIR/setup.bash\"
 echo 'Starting Gazebo with world: $WORLD'
 echo 'Note: GPS may take 10-30 seconds to initialize'
 ros2 launch vrx_gz competition.launch.py world:=$WORLD
@@ -233,7 +243,7 @@ recheck "$GAZEBO_PID" "Gazebo"
 # T2: Launch ROS Bridge (WebSocket for dashboard)
 print_status "Launching ROS Bridge (WebSocket on ws://localhost:9090)..."
 gnome-terminal --tab --title="rosbridge" -- bash -i -c "
-source $HOME/seal_ws/install/setup.bash
+source \"$INSTALL_DIR/setup.bash\"
 echo 'Starting ROS Bridge WebSocket server...'
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
 " &
@@ -245,10 +255,13 @@ recheck "$ROSBRIDGE_PID" "ROS Bridge"
 # T3: Launch Navigation Stack (OKO-SPUTNIK-BURAN)
 print_status "Launching Navigation Stack (OKO-SPUTNIK-BURAN)..."
 gnome-terminal --tab --title="navigation" -- bash -i -c "
-source $HOME/seal_ws/install/setup.bash
+source \"$INSTALL_DIR/setup.bash\"
 echo 'Starting Vostok1 Modular Navigation System...'
 echo 'Components: OKO (perception) | SPUTNIK (planner) | BURAN (control)'
-ros2 launch ~/seal_ws/src/uvautoboat/launch/vostok1.launch.yaml
+ros2 launch \"$WS_ROOT/src/uvautoboat/launch/vostok1.launch.yaml\" \
+    world:=${WORLD} \
+    sputnik_planner_node.world_name:=${WORLD} \
+    sputnik_planner_node.pollutant_sdf_glob:=$WS_ROOT/src/uvautoboat/test_environment/${WORLD}.sdf
 " &
 NAV_PID=$!
 sleep 8  # Wait for navigation stack to initialize
@@ -258,8 +271,8 @@ recheck "$NAV_PID" "Navigation stack"
 # T4: Launch Web Video Server (camera stream)
 if [ "$LAUNCH_CAMERA" = true ]; then
     print_status "Launching Web Video Server (http://localhost:8080)..."
-    gnome-terminal --tab --title="camera" -- bash -i -c "
-source $HOME/seal_ws/install/setup.bash
+gnome-terminal --tab --title="camera" -- bash -i -c "
+source \"$INSTALL_DIR/setup.bash\"
 echo 'Starting Web Video Server for camera feed...'
 echo 'Stream available at: http://localhost:8080'
 ros2 run web_video_server web_video_server
@@ -273,11 +286,11 @@ fi
 # T5: Launch RViz (optional visualization)
 if [ "$LAUNCH_RVIZ" = true ]; then
     print_status "Launching RViz visualization..."
-    gnome-terminal --tab --title="rviz" -- bash -i -c "
-source $HOME/seal_ws/install/setup.bash
+gnome-terminal --tab --title="rviz" -- bash -i -c "
+source \"$INSTALL_DIR/setup.bash\"
 echo 'Starting RViz...'
 sleep 3
-cd $HOME/seal_ws
+cd \"$WS_ROOT\"
 ros2 launch vrx_gazebo rviz.launch.py
 " &
     RVIZ_PID=$!
@@ -290,7 +303,7 @@ fi
 if [ "$LAUNCH_DASHBOARD" = true ]; then
     print_status "Launching Web Dashboard (http://localhost:8000)..."
 gnome-terminal --tab --title="dashboard" -- bash -i -c "
-cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1
+cd \"$WS_ROOT/src/uvautoboat/web_dashboard/vostok1\"
 echo 'Starting Web Dashboard HTTP server...'
 echo 'Dashboard available at: http://localhost:8000'
 echo 'Note: Wait for GPS to initialize (~10-30s) before opening dashboard'

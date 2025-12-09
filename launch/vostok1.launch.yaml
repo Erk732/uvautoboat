@@ -114,9 +114,9 @@ launch:
     - name: hazard_enabled
       value: false      # Disabled by default (enable via CLI/param if needed)
     - name: hazard_origin_world_x
-      value: -530.6717  # World frame origin X coordinate
+      value: -532.0     # World frame origin X coordinate (matches competition.launch spawn)
     - name: hazard_origin_world_y
-      value: 161.6251   # World frame origin Y coordinate
+      value: 162.0      # World frame origin Y coordinate (matches competition.launch spawn)
     - name: plan_avoid_margin
       value: 5.0        # Detour margin (m) around hazard boxes
     - name: hull_radius

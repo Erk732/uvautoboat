@@ -59,6 +59,10 @@ let currentState = {
         base_speed: 500.0,
         max_speed: 800.0,
         min_safe_distance: 15.0
+    },
+    world: {
+        name: 'unknown',
+        hasSmoke: false
     }
 };
 
@@ -75,12 +79,28 @@ window.addEventListener('load', () => {
     initMissionControl();  // NEW: Mission control buttons
     initCameraFeed();      // Camera/RViz stream panel
     initTerminal();
+    initWorldBanner();
     addLog('Dashboard initialized', 'info');
 });
 
 // Style toggle removed - using single normal mode
 function initStyleToggle() {
     // Style toggle functionality removed
+}
+
+// World banner marquee
+function initWorldBanner() {
+    const banner = document.getElementById('world-banner-text');
+    if (banner) {
+        banner.textContent = 'Awaiting world info...';
+    }
+}
+
+function updateWorldBanner(name, hasSmoke) {
+    const banner = document.getElementById('world-banner-text');
+    if (!banner) return;
+    const smokeText = hasSmoke ? 'with smoke sources detected' : 'no smoke sources detected';
+    banner.innerHTML = `Currently loaded world is <b><i>${name || 'unknown'}</i></b> - ${smokeText}`;
 }
 
 
@@ -505,6 +525,7 @@ function subscribeToTopics() {
         const data = JSON.parse(message.data);
         console.log('Config received (vostok1):', data);
         updateConfigFromROS(data);
+        updateWorldFromConfig(data);
     });
     
     // Subscribe to current config (modular sputnik)
@@ -518,6 +539,7 @@ function subscribeToTopics() {
         const data = JSON.parse(message.data);
         console.log('Config received (sputnik):', data);
         updateConfigFromROS(data);
+        updateWorldFromConfig(data);
     });
     
     // Subscribe to waypoints for map preview (vostok1)
@@ -1217,8 +1239,26 @@ function addTerminalLine(message) {
     while (terminal.children.length > 200) {
         terminal.removeChild(terminal.firstChild);
     }
+
+    // World info if available
+    if (data.world_name) {
+        currentState.world.name = data.world_name;
+    }
+    if (data.pollutant_sources) {
+        currentState.world.hasSmoke = (data.pollutant_sources.length || 0) > 0;
+    }
+    updateWorldBanner(currentState.world.name, currentState.world.hasSmoke);
 }
 
+function updateWorldFromConfig(data) {
+    if (data.world_name) {
+        currentState.world.name = data.world_name;
+    }
+    if (data.pollutant_sources) {
+        currentState.world.hasSmoke = (data.pollutant_sources.length || 0) > 0;
+    }
+    updateWorldBanner(currentState.world.name, currentState.world.hasSmoke);
+}
 // Initialize terminal controls
 function initTerminal() {
     const clearBtn = document.getElementById('btn-clear-terminal');
