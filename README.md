@@ -1,4 +1,5 @@
 # AutoBoat — Autonomous Navigation for Unmanned Surface Vehicles
+
 [![ROS 2](https://img.shields.io/badge/ROS_2-Jazzy-blue)](https://docs.ros.org/en/jazzy/)
 [![Gazebo](https://img.shields.io/badge/Gazebo-Harmonic-orange)](https://gazebosim.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
@@ -14,7 +15,7 @@
 1. [Abstract](#abstract)
 2. [Project Overview](#project-overview)
    - [Project Status](#project-status)
-   - [Project Structure](#project-structure)
+   - [Project Structure](#project-structure-dont-forget-to-change)
    - [Additional Documentation](#additional-documentation)
    - [System Requirements](#system-requirements)
    - [Key Features](#key-features)
@@ -54,8 +55,7 @@ The project implements a hierarchical autonomous navigation framework combining 
 - **Smart Anti-Stuck System (SASS)**: Intelligent recovery with Kalman-filtered drift compensation
 - **Web Dashboard**: Real-time monitoring with better visualization
 - **Waypoint Skip Strategy**: Automatic skip for blocked waypoints ensuring mission completion
-- **A-star Planner Algorithm**: Whenever path is blocked by an obstacle thanks to this algorithm it will avoid it 
-
+- **A-star Planner Algorithm**: Whenever path is blocked by an obstacle thanks to this algorithm it will avoid it
 
 ---
 
@@ -72,7 +72,7 @@ The project implements a hierarchical autonomous navigation framework combining 
 
 See [Board.md](Board.md) for detailed milestones and progress tracking.
 
-### Project Structure !DONT FORGET TO CHANGE!
+### Project Structure !DONT FORGET TO CHANGE
 
 ```text
 uvautoboat/
@@ -425,7 +425,7 @@ AutoBoat provides multiple navigation systems:
 | **Anti-Stuck** | SASS v2.0 | SASS v2.0 | Adaptive Escape with SASS (Work in progress) |
 | **Best For** | Production use | Custom tuning | Robust Path Validation |
 
-### Modular Architecture (TNO Style) !DONT FORGET TO CHANGE!
+### Modular Architecture (TNO Style) !DONT FORGET TO CHANGE
 
 The modular system uses below programs to work:
 
