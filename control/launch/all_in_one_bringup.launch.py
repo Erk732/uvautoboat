@@ -60,27 +60,32 @@ def generate_launch_description():
                 'pose_topic': '/wamv/pose_filtered',
                 
                 # ==================== Thrust Control ====================
-                'forward_thrust': 400.0,           # Base forward thrust (N)
+                'forward_thrust': 320.0,           # Base forward thrust (N) - lower to reduce post-avoid oscillation
                 'kp_yaw': 600.0,                   # Heading P gain
-                'control_rate': 20.0,              # Control loop frequency (Hz)
+                'control_rate': 30.0,              # Control loop frequency (Hz)
                 
                 # ==================== Waypoint Tracking ====================
                 'waypoint_tolerance': 3.0,         # Intermediate waypoint tolerance (m)
                 'goal_tolerance': 1.0,             # Final goal tolerance (m)
                 'approach_slow_dist': 10.0,        # Start slowdown distance (m)
-                'heading_align_thresh_deg': 20.0,  # Heading alignment threshold (deg)
+                'heading_align_thresh_deg': 25.0,  # Heading alignment threshold (deg) - higher to align before pushing
                 'overshoot_margin': 1.0,           # Overshoot detection boundary (m)
                 
                 # ==================== Obstacle Avoidance ====================
-                'obstacle_slow_dist': 12.0,        # Slowdown trigger distance (m)
-                'obstacle_stop_dist': 6.0,         # Hard avoid trigger distance (m)
-                'avoid_turn_thrust': 350.0,        # Avoidance turn thrust (N)
-                'avoid_diff_gain': 40.0,           # Avoidance steering gain
-                'avoid_clear_margin': 3.0,         # Safety margin to exit avoidance (m)
+                'obstacle_slow_dist': 10.0,        # Slowdown trigger distance (m)
+                'obstacle_stop_dist': 7.0,         # Hard avoid trigger distance (m)
+                'avoid_turn_thrust': 150.0,        # Avoidance turn thrust (N) - softer turning
+                'avoid_diff_gain': 10.0,           # Avoidance steering gain - softer bias
+                'avoid_clear_margin': 4.0,         # Safety margin to exit avoidance (m) - exit later
                 'avoid_max_turn_time': 5.0,        # Maximum turn time (s)
                 'full_clear_distance': 20.0,       # Force avoidance trigger distance (m) - FIXED: was 60.0 (caused avoidance mode to stick)
                 'front_angle_deg': 30.0,           # Front sector angle (deg)
                 'side_angle_deg': 60.0,            # Side sector angle (deg)
+                'hazard_world_auto_origin': True,  # Auto-convert world hazard boxes using first pose
+                # ==================== Auto Goal Sequence ====================
+                'auto_goal_enable': True,         # Enable auto-publishing next goals
+                # Format: "x1,y1;x2,y2" in same frame as pose (world/local ENU)
+                'auto_next_goals': '130,0;130,50;80,60',
                 
                 # ==================== Stuck Detection & Recovery ====================
                 'stuck_timeout': 8.0,              # Stuck detection timeout (s)
@@ -91,7 +96,7 @@ def generate_launch_description():
                 'recover_reverse_time_long': 6.0,  # Extended reverse time (s)
                 
                 # ==================== Lidar Parameters ====================
-                'min_range_filter': 3.0,           # Minimum range filter (m) - Ignore obstacles within 3m
+                'min_range_filter': 3.0,           # Minimum range filter (m)
                 'cloud_z_min': -10.0,              # Min height filter (m) - LOWER for deep underwater obstacles
                 'cloud_z_max': 3.0,                # Max height filter (m) - HIGHER for tall obstacles
                 'vfh_enabled': True,               # Enable VFH steering

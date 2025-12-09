@@ -145,6 +145,10 @@ class AllInOneStack(Node):
         self.declare_parameter('hazard_world_boxes', '')
         self.declare_parameter('hazard_origin_world_x', 0.0)
         self.declare_parameter('hazard_origin_world_y', 0.0)
+        self.declare_parameter('hazard_world_auto_origin', False)
+        # Auto goal sequencing
+        self.declare_parameter('auto_goal_enable', False)
+        self.declare_parameter('auto_next_goals', '')
         # Planning avoidance params
         self.declare_parameter('plan_avoid_margin', 5.0)
 
@@ -198,7 +202,24 @@ class AllInOneStack(Node):
         hazard_world = self._parse_hazard_boxes(str(self.get_parameter('hazard_world_boxes').value))
         origin_wx = float(self.get_parameter('hazard_origin_world_x').value)
         origin_wy = float(self.get_parameter('hazard_origin_world_y').value)
+        self.hazard_world_auto_origin = bool(self.get_parameter('hazard_world_auto_origin').value)
+        # Store raw world boxes for potential auto conversion once pose is available
+        self.hazard_world_boxes_raw = hazard_world
         self.hazard_boxes = hazard_local + self._world_boxes_to_local(hazard_world, origin_wx, origin_wy)
+        # Auto goal sequence
+        self.auto_goal_enable = bool(self.get_parameter('auto_goal_enable').value)
+        raw_goals = str(self.get_parameter('auto_next_goals').value)
+        self.auto_goals: list[tuple[float, float]] = []
+        for p in raw_goals.split(';'):
+            p = p.strip()
+            if not p:
+                continue
+            try:
+                gx, gy = map(float, p.split(','))
+                self.auto_goals.append((gx, gy))
+            except ValueError:
+                continue
+        self.auto_goal_idx: int = 0
         self.plan_avoid_margin = float(self.get_parameter('plan_avoid_margin').value)
         self.pose_timeout = float(self.get_parameter('pose_timeout').value)
         self.scan_timeout = float(self.get_parameter('scan_timeout').value)
@@ -235,6 +256,9 @@ class AllInOneStack(Node):
         self.last_side_right: float | None = None
         self.last_side_time: float = 0.0
         self.force_avoid_active: bool = False
+        self.hazard_converted: bool = False
+        self.auto_goal_idx: int = 0
+        self.auto_publishing: bool = False
 
         # ---------------- Publishers ----------------
         self.left_thruster_pub = self.create_publisher(
@@ -250,6 +274,11 @@ class AllInOneStack(Node):
         self.path_pub = self.create_publisher(
             Path,
             '/planning/path',
+            10
+        )
+        self.next_goal_pub = self.create_publisher(
+            PoseStamped,
+            '/planning/goal',
             10
         )
 
@@ -307,12 +336,25 @@ class AllInOneStack(Node):
 
     def pose_callback(self, msg: PoseStamped):
         self.current_pose = msg
+        # Lazy convert world hazard boxes to local once pose is available (auto origin)
+        if self.hazard_enabled and self.hazard_world_auto_origin and not self.hazard_converted:
+            origin_x = msg.pose.position.x
+            origin_y = msg.pose.position.y
+            converted = self._world_boxes_to_local(self.hazard_world_boxes_raw, origin_x, origin_y)
+            self.hazard_boxes.extend(converted)
+            self.hazard_converted = True
+            self.get_logger().info(
+                f'Hazard world boxes converted using origin ({origin_x:.2f}, {origin_y:.2f}), '
+                f'{len(converted)} boxes added.'
+            )
 
     def goal_callback(self, msg: PoseStamped):
         """
         On receiving /planning/goal, generate a straight-line path, publish /planning/path,
         and start control.
         """
+        was_auto_goal = self.auto_publishing
+        self.auto_publishing = False
         if self.current_pose is None:
             self.get_logger().warn('No current pose yet, cannot generate path.')
             return
@@ -509,6 +551,9 @@ class AllInOneStack(Node):
         self.last_goal_dist = float('inf')
         self.last_progress_time = self.get_clock().now().nanoseconds / 1e9
         self.last_progress_pos = (start.x, start.y)
+        # Reset auto-goal sequence only for manual goals
+        if not was_auto_goal:
+            self.auto_goal_idx = 0
         self.recovering = False
         self.recover_phase = ''
         self.recover_turn_dir = 1.0
@@ -828,6 +873,26 @@ class AllInOneStack(Node):
                 self.get_logger().info(
                     f'Final goal reached (idx={self.current_waypoint_idx}, dist={dist:.2f} m).'
                 )
+                # Auto-publish next goal if configured
+                if (
+                    self.auto_goal_enable
+                    and not self.auto_publishing
+                    and self.auto_goal_idx < len(self.auto_goals)
+                ):
+                    nx, ny = self.auto_goals[self.auto_goal_idx]
+                    self.auto_goal_idx += 1
+                    self.auto_publishing = True
+                    next_goal = PoseStamped()
+                    next_goal.header.stamp = self.get_clock().now().to_msg()
+                    next_goal.header.frame_id = self.current_pose.header.frame_id or 'world'
+                    next_goal.pose.position.x = nx
+                    next_goal.pose.position.y = ny
+                    next_goal.pose.position.z = 0.0
+                    next_goal.pose.orientation.w = 1.0
+                    self.next_goal_pub.publish(next_goal)
+                    self.get_logger().info(
+                        f'Auto goal #{self.auto_goal_idx} published: ({nx:.1f}, {ny:.1f}).'
+                    )
                 self.publish_thrust(0.0, 0.0)
                 self.active = False
                 return
