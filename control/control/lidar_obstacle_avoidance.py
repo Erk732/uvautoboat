@@ -3,10 +3,16 @@ LIDAR-based Real-Time Obstacle Avoidance Module
 SHARED MODULE: Keep a copy of this in both 'plan' and 'control' packages.
 """
 
+import json
 import math
 import struct
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
+
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import PointCloud2
+from std_msgs.msg import String
 
 @dataclass
 class Obstacle:
@@ -162,3 +168,98 @@ class RealtimeObstacleMonitor:
         return (self.front_distance < threshold or 
                 self.left_distance < threshold or 
                 self.right_distance < threshold)
+
+
+class LidarObstacleAvoidanceNode(Node):
+    """Lightweight ROS2 node wrapping the library for quick CLI testing."""
+
+    def __init__(self):
+        super().__init__('lidar_obstacle_avoidance')
+
+        # Parameters mirror the underlying helper classes
+        self.declare_parameter('sampling_factor', 10)
+        self.declare_parameter('cluster_radius', 2.0)
+        self.declare_parameter('safe_distance', 10.0)
+        self.declare_parameter('look_ahead', 15.0)
+        self.declare_parameter('min_distance', 0.3)
+        self.declare_parameter('max_distance', 50.0)
+        self.declare_parameter('min_height', -0.2)
+        self.declare_parameter('max_height', 3.0)
+        self.declare_parameter('z_filter_enabled', True)
+
+        # Core processing helpers
+        self.detector = LidarObstacleDetector(
+            min_distance=self.get_parameter('min_distance').value,
+            max_distance=self.get_parameter('max_distance').value,
+            min_height=self.get_parameter('min_height').value,
+            max_height=self.get_parameter('max_height').value,
+            z_filter_enabled=self.get_parameter('z_filter_enabled').value,
+        )
+        self.clusterer = ObstacleClustering(
+            cluster_radius=self.get_parameter('cluster_radius').value
+        )
+        self.avoider = ObstacleAvoider(
+            safe_distance=self.get_parameter('safe_distance').value,
+            look_ahead=self.get_parameter('look_ahead').value,
+        )
+        self.monitor = RealtimeObstacleMonitor()
+
+        # ROS I/O
+        self.create_subscription(
+            PointCloud2,
+            '/wamv/sensors/lidars/lidar_wamv_sensor/points',
+            self.lidar_callback,
+            rclpy.qos.qos_profile_sensor_data,
+        )
+        self.status_pub = self.create_publisher(String, '/perception/lidar_obstacle_status', 10)
+
+        self.get_logger().info("Lidar obstacle avoidance node ready (listening to lidar_wamv_sensor).")
+
+    def lidar_callback(self, msg: PointCloud2):
+        try:
+            sampling_factor = int(self.get_parameter('sampling_factor').value)
+            obstacles = self.detector.process_pointcloud(msg.data, msg.point_step, sampling_factor)
+            clusters = self.clusterer.cluster_obstacles(obstacles)
+            self.monitor.analyze_sectors(obstacles)
+
+            critical_thresh = float(self.get_parameter('safe_distance').value)
+            critical = self.monitor.is_critical(critical_thresh)
+
+            status = {
+                'obstacle_count': len(obstacles),
+                'cluster_count': len(clusters),
+                'front_distance': round(self.monitor.front_distance, 2),
+                'left_distance': round(self.monitor.left_distance, 2),
+                'right_distance': round(self.monitor.right_distance, 2),
+                'best_direction': self.monitor.get_best_direction(),
+                'critical': critical,
+            }
+            msg_out = String()
+            msg_out.data = json.dumps(status)
+            self.status_pub.publish(msg_out)
+
+            log_fn = self.get_logger().warn if critical else self.get_logger().info
+            log_fn(
+                f"LIDAR obs: {status['obstacle_count']} pts, clusters={status['cluster_count']} | "
+                f"F:{status['front_distance']}m L:{status['left_distance']}m R:{status['right_distance']}m | "
+                f"dir={status['best_direction']}",
+                throttle_duration_sec=1.0,
+            )
+        except Exception as e:
+            self.get_logger().error(f"Lidar callback failed: {e}")
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = LidarObstacleAvoidanceNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
