@@ -1126,9 +1126,86 @@ The Kalman filter is Bayes' theorem for continuous states with Gaussian distribu
 
 ---
 
-### Atlantis Planner Safety Line Check
+---
 
-Unlike standard waypoints planners, the Atlantis planner verifies the entire path segment between waypoints (every 2 meters) to prevent planning trajectories that intersect with obstacles.
+## SPUTNIK Planner
+
+**SPUTNIK** (named after the first artificial satellite) is the trajectory planning system in the modular Vostok1 architecture.
+
+### Overview
+
+SPUTNIK generates systematic coverage patterns and manages mission execution. It works with OKO (perception) and BURAN (control) nodes in the modular architecture:
+
+```text
+GPS Input → SPUTNIK Planner → Waypoints/Targets → BURAN Controller
+                 ↑
+          Obstacle Info from OKO
+```
+
+### States of Sputnik
+
+| State | Description |
+|:------|:------------|
+| **INIT** | Waiting for GPS fix |
+| **WAITING_CONFIRM** | Waypoints generated, awaiting user confirmation |
+| **READY** | Confirmed, ready to start mission |
+| **DRIVING** | Actively navigating waypoints |
+| **PAUSED** | Mission paused by user |
+| **FINISHED** | All waypoints reached |
+| **JOYSTICK** | Manual override mode |
+
+### Lawnmower Pattern Generation
+
+SPUTNIK creates systematic zigzag coverage patterns:
+```text
+Lane 0: Start ────────────────> End
+                                 │
+Lane 1: End <────────────────────┘
+        │
+Lane 2: └────────────────────> End
+                                 │
+Lane 3: End <────────────────────┘
+```
+
+### Configuration Parameters
+
+| Parameter | Default | Description |
+|:----------|:--------|:------------|
+| `scan_length` | 15.0m | Length of each lane |
+| `scan_width` | 30.0m | Spacing between lanes |
+| `lanes` | 10 | Number of parallel lanes |
+| `waypoint_tolerance` | 2.0m | Arrival radius for waypoint |
+| `waypoint_skip_timeout` | 45.0s | Skip blocked waypoint after this time |
+
+### ROS 2 Topics
+
+**Subscriptions:**
+
+| Topic | Description |
+|:------|:------------|
+| `/wamv/sensors/gps/gps/fix` | GPS position |
+| `/perception/obstacle_info` | Obstacle detection from OKO |
+| `/sputnik/mission_command` | CLI/dashboard commands |
+| `/planning/detour_request` | Detour requests from BURAN |
+
+**Publications:**
+
+| Topic | Description |
+|:------|:------------|
+| `/planning/waypoints` | Full waypoint list (JSON) |
+| `/planning/current_target` | Current navigation target (JSON) |
+| `/planning/mission_status` | Mission state and progress (JSON) |
+| `/sputnik/config` | Current configuration (JSON) |
+
+### Key Features
+
+| Feature | Description |
+|:--------|:------------|
+| **Waypoint Skip** | Skips waypoints blocked for too long |
+| **Go Home Mode** | Returns to spawn with detour insertion (not skipping) |
+| **Hazard Zones** | Pre-defined rectangular no-go areas |
+| **A-star Planning** | Integrated pathfinding for obstacle avoidance |
+| **Pollutant Detection** | Logs when boat passes near smoke generators |
 
 ## Troubleshooting
 
@@ -1154,6 +1231,10 @@ Unlike standard waypoints planners, the Atlantis planner verifies the entire pat
 | **No obstacles detected** | Check LIDAR: `ros2 topic hz /wamv/sensors/lidars/lidar_wamv/points` |
 | **Critical at spawn** | Increase `min_range` to 5.0 in launch file |
 | **Build failures** | Clean: `rm -rf build install log && colcon build` |
+| **A* not finding paths** | Reduce `astar_safety_margin` or increase `astar_resolution` |
+| **A* too slow** | Reduce `astar_max_expansions` or increase `astar_resolution` |
+| **Waypoints not generating** | Check GPS: ensure `/wamv/sensors/gps/gps/fix` is publishing |
+| **Mission stuck in INIT** | Run `ros2 run plan vostok1_cli generate` to create waypoints |
 
 ### Debug Commands
 
@@ -1223,6 +1304,24 @@ ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messag
 cd ~/seal_ws/src/uvautoboat/web_dashboard/vostok1 && python3 -m http.server 8000
 ```
 
+### A* Path Planning
+```bash
+# Enable A* runtime detours
+ros2 topic pub /sputnik/set_config std_msgs/String "data: '{\"astar_enabled\": true}'" --once
+
+# Enable A* hybrid mode (pre-planning between waypoints)
+ros2 topic pub /sputnik/set_config std_msgs/String "data: '{\"astar_hybrid_mode\": true}'" --once
+
+# Adjust grid resolution (smaller grid allows more precise and slower response)
+ros2 topic pub /sputnik/set_config std_msgs/String "data: '{\"astar_resolution\": 2.0}'" --once
+
+# Adjust safe distance around obstacles
+ros2 topic pub /sputnik/set_config std_msgs/String "data: '{\"astar_safety_margin\": 10.0}'" --once
+
+# Check current A* configuration
+ros2 topic echo /sputnik/config --once | grep astar
+```
+
 ### Teleport Boat
 
 ```bash
@@ -1239,7 +1338,7 @@ gz service -s /world/sydney_regatta/set_pose \
 
 | Feature | Priority | Description |
 |:--------|:---------|:------------|
-| **A* Path Planning** | Implemented | Grid-based pathfinding in SPUTNIK |
+| **A-Star Path Planning** | Implemented | Grid-based pathfinding in SPUTNIK |
 | **Hybrid Mode** | Implemented | Pre-compute routes between waypoints with lawnmower algorithm|
 | **Hazard Zone Avoidance** | Implemented | Pre determined rectangular no-go zones |
 | **Dynamic Replanning** | High | Replan path when new obstacles detected |
