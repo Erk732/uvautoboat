@@ -58,7 +58,6 @@ def generate_launch_description():
             parameters=[{
                 'use_sim_time': True,
                 'pose_topic': '/wamv/pose_filtered',
-<<<<<<< Updated upstream
                 
                 # ==================== Thrust Control ====================
                 'forward_thrust': 320.0,           # Base forward thrust (N) - lower to reduce post-avoid oscillation
@@ -117,32 +116,6 @@ def generate_launch_description():
                 'scan_timeout': 1.0,               # Lidar data timeout (s)
                 'lidar_log_interval': 2.0,         # Lidar log interval (s)
                 
-=======
-                # Obstacle and control parameters
-                'front_angle_deg': 45.0,
-                'side_angle_deg': 80.0,
-                'obstacle_slow_dist': 12.0,
-                'obstacle_stop_dist': 7.0,
-                'avoid_clear_margin': 2.0,
-                'avoid_max_turn_time': 5.0,
-                'avoid_turn_thrust': 150.0,
-                'avoid_diff_gain': 5.0,
-                'diff_bias_alpha': 0.8,
-                'side_change_threshold': 1.0,
-                'side_straight_clearance': 6.0,
-                'plan_avoid_margin': 8.0,
-                'hull_radius': 1.5,
-                'forward_thrust': 2200.0,
-                'kp_yaw': 300.0,
-                'heading_align_thresh_deg': 35.0,
-                'approach_slow_dist': 8.0,
-                'stuck_timeout': 25.0,
-                'stuck_progress_epsilon': 0.5,
-                'recover_reverse_time': 1.0,
-                'recover_turn_time': 3.0,
-                'recover_reverse_thrust': -120.0,
-                'lidar_log_interval': 2.0,
->>>>>>> Stashed changes
             }, hazard_config],
         ),
     ])
