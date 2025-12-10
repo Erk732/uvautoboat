@@ -227,10 +227,18 @@ class OkoPerception(Node):
                     range_filtered += 1
                     continue
                 
-                # Only consider points in front (positive x)
+                # Only consider points in front (positive x) CHNAGE HERE TO 0.2m
                 if x < 0.2:
                     behind_filtered += 1
                     continue
+
+                '''
+                if you want to filter a specific area behind the boat, uncomment this
+                # Filter specific area behind boat (e.g., reflections from yellow box)
+                if x > -4.0 and x < 0.8 and abs(y) < 1.3:
+                    behind_filtered += 1
+                    continue 
+                '''
                 
                 # 5. Ground plane removal - filter water surface
                 if self.water_plane_z is not None:
