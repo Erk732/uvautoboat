@@ -154,7 +154,7 @@ uvautoboat/
 | **Bilingual Interface** | French/English terminal output |
 | **Path Priority Logic** | Feature that prioritizes GPS trajectory over obstacle panic when the direct path is clear |
 | **Z-Node Interpolation** | Feature that prioritizes GPS trajectory over obstacle panic when the direct path is clear |
-| **A* Path Planning** | Grid-based pathfinding algorithm with obstacle inflation and pre-defined hazard zones |
+| **A\* Path Planning** | Grid-based pathfinding algorithm with obstacle inflation and pre-defined hazard zones |
 
 ---
 
