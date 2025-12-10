@@ -12,22 +12,14 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-<<<<<<< Updated upstream
-        # Uses glob to find all launch files (prevents errors if specific files are missing)
-        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+        # Include all launch files and example goal file
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py') + ['launch/goals_example.txt']),
+        # Include all configs
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
     ],
     install_requires=[
         'setuptools',
         'numpy',
-=======
-        ('share/' + package_name + '/launch', [
-            'launch/all_in_one_bringup.launch.py',
-        ]),
-        ('share/' + package_name + '/config', [
-            'config/hazard_world_boxes.yaml',
-        ]),
->>>>>>> Stashed changes
     ],
     zip_safe=True,
     maintainer='ghostzero',
