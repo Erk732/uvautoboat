@@ -7,7 +7,7 @@ import math
 import json
 import time
 
-# Relative Import
+# NEW: Relative Import
 from .lidar_obstacle_avoidance import LidarObstacleDetector
 
 class AtlantisController(Node):
@@ -167,7 +167,7 @@ class AtlantisController(Node):
             distances = [p[3] for p in points]
             self.min_obstacle_distance = min(distances)
             
-            front_obs = [p[3] for p in points if abs(p[1]) < 5.0 and p[0] > 0] # for avoiding the boat's lidar see itself use 4.0 insted of 2.0
+            front_obs = [p[3] for p in points if abs(p[1]) < 5.0 and p[0] > 0]
             front_dist = min(front_obs) if front_obs else 100.0
             
             # Simple Hysteresis

@@ -31,8 +31,8 @@ substitutions:
   waypoint_tolerance: '2.0'
 
   # Controller - Obstacle Avoidance Parameters
-  min_safe_distance: '8.0'
-  critical_distance: '2.0'
+  min_safe_distance: '12.0'
+  critical_distance: '5.0'
   obstacle_slow_factor: '0.1'
   hysteresis_distance: '1.0'
   reverse_timeout: '10.0'
