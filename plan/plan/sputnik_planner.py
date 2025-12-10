@@ -246,6 +246,9 @@ class SputnikPlanner(Node):
         self.right_clear = float('inf')
         self.min_obstacle_distance = float('inf')
         self.obstacle_blocking_time = 0.0  # Cumulative time obstacle detected near waypoint
+        self.blocked_reason = ""  # Human-readable reason for blockage
+        self.declare_parameter('max_block_time', 30.0)  # Max seconds to wait before auto-detour/skip
+        self.max_block_time = float(self.get_parameter('max_block_time').value)
         self.last_obstacle_check = None
         self.go_home_mode = False  # Track if we're in return-home mode
         self.home_detour_timeout = 15.0  # Insert detour after this many seconds in home mode
@@ -404,13 +407,14 @@ class SputnikPlanner(Node):
                 self.get_logger().info("📡 Publishing PAUSED state - BURAN should stop immediately")
                 
             elif command == 'resume_mission':
-                if self.state == "PAUSED" and self.waypoints:
+                resumable_states = {"PAUSED", "JOYSTICK", "STOP", "STOPPED", "EMERGENCY_STOP", "WAITING_CONFIRM", "READY"}
+                if self.waypoints and self.state in resumable_states:
                     self.state = "DRIVING"
                     self.mission_armed = True
                     # Reset obstacle blocking time for fresh start
                     self.obstacle_blocking_time = 0.0
                     self.detour_waypoint_inserted = False
-                    self.get_logger().info("▶️ MISSION RESUMED")
+                    self.get_logger().info(f"▶️ MISSION RESUMED from {self.state}")
                     # Force immediate status publish so BURAN resets and starts
                     self.publish_mission_status_timer()
                     # Force immediate target publish so BURAN has target right away
@@ -447,7 +451,8 @@ class SputnikPlanner(Node):
                 
             elif command == 'joystick_disable':
                 # Disable joystick mode
-                self.state = "INIT" if not self.waypoints else "WAITING_CONFIRM"
+                # If we have waypoints, drop to PAUSED so RESUME works immediately; otherwise reset to INIT
+                self.state = "PAUSED" if self.waypoints else "INIT"
                 self.get_logger().info("JOYSTICK MODE DISABLED")
                 self.publish_mission_status_timer()
             
@@ -843,6 +848,7 @@ class SputnikPlanner(Node):
         self.current_wp_index += 1
         self.waypoint_start_time = None
         self.obstacle_blocking_time = 0.0
+        self.blocked_reason = ""
         self.last_obstacle_check = None
         self.detour_waypoint_inserted = False  # Reset for next waypoint
 
@@ -866,10 +872,12 @@ class SputnikPlanner(Node):
             if self.last_obstacle_check is not None:
                 dt = (now - self.last_obstacle_check).nanoseconds / 1e9
                 self.obstacle_blocking_time += dt
+                self.blocked_reason = "obstacle_persistent"
         else:
             # Reset blocking time if no obstacle detected at close range
             if dist < 30.0:
                 self.obstacle_blocking_time = 0.0
+                self.blocked_reason = ""
         
         self.last_obstacle_check = now
         
@@ -882,9 +890,20 @@ class SputnikPlanner(Node):
                 )
                 self.insert_detour_waypoint(curr_x, curr_y)
                 self.obstacle_blocking_time = 0.0  # Reset timer after inserting detour
+                self.blocked_reason = "detour_home"
             return  # Don't skip in home mode
         
         # NORMAL MODE: Check if we should skip
+        # If blocked too long, try a side detour automatically
+        if self.obstacle_blocking_time >= self.max_block_time and not self.detour_waypoint_inserted:
+            self.get_logger().warn(
+                f"⏳ Obstacle blocking for {self.obstacle_blocking_time:.0f}s - inserting detour waypoint"
+            )
+            self.insert_detour_waypoint(curr_x, curr_y)
+            self.obstacle_blocking_time = 0.0
+            self.blocked_reason = "detour_auto"
+            return
+
         # Skip condition 1: Timeout exceeded (reduced timeout for faster response)
         timeout_exceeded = self.obstacle_blocking_time >= self.waypoint_skip_timeout
         
@@ -904,6 +923,7 @@ class SputnikPlanner(Node):
                         f"🧭 A* DETOUR inserted for WP {wp_num}/{total_wp} ({len(detour_path)} segments)"
                     )
                     self.obstacle_blocking_time = 0.0
+                    self.blocked_reason = "detour_astar"
                     return
             
             reason = "timeout" if timeout_exceeded else "obstacle_cluster"
@@ -912,6 +932,7 @@ class SputnikPlanner(Node):
                 f"Distance: {dist:.1f}m, Blocking: {self.obstacle_blocking_time:.1f}s "
                 f"(target: ({target_x:.1f}, {target_y:.1f}))"
             )
+            self.blocked_reason = "skipped_" + reason
             self.advance_to_next_waypoint()
 
     def insert_detour_waypoint(self, curr_x, curr_y):
@@ -1085,7 +1106,8 @@ class SputnikPlanner(Node):
             'mission_armed': self.mission_armed,
             'gps_ready': gps_ready,
             'detour_active': self.detour_waypoint_inserted,
-            'joystick_override': self.state == "JOYSTICK"
+            'joystick_override': self.state == "JOYSTICK",
+            'blocked_reason': self.blocked_reason
         })
         self.pub_mission_status.publish(msg)
 

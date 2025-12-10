@@ -1068,6 +1068,39 @@ ros2 run plan vostok1_cli home
 
 > **Auto-Ready Check:** The `generate` command automatically waits up to 5 seconds for the navigation system to respond. If not ready, it will show which command to run to start the navigation system.
 
+### Modular Mission Flow (Dashboard + Sputnik/Buran)
+
+```bash
+[Dashboard open & connected]
+     |
+     v
+[Generate Waypoints] --(GPS missing)--> [Wait for GPS]
+     |
+     v
+[Confirm Waypoints] -> state=READY/WAITING_CONFIRM
+     |
+     v
+[Start Mission]
+     |
+     v
+[Sputnik: DRIVING + mission_armed=true]
+  publishes mission_status + current_target
+     |
+     v
+[BURAN: follows target + obstacle avoidance/SASS]
+     |
+     v
+[FINISHED] --> dashboard shows finished (can Start again)
+
+Interrupts:
+- STOP: dashboard/CLI burst -> state=PAUSED, mission_armed=false, thrust zero; Resume enabled.
+- RESUME: from PAUSED/STOP with waypoints -> state=DRIVING, mission_armed=true.
+- RESET: clears waypoints, state->INIT/IDLE, thrust zero; must Generate/Confirm again.
+- JOYSTICK ON: state->JOYSTICK, mission_armed=false; BURAN stops, manual teleop.
+- JOYSTICK OFF: if waypoints exist -> state=PAUSED (Resume works); else INIT.
+- GO HOME: replace waypoints with spawn, state=DRIVING, mission_armed=true.
+```
+
 ---
 
 ## Technical Documentation

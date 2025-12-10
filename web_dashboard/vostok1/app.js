@@ -474,7 +474,14 @@ function subscribeToTopics() {
     modularControlTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
         console.log('Modular control status:', data);
-        // Can be used for additional status display if needed
+        if (data.stop_override !== undefined) {
+            missionState.stopOverride = !!data.stop_override;
+            const el = document.getElementById('stop-override');
+            if (el) {
+                el.textContent = missionState.stopOverride ? 'STOP LATCHED' : 'Inactive';
+                el.className = 'value ' + (missionState.stopOverride ? 'warning' : '');
+            }
+        }
     });
 
     // Pollutant sources (smoke generators) for minimap markers and UI status
@@ -727,6 +734,7 @@ function updateThruster(side, value) {
 function updateMissionStatus(data) {
     currentState.mission.state = data.state || 'UNKNOWN';
     currentState.mission.waypoint = data.waypoint || 0;
+    missionState.blockedReason = data.blocked_reason || '';
     // Detour badge
     updateDetourBadge(!!data.detour_active);
     // Guard against missing distance fields to avoid crashes on refresh
@@ -759,6 +767,11 @@ function updateMissionStatus(data) {
     document.getElementById('state').textContent = (data.state || 'UNKNOWN').replace(/_/g, ' ');
     document.getElementById('waypoint').textContent = `${data.waypoint || 0}/${data.total_waypoints || missionState.totalWaypoints || 0}`;
     document.getElementById('distance').textContent = distance.toFixed(1) + 'm';
+    const blockedEl = document.getElementById('blocked-reason');
+    if (blockedEl) {
+        const reason = missionState.blockedReason || 'None';
+        blockedEl.textContent = reason;
+    }
 }
 
 // Show/hide detour badge
@@ -1432,7 +1445,7 @@ function sendMissionCommand(command) {
 // Update mission control UI based on state
 function updateMissionControlUI(state) {
     console.log('updateMissionControlUI called with state:', state);
-    missionState.state = state.state || 'IDLE';
+    missionState.state = (state.state || 'IDLE').toString().toUpperCase();
     // If no gps_ready field, assume true when connected (for testing)
     missionState.gpsReady = (state.gps_ready !== undefined) ? state.gps_ready : connected;
     missionState.missionArmed = state.mission_armed || false;
@@ -1487,58 +1500,42 @@ function updateMissionControlUI(state) {
     const btnResume = document.getElementById('btn-resume-mission');
     const btnJoyEnable = document.getElementById('btn-joystick-enable');
     const btnJoyDisable = document.getElementById('btn-joystick-disable');
+    const btnGoHome = document.getElementById('btn-go-home');
     const hasWaypoints = (missionState.totalWaypoints || 0) > 0 || (missionState.waypoints && missionState.waypoints.length > 0);
+    const resumableStates = ['PAUSED', 'STOP', 'STOPPED', 'EMERGENCY_STOP', 'PANIC'];
+    const awaitingDecision = ['WAITING_CONFIRM', 'WAYPOINTS_PREVIEW'].includes(missionState.state);
     
     // Reset all buttons
-    [btnGenerate, btnConfirm, btnCancel, btnStart, btnStop, btnResume, btnJoyEnable, btnJoyDisable].forEach(btn => {
+    [btnGenerate, btnConfirm, btnCancel, btnStart, btnStop, btnResume, btnGoHome, btnJoyEnable, btnJoyDisable].forEach(btn => {
         if (btn) btn.disabled = true;
     });
     
-    // Enable buttons based on state
-    switch (missionState.state) {
-        case 'INIT':  // Modular sputnik uses INIT instead of IDLE
-        case 'IDLE':
-            if (missionState.gpsReady) {
-                btnGenerate.disabled = false;
-            }
-            btnJoyEnable.disabled = false;
-            break;
-        
-        case 'WAITING_CONFIRM':  // Modular sputnik uses this instead of WAYPOINTS_PREVIEW
-        case 'WAYPOINTS_PREVIEW':
-            btnGenerate.disabled = false;
-            btnConfirm.disabled = !hasWaypoints;
-            btnCancel.disabled = !hasWaypoints;
-            btnJoyEnable.disabled = false;
-            break;
-            
-        case 'READY':
-            btnStart.disabled = !hasWaypoints;
-            btnCancel.disabled = !hasWaypoints;
-            btnJoyEnable.disabled = false;
-            break;
-        
-        case 'DRIVING':  // Modular sputnik uses DRIVING instead of RUNNING
-        case 'RUNNING':
-            btnStop.disabled = false;
-            break;
-            
-        case 'PAUSED':
-            btnResume.disabled = !hasWaypoints;
-            btnStart.disabled = !hasWaypoints;
-            btnCancel.disabled = !hasWaypoints;
-            btnJoyEnable.disabled = false;
-            break;
-            
-        case 'JOYSTICK':
-            btnJoyDisable.disabled = false;
-            break;
-            
-        case 'FINISHED':
-            btnGenerate.disabled = false;
-            btnJoyEnable.disabled = false;
-            break;
+    // STOP/joystick toggles only when not awaiting confirm/cancel
+    if (!awaitingDecision) {
+        if (btnStop) btnStop.disabled = !connected;
+        if (btnJoyEnable) btnJoyEnable.disabled = !(connected && !missionState.joystickOverride);
+        if (btnJoyDisable) btnJoyDisable.disabled = !(connected && missionState.joystickOverride);
     }
+
+    // Generate allowed when connected, GPS ready, not in joystick override, and either no waypoints yet or we're in INIT/IDLE
+    const canGenerate = connected && missionState.gpsReady && !missionState.joystickOverride &&
+        (!hasWaypoints || ['INIT', 'IDLE'].includes(missionState.state));
+    if (btnGenerate) btnGenerate.disabled = !canGenerate;
+
+    // Confirm/Cancel only during preview/confirm stage (waypoints exist, no joystick override)
+    const canDecide = awaitingDecision && hasWaypoints && !missionState.joystickOverride;
+    if (btnConfirm) btnConfirm.disabled = !canDecide;
+    if (btnCancel) btnCancel.disabled = !canDecide;
+
+    // Start/Go Home allowed when waypoints exist, not in joystick override, not awaiting decision, and state is ready/paused/stop family
+    const startAllowedStates = ['READY', 'PAUSED', 'STOP', 'STOPPED', 'EMERGENCY_STOP', 'PANIC', 'FINISHED', 'IDLE', 'INIT'];
+    const canStart = hasWaypoints && !missionState.joystickOverride && !awaitingDecision && startAllowedStates.includes(missionState.state);
+    if (btnStart) btnStart.disabled = !canStart;
+    if (btnGoHome) btnGoHome.disabled = !canStart;
+
+    // Resume allowed when paused/stop family and waypoints exist (no joystick override) and not awaiting decision
+    const canResume = hasWaypoints && !missionState.joystickOverride && !awaitingDecision && resumableStates.includes(missionState.state);
+    if (btnResume) btnResume.disabled = !canResume;
     
     // Update joystick status and instructions display
     const joystickStatus = document.getElementById('joystick-status');

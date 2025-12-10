@@ -41,6 +41,14 @@
                         <span id="distance" class="value">-</span>
                     </div>
                     <div class="info-item">
+                        <span class="label">Blocked:</span>
+                        <span id="blocked-reason" class="value">None</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Stop Override:</span>
+                        <span id="stop-override" class="value">Inactive</span>
+                    </div>
+                    <div class="info-item">
                         <span class="label">Detour:</span>
                         <span id="detour-badge" class="value badge" style="display:none;background:#f39c12;color:#fff;">Active</span>
                     </div>
@@ -330,43 +338,48 @@
                         <span class="joystick-active">🎮 OVERRIDE ACTIVE - Autonomous control disabled</span>
                     </div>
                     <div id="joystick-instructions" class="joystick-instructions hidden">
-                        <div class="instructions-title">🎮 Keyboard Controls</div>
-                        <div class="instructions-content">
-                            <p><strong>Run in a new terminal | Exécuter dans un terminal:</strong></p>
-                            <code>ros2 run control keyboard_teleop</code>
+                            <div class="instructions-title">🎮 Keyboard Controls</div>
+                            <div class="instructions-content">
+                                <p><strong>Run in a new terminal | Exécuter dans un terminal:</strong></p>
+                                <code>ros2 run control keyboard_teleop</code>
 
-                            <div class="teleop-controls-grid">
-                                <div class="control-group">
-                                    <div class="control-header">⚡ Throttle | Accélérateur</div>
-                                    <div class="control-keys">
-                                        <kbd>W</kbd> / <kbd>↑</kbd> = Forward | Avant<br>
-                                        <kbd>S</kbd> / <kbd>↓</kbd> = Backward | Arrière<br>
-                                        <kbd>Space</kbd> = Full Stop | Arrêt<br>
-                                        <kbd>X</kbd> = Emergency | Urgence
+                                <div class="teleop-controls-grid">
+                                    <div class="control-group">
+                                        <div class="control-header">⚡ Throttle (persists) | Accélérateur (persiste)</div>
+                                        <div class="control-keys">
+                                            <kbd>W</kbd> / <kbd>↑</kbd> = Forward | Avant<br>
+                                            <kbd>S</kbd> / <kbd>↓</kbd> = Backward | Arrière<br>
+                                            <kbd>Space</kbd> = Full Stop | Arrêt<br>
+                                            <kbd>X</kbd> = Emergency Reverse | Marche arrière d'urgence<br>
+                                            <kbd>+</kbd>/<kbd>=</kbd> or <kbd>-</kbd> = Adjust max thrust | Ajuster la poussée max
+                                        </div>
+                                    </div>
+                                    <div class="control-group">
+                                        <div class="control-header">🧭 Rudder (auto-centers) | Gouvernail (auto-centrage)</div>
+                                        <div class="control-keys">
+                                            <kbd>A</kbd> / <kbd>←</kbd> = Left | Gauche<br>
+                                            <kbd>D</kbd> / <kbd>→</kbd> = Right | Droite<br>
+                                            <kbd>Q</kbd> = Hard Left | Virage Gauche<br>
+                                            <kbd>E</kbd> = Hard Right | Virage Droit<br>
+                                            <kbd>R</kbd> = Center rudder | Recentrer
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="control-group">
-                                    <div class="control-header">🧭 Rudder | Gouvernail</div>
-                                    <div class="control-keys">
-                                        <kbd>A</kbd> / <kbd>←</kbd> = Left | Gauche<br>
-                                        <kbd>D</kbd> / <kbd>→</kbd> = Right | Droite<br>
-                                        <kbd>Q</kbd> = Sharp Left | Virage Gauche<br>
-                                        <kbd>E</kbd> = Sharp Right | Virage Droit
-                                    </div>
+
+                                <div class="teleop-features">
+                                    <span class="feature-tag">✅ Persistent throttle lever</span>
+                                    <span class="feature-tag">✅ Progressive acceleration</span>
+                                    <span class="feature-tag">✅ Auto rudder centering</span>
+                                    <span class="feature-tag">✅ 30 Hz updates</span>
+                                    <span class="feature-tag">✅ Max thrust adjust</span>
                                 </div>
-                            </div>
 
-                            <div class="teleop-features">
-                                <span class="feature-tag">✅ Progressive Acceleration</span>
-                                <span class="feature-tag">✅ Auto Rudder Centering</span>
-                                <span class="feature-tag">✅ 30 Hz</span>
+                                <p class="instructions-note">Or VRX joystick | Ou joystick VRX</p>
+                                <code>ros2 launch vrx_gz usv_joy_teleop.py</code>
+                                <p class="instructions-note">Other keys: <kbd>H</kbd> help | <kbd>Esc/Ctrl+C</kbd> quit</p>
                             </div>
-
-                            <p class="instructions-note">Or VRX joystick | Ou joystick VRX</p>
-                            <code>ros2 launch vrx_gz usv_joy_teleop.py</code>
                         </div>
                     </div>
-                </div>
             </div>
 
             <!-- Configuration Panel -->
@@ -463,7 +476,16 @@
 
             <!-- Logs Panel -->
             <div class="panel logs-panel">
-                <h2>System Logs | Journaux Système</h2>
+                <div class="terminal-header">
+                    <h2>System Logs | Journaux Système</h2>
+                    <div class="terminal-controls">
+                        <button id="btn-clear-logs" class="terminal-btn">Clear | Effacer</button>
+                        <label class="auto-scroll-label">
+                            <input type="checkbox" id="logs-auto-scroll" checked>
+                            Auto-scroll
+                        </label>
+                    </div>
+                </div>
                 <div id="logs" class="logs-container"></div>
             </div>
         </div>

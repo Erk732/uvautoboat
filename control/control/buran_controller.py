@@ -160,8 +160,10 @@ class BuranController(Node):
         # Obstacle avoidance
         self.declare_parameter('critical_distance', 5.0)
         self.declare_parameter('min_safe_distance', 12.0)
-        self.declare_parameter('reverse_timeout', 5.0)
-        self.declare_parameter('avoid_diff_gain', 40.0)  # VFH/polar differential steering gain
+        self.declare_parameter('reverse_timeout', 3.0)  # Shorter default reverse timeout
+        self.declare_parameter('max_reverse_distance', 25.0)  # Max meters to reverse during escape
+        # Softer avoidance steering to avoid sharp pivots
+        self.declare_parameter('avoid_diff_gain', 25.0)  # VFH/polar differential steering gain (reduced from 40)
         self.declare_parameter('use_vfh_bias', False)    # Enable/disable VFH/polar steering bias
         
         # Smart anti-stuck parameters
@@ -192,6 +194,7 @@ class BuranController(Node):
         self.critical_distance = self.get_parameter('critical_distance').value
         self.min_safe_distance = self.get_parameter('min_safe_distance').value
         self.reverse_timeout = self.get_parameter('reverse_timeout').value
+        self.max_reverse_distance = float(self.get_parameter('max_reverse_distance').value)
         self.avoid_diff_gain = float(self.get_parameter('avoid_diff_gain').value)
         self.use_vfh_bias = bool(self.get_parameter('use_vfh_bias').value)
         
@@ -219,6 +222,8 @@ class BuranController(Node):
         
         # Mission state (from planner)
         self.mission_active = False  # True only when planner is in DRIVING state
+        # Highest-priority STOP latch (cleared only by explicit resume/clear)
+        self.stop_override = False
 
         # Obstacle state (from perception)
         self.obstacle_detected = False
@@ -239,6 +244,8 @@ class BuranController(Node):
         # Avoidance state
         self.avoidance_mode = False
         self.reverse_start_time = None
+        self.reverse_start_pos = None
+        self.force_turn_after_reverse = False
         self.prev_left_thrust = 0.0
         self.prev_right_thrust = 0.0
 
@@ -309,6 +316,13 @@ class BuranController(Node):
             String,
             '/planning/mission_status',
             self.mission_status_callback,
+            10
+        )
+        # High-priority mission commands (STOP/RESUME)
+        self.create_subscription(
+            String,
+            '/vostok1/mission_command',
+            self.mission_command_callback,
             10
         )
         
@@ -432,6 +446,26 @@ class BuranController(Node):
                 
         except (json.JSONDecodeError, KeyError) as e:
             self.get_logger().warn(f"Invalid mission status: {e}")
+
+    def mission_command_callback(self, msg):
+        """Handle mission commands with highest priority STOP latch"""
+        try:
+            data = json.loads(msg.data)
+            command = data.get('command', '').lower()
+        except Exception as e:
+            self.get_logger().warn(f"Invalid mission command: {e}")
+            return
+
+        if command in ('stop_mission', 'emergency_stop', 'panic_stop'):
+            self.stop_override = True
+            self.mission_active = False
+            self.stop()
+            self.send_thrust(0.0, 0.0)
+            self.get_logger().warn("🛑 STOP override latched (command). Thrusters cut until resume/clear.")
+        elif command in ('force_resume', 'resume_mission', 'clear_stop_override', 'joystick_enable', 'go_home', 'start_mission'):
+            if self.stop_override:
+                self.get_logger().info(f"Clearing STOP override due to command: {command}")
+            self.stop_override = False
     
     def _reset_all_escape_state(self):
         """Reset all escape/stuck/avoidance state variables"""
@@ -486,6 +520,12 @@ class BuranController(Node):
             if 'min_safe_distance' in config:
                 self.min_safe_distance = float(config['min_safe_distance'])
                 updated.append(f"safe_dist={self.min_safe_distance}")
+            if 'reverse_timeout' in config:
+                self.reverse_timeout = float(config['reverse_timeout'])
+                updated.append(f"reverse_timeout={self.reverse_timeout}")
+            if 'max_reverse_distance' in config:
+                self.max_reverse_distance = float(config['max_reverse_distance'])
+                updated.append(f"max_reverse_distance={self.max_reverse_distance}")
             # Bank protection slowdown
             if 'bank_slow_distance' in config:
                 self.bank_slow_distance = float(config['bank_slow_distance'])
@@ -506,6 +546,12 @@ class BuranController(Node):
 
     def control_loop(self):
         """Main control loop - PID heading control with obstacle avoidance and smart anti-stuck"""
+        # Highest priority STOP latch (works even during SASS/panic)
+        if self.stop_override:
+            self.stop()
+            self.send_thrust(0.0, 0.0)
+            return
+
         # Check if mission is active - CRITICAL: Check every control loop to catch stops
         if not self.mission_active:
             self.stop()
@@ -536,23 +582,56 @@ class BuranController(Node):
 
         # --- CRITICAL OBSTACLE - REVERSE ---
         if self.is_critical and self.min_obstacle_distance < self.critical_distance:
-            if self.reverse_start_time is None:
-                self.reverse_start_time = self.get_clock().now()
-                self.integral_error = 0.0
-                self.get_logger().warn(
-                    f"CRITICAL OBSTACLE {self.min_obstacle_distance:.1f}m - Reversing!"
-                )
-
-            elapsed = (self.get_clock().now() - self.reverse_start_time).nanoseconds / 1e9
-            if elapsed > self.reverse_timeout:
-                self.get_logger().warn("Reverse timeout - switching to turn mode")
-                self.reverse_start_time = None
+            # If we've already hit reverse limits, skip reverse and go to turning
+            if self.force_turn_after_reverse:
+                self.get_logger().warn("Reverse limit reached - turning instead of further reversing")
             else:
-                self.send_thrust(-1600.0, -1600.0)  # Increased reverse thrust (v2.1: was -800)
-                self.publish_status("REVERSING")
-                return
+                if self.reverse_start_time is None:
+                    self.reverse_start_time = self.get_clock().now()
+                    self.reverse_start_pos = (self.current_x, self.current_y)
+                    self.integral_error = 0.0
+                    self.get_logger().warn(
+                        f"CRITICAL OBSTACLE {self.min_obstacle_distance:.1f}m - Reversing (CQB micro-steps)"
+                    )
+
+                elapsed = (self.get_clock().now() - self.reverse_start_time).nanoseconds / 1e9
+                # Track reverse distance traveled
+                if self.reverse_start_pos is not None:
+                    dx = self.current_x - self.reverse_start_pos[0]
+                    dy = self.current_y - self.reverse_start_pos[1]
+                    reverse_dist = math.hypot(dx, dy)
+                else:
+                    reverse_dist = 0.0
+
+                # Stop reversing if time or distance exceeded
+                if elapsed > self.reverse_timeout or reverse_dist > self.max_reverse_distance:
+                    self.get_logger().warn(
+                        f"Reverse limit reached (t={elapsed:.1f}s, d={reverse_dist:.1f}m) - switching to turn"
+                    )
+                    self.reverse_start_time = None
+                    self.reverse_start_pos = None
+                    self.force_turn_after_reverse = True
+                else:
+                    # CQB micro-steps: short bursts, then pause
+                    cycle = 0.6  # seconds
+                    on_time = 0.2
+                    phase = elapsed % cycle
+                    thrust_cmd = -1200.0 if phase < on_time else 0.0
+                    self.send_thrust(thrust_cmd, thrust_cmd)
+                    self.publish_status("REVERSING")
+                    return
+
+            # After reverse cap, fall through to avoidance turning
+            self.reverse_start_time = None
+            self.reverse_start_pos = None
+            self.force_turn_after_reverse = False
+            self.avoidance_mode = True
+            if self.reverse_start_time is None:
+                self.reverse_start_time = None
         else:
             self.reverse_start_time = None
+            self.reverse_start_pos = None
+            self.force_turn_after_reverse = False
 
         # --- OBSTACLE AVOIDANCE MODE ---
         if self.obstacle_detected:
@@ -575,12 +654,12 @@ class BuranController(Node):
                 direction = f"GAP {gap_direction_deg:.0f}° ({gap_width:.0f}° wide)"
             elif self.left_clear > self.right_clear:
                 # Fallback: Turn towards clearer side
-                # Use urgency to scale turn angle: higher urgency = sharper turn
-                turn_angle = math.pi / 4 + (self.urgency * math.pi / 4)  # 45° to 90°
+                # Use urgency to scale turn angle: higher urgency = sharper turn, but keep it mild (30°-60°)
+                turn_angle = math.radians(30) + (self.urgency * math.radians(30))  # 30° to 60°
                 avoidance_heading = self.current_yaw + turn_angle
                 direction = "GAUCHE/LEFT"
             else:
-                turn_angle = math.pi / 4 + (self.urgency * math.pi / 4)  # 45° to 90°
+                turn_angle = math.radians(30) + (self.urgency * math.radians(30))  # 30° to 60°
                 avoidance_heading = self.current_yaw - turn_angle
                 direction = "DROITE/RIGHT"
 
@@ -760,6 +839,7 @@ class BuranController(Node):
         msg = String()
         msg.data = json.dumps({
             'mode': mode,
+            'stop_override': self.stop_override,
             'avoidance_active': self.avoidance_mode,
             'obstacle_detected': bool(self.obstacle_detected),
             'obstacle_distance': round(float(self.min_obstacle_distance), 2),
@@ -855,10 +935,10 @@ class BuranController(Node):
         elapsed = (self.get_clock().now() - self.escape_start_time).nanoseconds / 1e9
         
         # Phase boundaries
-        probe_end = 2.0
-        reverse_end = probe_end + self.adaptive_escape_duration * 0.4
+        probe_end = 1.5
+        reverse_end = probe_end + self.adaptive_escape_duration * 0.35
         turn_end = reverse_end + self.adaptive_escape_duration * 0.35
-        forward_end = turn_end + self.adaptive_escape_duration * 0.25
+        forward_end = turn_end + self.adaptive_escape_duration * 0.30
         
         # Get drift compensation
         drift_comp_left, drift_comp_right = self.calculate_drift_compensation()
@@ -890,7 +970,7 @@ class BuranController(Node):
         # PHASE 1: Reverse
         elif elapsed < reverse_end:
             self.escape_phase = 1
-            reverse_power = -700.0 - min(300.0, 100.0 / max(0.5, self.min_obstacle_distance))
+            reverse_power = -500.0 - min(200.0, 80.0 / max(0.5, self.min_obstacle_distance))
             self.send_thrust(reverse_power + drift_comp_left, reverse_power + drift_comp_right)
             self.get_logger().info(f"Phase 1: REVERSE ({elapsed:.1f}s/{reverse_end:.1f}s)", throttle_duration_sec=1.0)
             return
@@ -898,8 +978,8 @@ class BuranController(Node):
         # PHASE 2: Turn
         elif elapsed < turn_end:
             self.escape_phase = 2
-            turn_power = 600.0 + (self.consecutive_stuck_count * 100.0)
-            turn_power = min(900.0, turn_power)
+            turn_power = 500.0 + (self.consecutive_stuck_count * 80.0)
+            turn_power = min(650.0, turn_power)
             
             if self.best_escape_direction == 'LEFT':
                 self.send_thrust(-turn_power + drift_comp_left, turn_power + drift_comp_right)
@@ -917,9 +997,9 @@ class BuranController(Node):
             self.escape_phase = 3
             if self.is_heading_toward_no_go_zone():
                 self.get_logger().warn("Forward leads to no-go zone - extra turn")
-                self.send_thrust(-400.0, 400.0)
+                self.send_thrust(-300.0, 300.0)
             else:
-                self.send_thrust(400.0 + drift_comp_left, 400.0 + drift_comp_right)
+                self.send_thrust(300.0 + drift_comp_left, 300.0 + drift_comp_right)
             
             self.get_logger().info(f"Phase 3: FORWARD TEST ({elapsed:.1f}s/{forward_end:.1f}s)", throttle_duration_sec=1.0)
             return
@@ -937,7 +1017,7 @@ class BuranController(Node):
     
     def calculate_adaptive_escape_duration(self):
         """Calculate escape duration based on situation"""
-        base_duration = 10.0
+        base_duration = 8.0
         
         if self.min_obstacle_distance < self.critical_distance:
             base_duration += 4.0
@@ -945,7 +1025,7 @@ class BuranController(Node):
             base_duration += 2.0
         
         base_duration += self.consecutive_stuck_count * 2.0
-        self.adaptive_escape_duration = min(20.0, base_duration)
+        self.adaptive_escape_duration = min(15.0, base_duration)
     
     def add_no_go_zone(self, x, y):
         """Add no-go zone around stuck location"""

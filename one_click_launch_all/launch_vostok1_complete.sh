@@ -15,7 +15,7 @@
 #   - Optional: ----------------------------------------------
 # Default options
 # ----------------------------------------------------------------------------
-# Author: UVAutoBoat Team
+# Author: IMT Nord Europe UVAutoBoat Team
 #
 # Usage:
 #   chmod +x launch_vostok1_complete.sh
@@ -34,12 +34,10 @@
 # Prerequisites:
 #   - ROS 2 Jazzy installed and sourced
 #   - VRX package installed
-#   - AutoBoat workspace built: cd ~/seal_ws && colcon build --merge-install
-#   - Gazebo Harmonic installed
-#   - rosbridge-suite: sudo apt install ros-jazzy-rosbridge-suite
-#   - web_video_server: sudo apt install ros-jazzy-web-video-server
+#   - AutoBoat workspace built: cd ~/seal_ws && colcon build --merge-install # (seal_ws is example workspace)
+#   - rosbridge-suite: sudo apt install ros-jazzy-rosbridge-suite (Install if not already)
+#   - web_video_server: sudo apt install ros-jazzy-web-video-server (Install if not already)
 #   - GNOME Terminal available for multi-tab launch
-#   - Install once if missing: sudo apt install ros-${ROS_DISTRO}-web-video-server
 # ============================================================================
 
 set -e  # Exit on error
@@ -51,6 +49,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'  # No Color
 
+# Graceful exit helper
+die() { echo -e "${RED}$*${NC}"; exit 1; }
+
 # Cleanup on exit (kills all spawned components)
 cleanup() {
     echo -e "${YELLOW}Stopping all Vostok1 components...${NC}"
@@ -61,8 +62,11 @@ cleanup() {
     pkill -9 -f "web_video_server" || true
     pkill -9 -f "vostok1.launch.yaml" || true
     pkill -9 -f "plan/vostok1" || true
-    pkill -9 -f "rviz" || true
+    pkill -9 -f "sputnik_planner" || true
+    pkill -9 -f "buran_controller" || true
+    pkill -9 -f "oko_perception" || true
     pkill -9 -f "http.server 8000" || true
+    pkill -9 -f "rviz" || true
     pkill -9 -f "web_dashboard/vostok1" || true
     # Close gnome-terminal tabs we opened (if still running)
     for pid in $GAZEBO_PID $ROSBRIDGE_PID $NAV_PID $CAMERA_PID $RVIZ_PID $DASHBOARD_PID; do
@@ -172,8 +176,7 @@ recheck() {
 print_header "Checking Prerequisites"
 
 if ! command -v ros2 &> /dev/null; then
-    print_error "ROS 2 not found. Please install and source ROS 2 Jazzy."
-    exit 1
+    die "ROS 2 not found. Please install and source ROS 2 Jazzy."
 fi
 print_status "ROS 2 found"
 
@@ -182,8 +185,7 @@ if ! command -v gnome-terminal &> /dev/null; then
 fi
 
 if ! command -v gz &> /dev/null; then
-    print_error "Gazebo not found. Please install Gazebo Harmonic."
-    exit 1
+    die "Gazebo not found. Please install Gazebo Harmonic."
 fi
 print_status "Gazebo found"
 
@@ -196,8 +198,7 @@ while [ "$WS_ROOT" != "/" ]; do
 done
 INSTALL_DIR="$WS_ROOT/install"
 if [ ! -f "$INSTALL_DIR/setup.bash" ]; then
-    print_error "AutoBoat workspace not built or install/setup.bash not found. Run: colcon build --merge-install"
-    exit 1
+    die "AutoBoat workspace not built or install/setup.bash not found. Run: colcon build --merge-install"
 fi
 print_status "AutoBoat workspace found at $WS_ROOT"
 
@@ -217,6 +218,9 @@ echo "Dashboard: $([ "$LAUNCH_DASHBOARD" = true ] && echo 'Yes' || echo 'No')"
 echo "Camera Stream: $([ "$LAUNCH_CAMERA" = true ] && echo 'Yes' || echo 'No')"
 echo "Auto-open Browser: $([ "$OPEN_BROWSER" = true ] && echo 'Yes' || echo 'No')"
 echo ""
+echo "Tip: If tabs close immediately, check their terminal output for missing packages or model downloads."
+echo "Shortcuts: skip RViz with --skip-rviz, skip dashboard with --skip-dashboard, skip camera with --skip-camera, change world with --world <name>."
+echo ""
 
 # Kill any old processes
 print_status "Cleaning up old processes..."
@@ -225,11 +229,16 @@ pkill -9 -f "gzserver" &> /dev/null || true
 pkill -9 -f "gzclient" &> /dev/null || true
 pkill -9 -f "rosbridge" &> /dev/null || true
 pkill -9 -f "web_video_server" &> /dev/null || true
+pkill -9 -f "vostok1.launch.yaml" &> /dev/null || true
+pkill -9 -f "sputnik_planner" &> /dev/null || true
+pkill -9 -f "buran_controller" &> /dev/null || true
+pkill -9 -f "oko_perception" &> /dev/null || true
+pkill -9 -f "http.server 8000" &> /dev/null || true
 sleep 4
 
 # T1: Launch Gazebo (VRX Simulation)
 print_status "Launching Gazebo (Sydney Regatta - $WORLD)..."
-gnome-terminal --tab --title="gazebo" -- bash -i -c "
+gnome-terminal --wait --tab --title="gazebo" -- bash -i -c "
 source \"$INSTALL_DIR/setup.bash\"
 echo 'Starting Gazebo with world: $WORLD'
 echo 'Note: GPS may take 10-30 seconds to initialize'
@@ -242,7 +251,7 @@ recheck "$GAZEBO_PID" "Gazebo"
 
 # T2: Launch ROS Bridge (WebSocket for dashboard)
 print_status "Launching ROS Bridge (WebSocket on ws://localhost:9090)..."
-gnome-terminal --tab --title="rosbridge" -- bash -i -c "
+gnome-terminal --wait --tab --title="rosbridge" -- bash -i -c "
 source \"$INSTALL_DIR/setup.bash\"
 echo 'Starting ROS Bridge WebSocket server...'
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
@@ -254,7 +263,7 @@ recheck "$ROSBRIDGE_PID" "ROS Bridge"
 
 # T3: Launch Navigation Stack (OKO-SPUTNIK-BURAN)
 print_status "Launching Navigation Stack (OKO-SPUTNIK-BURAN)..."
-gnome-terminal --tab --title="navigation" -- bash -i -c "
+gnome-terminal --wait --tab --title="navigation" -- bash -i -c "
 source \"$INSTALL_DIR/setup.bash\"
 echo 'Starting Vostok1 Modular Navigation System...'
 echo 'Components: OKO (perception) | SPUTNIK (planner) | BURAN (control)'
@@ -271,7 +280,7 @@ recheck "$NAV_PID" "Navigation stack"
 # T4: Launch Web Video Server (camera stream)
 if [ "$LAUNCH_CAMERA" = true ]; then
     print_status "Launching Web Video Server (http://localhost:8080)..."
-gnome-terminal --tab --title="camera" -- bash -i -c "
+gnome-terminal --wait --tab --title="camera" -- bash -i -c "
 source \"$INSTALL_DIR/setup.bash\"
 echo 'Starting Web Video Server for camera feed...'
 echo 'Stream available at: http://localhost:8080'
@@ -286,7 +295,7 @@ fi
 # T5: Launch RViz (optional visualization)
 if [ "$LAUNCH_RVIZ" = true ]; then
     print_status "Launching RViz visualization..."
-gnome-terminal --tab --title="rviz" -- bash -i -c "
+gnome-terminal --wait --tab --title="rviz" -- bash -i -c "
 source \"$INSTALL_DIR/setup.bash\"
 echo 'Starting RViz...'
 sleep 3
@@ -302,7 +311,7 @@ fi
 # T6: Launch Web Dashboard
 if [ "$LAUNCH_DASHBOARD" = true ]; then
     print_status "Launching Web Dashboard (http://localhost:8000)..."
-gnome-terminal --tab --title="dashboard" -- bash -i -c "
+gnome-terminal --wait --tab --title="dashboard" -- bash -i -c "
 cd \"$WS_ROOT/src/uvautoboat/web_dashboard/vostok1\"
 echo 'Starting Web Dashboard HTTP server...'
 echo 'Dashboard available at: http://localhost:8000'

@@ -424,12 +424,12 @@
 
       No external model needed - fully self-contained particle emitter.
     -->
-    <!-- All smoke generators clustered in one zone (~120m north of boat spawn) -->
+    <!-- Smoke generators scattered north of boat spawn (~>100m) -->
       <!-- ========================= -->
 <!--  SMOKE SET A (MAIN)      -->
 <!-- ========================= -->
     <model name="smoke_generator">
-      <pose>-535 280 0.5 0 0 0</pose>
+      <pose>-535 260 0.5 0 0 0</pose>
       <static>true</static>
 
       <link name="smoke_link">
@@ -476,7 +476,7 @@
     <!--  SMOKE SET B (EAST)      -->
     <!-- ========================= -->
     <model name="smoke_generator_east">
-      <pose>-525 275 0.5 0 0 0</pose>
+      <pose>-500 310 0.5 0 0 0</pose>
       <static>true</static>
 
       <link name="smoke_link">
@@ -515,7 +515,7 @@
     <!--  SMOKE SET C (NORTH)     -->
     <!-- ========================= -->
     <model name="smoke_generator_north">
-      <pose>-545 285 0.5 0 0 0</pose>
+      <pose>-580 340 0.5 0 0 0</pose>
       <static>true</static>
 
       <link name="smoke_link">
