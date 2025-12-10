@@ -47,6 +47,7 @@ setup(
             'gps_imu_pose = control.gps_imu_pose:main',
             'pose_filter = control.pose_filter:main',
             'buran_controller_fixed = control.buran_controller_fixed:main',
+            # PLEASE DONT REMOVE ANYTHING ABOVE PLEASE
         ],
     },
 )
