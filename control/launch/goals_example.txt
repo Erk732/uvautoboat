@@ -1,0 +1,4 @@
+# x y or x,y per line; lines starting with # are ignored
+130 0
+130 50
+80 60
