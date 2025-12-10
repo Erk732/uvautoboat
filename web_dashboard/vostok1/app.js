@@ -1875,3 +1875,431 @@ function updatePollutantStatusUI(count, status, sources) {
         listEl.innerHTML = '';
     }
 }
+
+// =============================================================================
+// PERCEPTION & CONTROL TUNING SYSTEM
+// =============================================================================
+
+// Preset configurations
+const TUNING_PRESETS = {
+    universal: {
+        name: "Universal",
+        oko: {
+            min_height: -1.8,
+            max_height: 0.8,
+            min_range: 0.8,
+            max_range: 80.0,
+            min_safe_distance: 11.0,
+            critical_distance: 3.5,
+            cluster_distance: 1.5,
+            min_cluster_size: 4,
+            temporal_history_size: 3,
+            temporal_threshold: 3,
+            water_plane_threshold: 0.2,
+            hysteresis_distance: 1.3
+        },
+        buran: {
+            critical_distance: 3.5,
+            min_safe_distance: 11.0,
+            bank_slow_distance: 7.0,
+            obstacle_slow_factor: 0.35,
+            bank_slow_factor: 0.22,
+            avoid_diff_gain: 35.0,
+            use_vfh_bias: true,
+            stuck_timeout: 3.5,
+            stuck_threshold: 0.9,
+            no_go_zone_radius: 8.0,
+            detour_distance: 12.0,
+            reverse_timeout: 2.5,
+            max_reverse_distance: 20.0,
+            turn_deadband_deg: 1.5,
+            slew_rate_limit: 90.0
+        }
+    },
+    buoyField: {
+        name: "Buoy Field",
+        oko: {
+            min_height: -1.8,
+            max_height: 0.8,
+            min_range: 0.8,
+            max_range: 80.0,
+            min_safe_distance: 10.0,
+            critical_distance: 2.5,
+            cluster_distance: 1.2,
+            min_cluster_size: 3,
+            temporal_history_size: 2,
+            temporal_threshold: 2,
+            water_plane_threshold: 0.2,
+            hysteresis_distance: 1.0
+        },
+        buran: {
+            critical_distance: 3.0,
+            min_safe_distance: 10.0,
+            bank_slow_distance: 6.0,
+            obstacle_slow_factor: 0.3,
+            bank_slow_factor: 0.2,
+            avoid_diff_gain: 40.0,
+            use_vfh_bias: true,
+            stuck_timeout: 3.0,
+            stuck_threshold: 1.0,
+            no_go_zone_radius: 6.0,
+            detour_distance: 8.0,
+            reverse_timeout: 2.0,
+            max_reverse_distance: 10.0,
+            turn_deadband_deg: 1.0,
+            slew_rate_limit: 100.0
+        }
+    },
+    pier: {
+        name: "Pier Detect",
+        oko: {
+            min_height: -1.6,
+            max_height: 1.0,
+            min_range: 0.5,
+            max_range: 60.0,
+            min_safe_distance: 12.0,
+            critical_distance: 2.0,
+            cluster_distance: 0.5,
+            min_cluster_size: 3,
+            temporal_history_size: 3,
+            temporal_threshold: 2,
+            water_plane_threshold: 0.15,
+            hysteresis_distance: 1.5
+        },
+        buran: {
+            critical_distance: 2.5,
+            min_safe_distance: 12.0,
+            bank_slow_distance: 8.0,
+            obstacle_slow_factor: 0.3,
+            bank_slow_factor: 0.2,
+            avoid_diff_gain: 30.0,
+            use_vfh_bias: true,
+            stuck_timeout: 4.0,
+            stuck_threshold: 0.8,
+            no_go_zone_radius: 10.0,
+            detour_distance: 15.0,
+            reverse_timeout: 3.0,
+            max_reverse_distance: 25.0,
+            turn_deadband_deg: 2.0,
+            slew_rate_limit: 80.0
+        }
+    },
+    openWater: {
+        name: "Open Water",
+        oko: {
+            min_height: -0.2,
+            max_height: 3.0,
+            min_range: 3.0,
+            max_range: 80.0,
+            min_safe_distance: 15.0,
+            critical_distance: 5.0,
+            cluster_distance: 3.0,
+            min_cluster_size: 6,
+            temporal_history_size: 2,
+            temporal_threshold: 1,
+            water_plane_threshold: 0.5,
+            hysteresis_distance: 2.0
+        },
+        buran: {
+            critical_distance: 5.0,
+            min_safe_distance: 15.0,
+            bank_slow_distance: 8.0,
+            obstacle_slow_factor: 0.4,
+            bank_slow_factor: 0.3,
+            avoid_diff_gain: 30.0,
+            use_vfh_bias: true,
+            stuck_timeout: 4.0,
+            stuck_threshold: 0.8,
+            no_go_zone_radius: 10.0,
+            detour_distance: 15.0,
+            reverse_timeout: 3.0,
+            max_reverse_distance: 30.0,
+            turn_deadband_deg: 2.0,
+            slew_rate_limit: 80.0
+        }
+    }
+};
+
+// Initialize tuning panel
+function initTuningPanel() {
+    console.log('Initializing tuning panel...');
+
+    // Collapsible section headers
+    document.querySelectorAll('.tuning-section-header').forEach(header => {
+        header.addEventListener('click', function() {
+            const targetId = this.getAttribute('data-target');
+            const content = document.getElementById(targetId);
+            const icon = this.querySelector('.section-icon');
+
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.textContent = '▼';
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▶';
+            }
+        });
+    });
+
+    // Preset buttons
+    document.getElementById('btn-preset-universal').addEventListener('click', () => applyPreset('universal'));
+    document.getElementById('btn-preset-buoy-field').addEventListener('click', () => applyPreset('buoyField'));
+    document.getElementById('btn-preset-pier').addEventListener('click', () => applyPreset('pier'));
+    document.getElementById('btn-preset-open-water').addEventListener('click', () => applyPreset('openWater'));
+
+    // Apply buttons
+    document.getElementById('btn-apply-oko').addEventListener('click', applyOkoParameters);
+    document.getElementById('btn-apply-buran').addEventListener('click', applyBuranParameters);
+
+    console.log('Tuning panel initialized');
+}
+
+// Apply preset configuration
+function applyPreset(presetName) {
+    const preset = TUNING_PRESETS[presetName];
+    if (!preset) {
+        addLog(`Preset ${presetName} not found`, 'error');
+        return;
+    }
+
+    const statusEl = document.getElementById('preset-status');
+    statusEl.textContent = `Applying ${preset.name} preset...`;
+    statusEl.style.color = '#f39c12';
+
+    // Update UI inputs
+    updateOkoInputs(preset.oko);
+    updateBuranInputs(preset.buran);
+
+    // Apply parameters to ROS
+    applyOkoParameters(preset.oko);
+    applyBuranParameters(preset.buran);
+
+    setTimeout(() => {
+        statusEl.textContent = `✅ ${preset.name} preset applied!`;
+        statusEl.style.color = '#27ae60';
+        setTimeout(() => {
+            statusEl.textContent = '';
+        }, 3000);
+    }, 500);
+
+    addLog(`Applied ${preset.name} preset`, 'info');
+}
+
+// Update OKO input fields from preset
+function updateOkoInputs(params) {
+    document.getElementById('oko-min-height').value = params.min_height;
+    document.getElementById('oko-max-height').value = params.max_height;
+    document.getElementById('oko-min-range').value = params.min_range;
+    document.getElementById('oko-max-range').value = params.max_range;
+    document.getElementById('oko-safe-dist').value = params.min_safe_distance;
+    document.getElementById('oko-critical-dist').value = params.critical_distance;
+    document.getElementById('oko-cluster-dist').value = params.cluster_distance;
+    document.getElementById('oko-min-cluster-size').value = params.min_cluster_size;
+    document.getElementById('oko-temporal-history').value = params.temporal_history_size;
+    document.getElementById('oko-temporal-threshold').value = params.temporal_threshold;
+    document.getElementById('oko-water-threshold').value = params.water_plane_threshold;
+    document.getElementById('oko-hysteresis').value = params.hysteresis_distance;
+}
+
+// Update BURAN input fields from preset
+function updateBuranInputs(params) {
+    document.getElementById('buran-critical-dist').value = params.critical_distance;
+    document.getElementById('buran-safe-dist').value = params.min_safe_distance;
+    document.getElementById('buran-bank-dist').value = params.bank_slow_distance;
+    document.getElementById('buran-obstacle-slow').value = params.obstacle_slow_factor;
+    document.getElementById('buran-bank-slow').value = params.bank_slow_factor;
+    document.getElementById('buran-avoid-gain').value = params.avoid_diff_gain;
+    document.getElementById('buran-use-vfh').value = params.use_vfh_bias.toString();
+    document.getElementById('buran-stuck-timeout').value = params.stuck_timeout;
+    document.getElementById('buran-stuck-threshold').value = params.stuck_threshold;
+    document.getElementById('buran-no-go-radius').value = params.no_go_zone_radius;
+    document.getElementById('buran-detour-dist').value = params.detour_distance;
+    document.getElementById('buran-reverse-timeout').value = params.reverse_timeout;
+    document.getElementById('buran-max-reverse').value = params.max_reverse_distance;
+    document.getElementById('buran-turn-deadband').value = params.turn_deadband_deg;
+    document.getElementById('buran-slew-rate').value = params.slew_rate_limit;
+}
+
+// Apply OKO perception parameters via ROS2 service
+function applyOkoParameters(presetParams = null) {
+    if (!connected) {
+        addLog('Not connected to ROS', 'error');
+        return;
+    }
+
+    // Get parameters from UI or preset
+    const params = presetParams || {
+        min_height: parseFloat(document.getElementById('oko-min-height').value),
+        max_height: parseFloat(document.getElementById('oko-max-height').value),
+        min_range: parseFloat(document.getElementById('oko-min-range').value),
+        max_range: parseFloat(document.getElementById('oko-max-range').value),
+        min_safe_distance: parseFloat(document.getElementById('oko-safe-dist').value),
+        critical_distance: parseFloat(document.getElementById('oko-critical-dist').value),
+        cluster_distance: parseFloat(document.getElementById('oko-cluster-dist').value),
+        min_cluster_size: parseInt(document.getElementById('oko-min-cluster-size').value),
+        temporal_history_size: parseInt(document.getElementById('oko-temporal-history').value),
+        temporal_threshold: parseInt(document.getElementById('oko-temporal-threshold').value),
+        water_plane_threshold: parseFloat(document.getElementById('oko-water-threshold').value),
+        hysteresis_distance: parseFloat(document.getElementById('oko-hysteresis').value)
+    };
+
+    // Call ROS2 parameter service for each parameter
+    const nodeName = '/oko_perception_node';
+    let successCount = 0;
+    let errorCount = 0;
+    const totalParams = Object.keys(params).length;
+
+    Object.entries(params).forEach(([paramName, paramValue]) => {
+        setROS2Parameter(nodeName, paramName, paramValue, (success) => {
+            if (success) {
+                successCount++;
+            } else {
+                errorCount++;
+            }
+
+            // Log result after all params processed
+            if (successCount + errorCount === totalParams) {
+                if (errorCount === 0) {
+                    addLog(`✅ OKO: ${successCount}/${totalParams} parameters applied`, 'info');
+                } else {
+                    addLog(`⚠️ OKO: ${successCount} success, ${errorCount} failed`, 'warning');
+                }
+            }
+        });
+    });
+}
+
+// Apply BURAN controller parameters via ROS2 service
+function applyBuranParameters(presetParams = null) {
+    if (!connected) {
+        addLog('Not connected to ROS', 'error');
+        return;
+    }
+
+    // Get parameters from UI or preset
+    const params = presetParams || {
+        critical_distance: parseFloat(document.getElementById('buran-critical-dist').value),
+        min_safe_distance: parseFloat(document.getElementById('buran-safe-dist').value),
+        bank_slow_distance: parseFloat(document.getElementById('buran-bank-dist').value),
+        obstacle_slow_factor: parseFloat(document.getElementById('buran-obstacle-slow').value),
+        bank_slow_factor: parseFloat(document.getElementById('buran-bank-slow').value),
+        avoid_diff_gain: parseFloat(document.getElementById('buran-avoid-gain').value),
+        use_vfh_bias: document.getElementById('buran-use-vfh').value === 'true',
+        stuck_timeout: parseFloat(document.getElementById('buran-stuck-timeout').value),
+        stuck_threshold: parseFloat(document.getElementById('buran-stuck-threshold').value),
+        no_go_zone_radius: parseFloat(document.getElementById('buran-no-go-radius').value),
+        detour_distance: parseFloat(document.getElementById('buran-detour-dist').value),
+        reverse_timeout: parseFloat(document.getElementById('buran-reverse-timeout').value),
+        max_reverse_distance: parseFloat(document.getElementById('buran-max-reverse').value),
+        turn_deadband_deg: parseFloat(document.getElementById('buran-turn-deadband').value),
+        slew_rate_limit: parseFloat(document.getElementById('buran-slew-rate').value)
+    };
+
+    // Call ROS2 parameter service for each parameter
+    const nodeName = '/buran_controller';
+    let successCount = 0;
+    let errorCount = 0;
+    const totalParams = Object.keys(params).length;
+
+    Object.entries(params).forEach(([paramName, paramValue]) => {
+        setROS2Parameter(nodeName, paramName, paramValue, (success) => {
+            if (success) {
+                successCount++;
+            } else {
+                errorCount++;
+            }
+
+            // Log result after all params processed
+            if (successCount + errorCount === totalParams) {
+                if (errorCount === 0) {
+                    addLog(`✅ BURAN: ${successCount}/${totalParams} parameters applied`, 'info');
+                } else {
+                    addLog(`⚠️ BURAN: ${successCount} success, ${errorCount} failed`, 'warning');
+                }
+            }
+        });
+    });
+}
+
+// Set ROS2 parameter via rosbridge service call
+function setROS2Parameter(nodeName, paramName, paramValue, callback) {
+    // Create service client for set_parameters
+    const setParamsService = new ROSLIB.Service({
+        ros: ros,
+        name: `${nodeName}/set_parameters`,
+        serviceType: 'rcl_interfaces/srv/SetParameters'
+    });
+
+    // Determine parameter type
+    let paramType;
+    let value;
+
+    if (typeof paramValue === 'boolean') {
+        paramType = 1; // PARAMETER_BOOL
+        value = { bool_value: paramValue };
+    } else if (Number.isInteger(paramValue)) {
+        paramType = 2; // PARAMETER_INTEGER
+        value = { integer_value: paramValue };
+    } else if (typeof paramValue === 'number') {
+        paramType = 3; // PARAMETER_DOUBLE
+        value = { double_value: paramValue };
+    } else if (typeof paramValue === 'string') {
+        paramType = 4; // PARAMETER_STRING
+        value = { string_value: paramValue };
+    } else {
+        console.error(`Unknown parameter type for ${paramName}:`, typeof paramValue);
+        if (callback) callback(false);
+        return;
+    }
+
+    // Create request
+    const request = new ROSLIB.ServiceRequest({
+        parameters: [{
+            name: paramName,
+            value: {
+                type: paramType,
+                ...value
+            }
+        }]
+    });
+
+    // Call service
+    setParamsService.callService(request, (response) => {
+        if (response && response.results && response.results.length > 0) {
+            const result = response.results[0];
+            if (result.successful) {
+                console.log(`✅ Set ${nodeName}/${paramName} = ${paramValue}`);
+                if (callback) callback(true);
+            } else {
+                console.error(`❌ Failed to set ${nodeName}/${paramName}: ${result.reason}`);
+                if (callback) callback(false);
+            }
+        } else {
+            console.error(`❌ No response from ${nodeName}/set_parameters`);
+            if (callback) callback(false);
+        }
+    }, (error) => {
+        console.error(`❌ Service call failed for ${nodeName}/${paramName}:`, error);
+        if (callback) callback(false);
+    });
+}
+
+// Hook into existing page load initialization
+// Find the existing initConfigPanel call and add initTuningPanel after it
+const originalInit = window.onload;
+window.addEventListener('load', () => {
+    // Wait for ROS connection before initializing tuning panel
+    setTimeout(() => {
+        if (connected) {
+            initTuningPanel();
+        } else {
+            // Retry after connection established
+            const checkConnection = setInterval(() => {
+                if (connected) {
+                    initTuningPanel();
+                    clearInterval(checkConnection);
+                }
+            }, 1000);
+        }
+    }, 1000);
+});

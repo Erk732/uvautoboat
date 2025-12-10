@@ -427,6 +427,246 @@
                 <input type="hidden" id="cfg-scan-width" value="50">
             </div>
 
+            <!-- Perception & Control Tuning Panel -->
+            <div class="panel tuning-panel">
+                <h2>🎛️ Perception & Control Tuning | Réglage Perception et Contrôle</h2>
+
+                <!-- Preset Buttons -->
+                <div class="tuning-presets">
+                    <h3>Quick Presets | Préconfigurations Rapides</h3>
+                    <div class="preset-buttons">
+                        <button id="btn-preset-universal" class="preset-btn universal">
+                            🌍 Universal | Universel
+                        </button>
+                        <button id="btn-preset-buoy-field" class="preset-btn buoy">
+                            🎯 Buoy Field | Champ de Bouées
+                        </button>
+                        <button id="btn-preset-pier" class="preset-btn pier">
+                            🏗️ Pier Detect | Détection Quai
+                        </button>
+                        <button id="btn-preset-open-water" class="preset-btn open">
+                            🌊 Open Water | Eau Libre
+                        </button>
+                    </div>
+                    <div id="preset-status" class="preset-status"></div>
+                </div>
+
+                <!-- Collapsible Parameter Sections -->
+                <div class="tuning-sections">
+                    <!-- OKO Perception Parameters -->
+                    <div class="tuning-section">
+                        <button class="tuning-section-header" data-target="oko-params">
+                            <span class="section-icon">▶</span>
+                            <span class="section-title">OKO Perception Parameters</span>
+                            <span class="section-node">/oko_perception_node</span>
+                        </button>
+                        <div id="oko-params" class="tuning-section-content" style="display: none;">
+                            <div class="param-grid">
+                                <div class="param-group">
+                                    <h4>Height Filtering | Filtrage Hauteur</h4>
+                                    <div class="param-item">
+                                        <label for="oko-min-height">Min Height (m):</label>
+                                        <input type="number" id="oko-min-height" step="0.1" value="-1.8">
+                                        <span class="param-hint">Filter low piers/buoys</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="oko-max-height">Max Height (m):</label>
+                                        <input type="number" id="oko-max-height" step="0.1" value="0.8">
+                                        <span class="param-hint">Reject smoke</span>
+                                    </div>
+                                </div>
+
+                                <div class="param-group">
+                                    <h4>Range Filtering | Filtrage Portée</h4>
+                                    <div class="param-item">
+                                        <label for="oko-min-range">Min Range (m):</label>
+                                        <input type="number" id="oko-min-range" step="0.1" value="0.8">
+                                        <span class="param-hint">Close detection</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="oko-max-range">Max Range (m):</label>
+                                        <input type="number" id="oko-max-range" step="1" value="80">
+                                        <span class="param-hint">Extended detection</span>
+                                    </div>
+                                </div>
+
+                                <div class="param-group">
+                                    <h4>Detection Thresholds | Seuils Détection</h4>
+                                    <div class="param-item">
+                                        <label for="oko-safe-dist">Safe Distance (m):</label>
+                                        <input type="number" id="oko-safe-dist" step="0.5" value="11.0">
+                                        <span class="param-hint">Start slowing</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="oko-critical-dist">Critical Distance (m):</label>
+                                        <input type="number" id="oko-critical-dist" step="0.1" value="3.5">
+                                        <span class="param-hint">Emergency threshold</span>
+                                    </div>
+                                </div>
+
+                                <div class="param-group">
+                                    <h4>Clustering | Regroupement</h4>
+                                    <div class="param-item">
+                                        <label for="oko-cluster-dist">Cluster Distance (m):</label>
+                                        <input type="number" id="oko-cluster-dist" step="0.1" value="1.5">
+                                        <span class="param-hint">Group nearby points</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="oko-min-cluster-size">Min Cluster Size:</label>
+                                        <input type="number" id="oko-min-cluster-size" step="1" min="1" value="4">
+                                        <span class="param-hint">Filter noise</span>
+                                    </div>
+                                </div>
+
+                                <div class="param-group">
+                                    <h4>Temporal Filtering | Filtrage Temporel</h4>
+                                    <div class="param-item">
+                                        <label for="oko-temporal-history">History Size:</label>
+                                        <input type="number" id="oko-temporal-history" step="1" min="1" max="10" value="3">
+                                        <span class="param-hint">Scan buffer</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="oko-temporal-threshold">Threshold:</label>
+                                        <input type="number" id="oko-temporal-threshold" step="1" min="1" max="10" value="3">
+                                        <span class="param-hint">Required confirmations</span>
+                                    </div>
+                                </div>
+
+                                <div class="param-group">
+                                    <h4>Water & Stability | Eau et Stabilité</h4>
+                                    <div class="param-item">
+                                        <label for="oko-water-threshold">Water Plane Threshold:</label>
+                                        <input type="number" id="oko-water-threshold" step="0.05" value="0.2">
+                                        <span class="param-hint">Water filtering</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="oko-hysteresis">Hysteresis (m):</label>
+                                        <input type="number" id="oko-hysteresis" step="0.1" value="1.3">
+                                        <span class="param-hint">Prevent oscillation</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="btn-apply-oko" class="apply-btn">Apply OKO Params | Appliquer</button>
+                        </div>
+                    </div>
+
+                    <!-- BURAN Controller Parameters -->
+                    <div class="tuning-section">
+                        <button class="tuning-section-header" data-target="buran-params">
+                            <span class="section-icon">▶</span>
+                            <span class="section-title">BURAN Controller Parameters</span>
+                            <span class="section-node">/buran_controller</span>
+                        </button>
+                        <div id="buran-params" class="tuning-section-content" style="display: none;">
+                            <div class="param-grid">
+                                <div class="param-group">
+                                    <h4>Distance Thresholds | Seuils Distance</h4>
+                                    <div class="param-item">
+                                        <label for="buran-critical-dist">Critical Distance (m):</label>
+                                        <input type="number" id="buran-critical-dist" step="0.1" value="3.5">
+                                        <span class="param-hint">Panic/reverse</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="buran-safe-dist">Safe Distance (m):</label>
+                                        <input type="number" id="buran-safe-dist" step="0.5" value="11.0">
+                                        <span class="param-hint">Start slowing</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="buran-bank-dist">Bank Slow Distance (m):</label>
+                                        <input type="number" id="buran-bank-dist" step="0.5" value="7.0">
+                                        <span class="param-hint">Extra slow near banks</span>
+                                    </div>
+                                </div>
+
+                                <div class="param-group">
+                                    <h4>Speed Control | Contrôle Vitesse</h4>
+                                    <div class="param-item">
+                                        <label for="buran-obstacle-slow">Obstacle Slow Factor:</label>
+                                        <input type="number" id="buran-obstacle-slow" step="0.05" min="0.1" max="1.0" value="0.35">
+                                        <span class="param-hint">Speed near obstacles</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="buran-bank-slow">Bank Slow Factor:</label>
+                                        <input type="number" id="buran-bank-slow" step="0.05" min="0.1" max="1.0" value="0.22">
+                                        <span class="param-hint">Crawl near banks</span>
+                                    </div>
+                                </div>
+
+                                <div class="param-group">
+                                    <h4>Steering | Direction</h4>
+                                    <div class="param-item">
+                                        <label for="buran-avoid-gain">Avoid Diff Gain:</label>
+                                        <input type="number" id="buran-avoid-gain" step="5" min="10" max="100" value="35">
+                                        <span class="param-hint">Steering aggressiveness</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="buran-use-vfh">Use VFH Bias:</label>
+                                        <select id="buran-use-vfh">
+                                            <option value="true">Enabled</option>
+                                            <option value="false">Disabled</option>
+                                        </select>
+                                        <span class="param-hint">Gap navigation</span>
+                                    </div>
+                                </div>
+
+                                <div class="param-group">
+                                    <h4>Anti-Stuck | Anti-Blocage</h4>
+                                    <div class="param-item">
+                                        <label for="buran-stuck-timeout">Stuck Timeout (s):</label>
+                                        <input type="number" id="buran-stuck-timeout" step="0.5" min="1" max="10" value="3.5">
+                                        <span class="param-hint">Stuck detection</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="buran-stuck-threshold">Stuck Threshold (m):</label>
+                                        <input type="number" id="buran-stuck-threshold" step="0.1" value="0.9">
+                                        <span class="param-hint">Movement threshold</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="buran-no-go-radius">No-Go Zone Radius (m):</label>
+                                        <input type="number" id="buran-no-go-radius" step="1" value="8">
+                                        <span class="param-hint">Exclusion zone size</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="buran-detour-dist">Detour Distance (m):</label>
+                                        <input type="number" id="buran-detour-dist" step="1" value="12">
+                                        <span class="param-hint">Detour waypoint offset</span>
+                                    </div>
+                                </div>
+
+                                <div class="param-group">
+                                    <h4>Escape Maneuvers | Manœuvres Échappement</h4>
+                                    <div class="param-item">
+                                        <label for="buran-reverse-timeout">Reverse Timeout (s):</label>
+                                        <input type="number" id="buran-reverse-timeout" step="0.5" value="2.5">
+                                        <span class="param-hint">Reverse duration</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="buran-max-reverse">Max Reverse Distance (m):</label>
+                                        <input type="number" id="buran-max-reverse" step="5" value="20">
+                                        <span class="param-hint">Max reverse</span>
+                                    </div>
+                                </div>
+
+                                <div class="param-group">
+                                    <h4>Turn Behavior | Comportement Virage</h4>
+                                    <div class="param-item">
+                                        <label for="buran-turn-deadband">Turn Deadband (deg):</label>
+                                        <input type="number" id="buran-turn-deadband" step="0.5" value="1.5">
+                                        <span class="param-hint">Precision threshold</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="buran-slew-rate">Slew Rate Limit (N):</label>
+                                        <input type="number" id="buran-slew-rate" step="10" value="90">
+                                        <span class="param-hint">Max thrust change</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="btn-apply-buran" class="apply-btn">Apply BURAN Params | Appliquer</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Map Panel -->
             <div class="panel map-panel">
                 <h2>Map & Waypoints | Carte et Points</h2>
