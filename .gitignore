@@ -8,6 +8,8 @@ dist/
 .venv/
 venv/
 env/
+.mypy_cache/
+.ruff_cache/
 
 # ROS 2 / Colcon Build Artifacts
 build/
@@ -16,6 +18,27 @@ log/
 build_isolated/
 devel_isolated/
 devel/
+COLCON_IGNORE
+
+# ROS 2 Bag Recordings
+*.bag
+*.db3
+rosbag2_*/
+
+# CMake / C++ Build Artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.o
+*.a
+*.so
+*.dylib
+
+# Gazebo
+*.log
+~/.gz/
+~/.gazebo/
 
 # Pytest / Testing
 .pytest_cache/
@@ -34,7 +57,15 @@ compile_commands.json
 # OS Generated
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Environment / Secrets
+.env
+.env.local
 
 # Generated TF Graphs
 frames_*.gv
 frames_*.pdf
+
+# RViz backup configs
+*.rviz~
