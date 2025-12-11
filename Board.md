@@ -22,12 +22,13 @@
 | 3 | Coverage Planning | ⏸️ | 0% |
 | 4 | Integration & Testing | 🔄 | 90% |
 
-### Active Systems
+### Active System
 
 | System | Architecture | Sensors | Features |
 |--------|--------------|---------|----------|
-| **Vostok1** | Integrated | 3D PointCloud | PID control, SASS v2.0, waypoint skip, web dashboard + camera panel, waypoint persistence |
-| **Modular** | Distributed | 3D PointCloud | OKO + SPUTNIK + BURAN, A* path planning, runtime config, dashboard camera panel, waypoint persistence |
+| **Vostok1 Modular** | Distributed (OKO + SPUTNIK + BURAN) | 3D PointCloud | A* path planning, SASS v2.0, runtime config, web dashboard + camera, waypoint persistence |
+
+> **Note:** The integrated Vostok1 has been deprecated and moved to `legacy/`. Use the modular system.
 
 ---
 
@@ -86,19 +87,19 @@
 
 ### Completed ✅
 
-| Test | Vostok1 | Modular |
-|------|:-------:|:-------:|
-| GPS waypoint following | ✅ | ✅ |
-| Obstacle detection (3D) | ✅ | ✅ |
-| Multi-waypoint missions | ✅ | ✅ |
-| Stuck detection/recovery | ✅ | ✅ |
-| Waypoint skip strategy | ✅ | ✅ |
-| Runtime config updates | ✅ | ✅ |
-| Web dashboard (map, mission, camera) | ✅ | ✅ |
-| Terminal CLI | ✅ | ✅ |
-| Min-range spawn fix (5m) | ✅ | ✅ |
-| A* path planning (hybrid + runtime) | ✅ | ✅ |
-| One-click launcher script | ✅ | ✅ |
+| Test | Status |
+|------|:------:|
+| GPS waypoint following | ✅ |
+| Obstacle detection (3D) | ✅ |
+| Multi-waypoint missions | ✅ |
+| Stuck detection/recovery | ✅ |
+| Waypoint skip strategy | ✅ |
+| Runtime config updates | ✅ |
+| Web dashboard (map, mission, camera) | ✅ |
+| Terminal CLI | ✅ |
+| Min-range spawn fix (5m) | ✅ |
+| A* path planning (hybrid + runtime) | ✅ |
+| One-click launcher script | ✅ |
 
 ### Pending ⬜
 

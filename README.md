@@ -94,10 +94,9 @@ uvautoboat/
 │       ├── all_in_one_bringup.launch.py  # Legacy integrated launch
 │       └── README_QUICKSTART.md     # Quick start guide
 ├── plan/                       # ROS 2 Planning Package
-│   ├── brain/
-│   │   ├── vostok1.py               # Integrated navigation system
+│   ├── plan/
 │   │   ├── oko_perception.py        # 3D LIDAR perception (OKO)
-│   │   ├── sputnik_planner.py       # Waypoint planner (SPUTNIK)
+│   │   ├── sputnik_planner.py       # Waypoint planner (SPUTNIK) + A* path planning
 │   │   ├── atlantis_planner.py      # Alternative planner (Atlantis)
 │   │   ├── vostok1_cli.py           # Terminal mission control
 │   │   ├── lidar_obstacle_avoidance.py  # LIDAR processing module
@@ -141,6 +140,9 @@ uvautoboat/
 │   └── Common-Issues.md             # Troubleshooting guide
 ├── one_click_launch_all/       # Automated launcher scripts
 │   └── launch_vostok1_complete.sh   # One-click full system launch
+├── legacy/                     # Deprecated code (for reference only)
+│   ├── vostok1_integrated.py        # Old monolithic navigation (DEPRECATED)
+│   └── DEPRECATED.md                # Deprecation notes
 ├── images/                     # Documentation images
 ├── quick_test.sh               # Quick system diagnostics
 ├── diagnose_boat.sh            # Detailed boat diagnosis
