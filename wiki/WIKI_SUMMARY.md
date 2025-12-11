@@ -256,7 +256,7 @@ Priority 1 pages to create:
 
 If someone else continues this work:
 
-1. Read `wiki/README.md` for structure
+1. Read `wiki/README_WIKI.md` for structure
 2. Follow existing page format
 3. Cross-reference related pages
 4. Update Home.md navigation when adding pages
