@@ -14,11 +14,13 @@ Welcome to the **AutoBoat Wiki**! This documentation provides comprehensive guid
 ## 📚 Quick Navigation
 
 ### 🚀 Getting Started
+
 - **[Installation Guide](Installation-Guide)** — Set up ROS 2, Gazebo, and AutoBoat
 - **[Quick Start](Quick-Start)** — Get your first mission running in 5 minutes
 - **[First Mission Tutorial](First-Mission-Tutorial)** — Step-by-step walkthrough
 
 ### 🏗️ Architecture
+
 - **[System Overview](System-Overview)** — High-level architecture and design philosophy
 - **[Vostok1 Architecture](Vostok1-Architecture)** — Integrated single-node system
 - **[Modular Architecture](Modular-Architecture)** — OKO-SPUTNIK-BURAN distributed system
@@ -26,6 +28,7 @@ Welcome to the **AutoBoat Wiki**! This documentation provides comprehensive guid
 - **[ROS 2 Topic Flow](ROS2-Topic-Flow)** — Inter-node communication diagram
 
 ### 📖 User Guides
+
 - **[Terminal Mission Control (CLI)](Terminal-Mission-Control)** — Command-line interface
 - **[Web Dashboard Guide](Web-Dashboard-Guide)** — Real-time monitoring interface
 - **[Keyboard Teleop](Keyboard-Teleop)** — Manual control for testing
@@ -33,6 +36,7 @@ Welcome to the **AutoBoat Wiki**! This documentation provides comprehensive guid
 - **[Launch Files Reference](Launch-Files-Reference)** — YAML and Python launch files
 
 ### 🧠 Core Concepts
+
 - **[GPS Navigation](GPS-Navigation)** — Coordinate systems and equirectangular projection
 - **[3D LIDAR Processing](3D-LIDAR-Processing)** — OKO perception system explained
 - **[PID Control](PID-Control)** — Heading controller fundamentals
@@ -40,6 +44,7 @@ Welcome to the **AutoBoat Wiki**! This documentation provides comprehensive guid
 - **[Kalman Filtering](Kalman-Filtering)** — State estimation and Bayesian inference
 
 ### 🛠️ Advanced Features
+
 - **[Smart Anti-Stuck System (SASS)](SASS)** — Intelligent recovery maneuvers
 - **[A* Path Planning](Astar-Path-Planning)** — Grid-based obstacle avoidance
 - **[Waypoint Skip Strategy](Waypoint-Skip-Strategy)** — Handling blocked waypoints
@@ -47,17 +52,20 @@ Welcome to the **AutoBoat Wiki**! This documentation provides comprehensive guid
 - **[Hazard Zone Management](Hazard-Zone-Management)** — Pre-defined no-go areas
 
 ### 🧪 Development
+
 - **[Contributing Guidelines](Contributing)** — How to contribute code
 - **[Code Review Standards](Code-Review-Standards)** — Best practices
 - **[Testing Guide](Testing-Guide)** — Unit tests and integration tests
 - **[API Reference](API-Reference)** — ROS 2 topics, services, and parameters
 
 ### 🐛 Troubleshooting
+
 - **[Common Issues](Common-Issues)** — Solutions to frequent problems
 - **[Debug Commands](Debug-Commands)** — Diagnostic tools
 - **[FAQ](FAQ)** — Frequently asked questions
 
 ### 📚 References
+
 - **[ROS 2 Resources](ROS2-Resources)** — External documentation
 - **[VRX Competition](VRX-Competition)** — Competition information
 - **[Related Projects](Related-Projects)** — Similar work and inspiration
