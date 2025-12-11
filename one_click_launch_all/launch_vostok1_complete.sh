@@ -12,7 +12,6 @@
 #   - BURAN Controller (PID control with obstacle avoidance)
 #   - Web Video Server (camera stream for dashboard)
 #   - Web Dashboard (real-time monitoring interface)
-#   - Optional: ----------------------------------------------
 # Default options
 # ----------------------------------------------------------------------------
 # Author: IMT Nord Europe UVAutoBoat Team
@@ -37,7 +36,7 @@
 #   - AutoBoat workspace built: cd ~/seal_ws && colcon build --merge-install # (seal_ws is example workspace)
 #   - rosbridge-suite: sudo apt install ros-jazzy-rosbridge-suite (Install if not already)
 #   - web_video_server: sudo apt install ros-jazzy-web-video-server (Install if not already)
-#   - GNOME Terminal available for multi-tab launch
+#   - GNOME Terminal installed (required for multi-tab launch)
 # ============================================================================
 
 set -e  # Exit on error
@@ -116,7 +115,7 @@ PROJET-17 Vostok1 Complete Launch Script
 Usage: ./launch_vostok1_complete.sh [OPTIONS]
 
 Options:
-  --world <world_name>       Gazebo world (default: sydney_regatta_smoke_wildlife)
+  --world <world_name>       Gazebo world (default: sydney_regatta_smoke)
   --skip-rviz                Skip RViz launch
   --skip-dashboard           Skip web dashboard launch
   --skip-camera              Skip web video server launch
