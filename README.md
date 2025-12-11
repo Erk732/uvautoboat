@@ -173,12 +173,12 @@ uvautoboat/
 | Wiki Page | Description |
 |:----------|:------------|
 | [Home](wiki/Home.md) | Wiki landing page with navigation |
-| [Installation Guide](wiki/Installation-Guide.md) | Step-by-step setup instructions |
-| [Quick Start](wiki/Quick-Start.md) | 5-minute quick start guide |
-| [System Overview](wiki/System-Overview.md) | Architecture and design philosophy |
+| [Installation Guide](wiki/Installation_Guide.md) | Step-by-step setup instructions |
+| [Quick Start](wiki/Quick_Start.md) | 5-minute quick start guide |
+| [System Overview](wiki/System_Overview.md) | Architecture and design philosophy |
 | [SASS](wiki/SASS.md) | Smart Anti-Stuck System deep-dive |
-| [3D LIDAR Processing](wiki/3D-LIDAR-Processing.md) | OKO perception system details |
-| [Common Issues](wiki/Common-Issues.md) | Comprehensive troubleshooting guide |
+| [3D LIDAR Processing](wiki/3D_LIDAR_Processing.md) | OKO perception system details |
+| [Common Issues](wiki/Common_Issues.md) | Comprehensive troubleshooting guide |
 
 ### System Requirements
 

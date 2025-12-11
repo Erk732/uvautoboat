@@ -14,13 +14,13 @@ Welcome to the **AutoBoat Wiki**! This documentation provides comprehensive guid
 
 ### 🚀 Getting Started
 
-- **[Installation Guide](Installation-Guide)** — Set up ROS 2, Gazebo, and AutoBoat
-- **[Quick Start](Quick-Start)** — Get your first mission running in 5 minutes
+- **[Installation Guide](Installation_Guide)** — Set up ROS 2, Gazebo, and AutoBoat
+- **[Quick Start](Quick_Start)** — Get your first mission running in 5 minutes
 - **[First Mission Tutorial](First-Mission-Tutorial)** — Step-by-step walkthrough
 
 ### 🏗️ Architecture
 
-- **[System Overview](System-Overview)** — High-level architecture and design philosophy
+- **[System Overview](System_Overview)** — High-level architecture and design philosophy
 - **[Vostok1 Architecture](Vostok1-Architecture)** — Integrated single-node system
 - **[Modular Architecture](Modular-Architecture)** — OKO-SPUTNIK-BURAN distributed system
 - **[Atlantis Architecture](Atlantis-Architecture)** — Control group approach
@@ -37,7 +37,7 @@ Welcome to the **AutoBoat Wiki**! This documentation provides comprehensive guid
 ### 🧠 Core Concepts
 
 - **[GPS Navigation](GPS-Navigation)** — Coordinate systems and equirectangular projection
-- **[3D LIDAR Processing](3D-LIDAR-Processing)** — OKO perception system explained
+- **[3D LIDAR Processing](3D_LIDAR_Processing)** — OKO perception system explained
 - **[PID Control](PID-Control)** — Heading controller fundamentals
 - **[Differential Thrust](Differential-Thrust)** — Two-thruster control system
 - **[Kalman Filtering](Kalman-Filtering)** — State estimation and Bayesian inference
@@ -59,7 +59,7 @@ Welcome to the **AutoBoat Wiki**! This documentation provides comprehensive guid
 
 ### 🐛 Troubleshooting
 
-- **[Common Issues](Common-Issues)** — Solutions to frequent problems
+- **[Common Issues](Common_Issues)** — Solutions to frequent problems
 - **[Debug Commands](Debug-Commands)** — Diagnostic tools
 - **[FAQ](FAQ)** — Frequently asked questions
 

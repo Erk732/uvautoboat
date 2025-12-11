@@ -11,12 +11,12 @@ The following pages have been created and are ready for upload:
 | Page | Description | Status |
 |:-----|:------------|:------:|
 | **Home.md** | Wiki landing page with navigation | ✅ Ready |
-| **Installation-Guide.md** | Complete setup instructions | ✅ Ready |
-| **Quick-Start.md** | 5-minute getting started guide | ✅ Ready |
-| **System-Overview.md** | Architecture and design philosophy | ✅ Ready |
+| **Installation_Guide.md** | Complete setup instructions | ✅ Ready |
+| **Quick_Start.md** | 5-minute getting started guide | ✅ Ready |
+| **System_Overview.md** | Architecture and design philosophy | ✅ Ready |
 | **SASS.md** | Smart Anti-Stuck System deep-dive | ✅ Ready |
-| **3D-LIDAR-Processing.md** | OKO perception system explained | ✅ Ready |
-| **Common-Issues.md** | Troubleshooting guide | ✅ Ready |
+| **3D_LIDAR_Processing.md** | OKO perception system explained | ✅ Ready |
+| **Common_Issues.md** | Troubleshooting guide | ✅ Ready |
 | **UPLOAD_INSTRUCTIONS.md** | How to upload these pages | ✅ Ready |
 
 ---

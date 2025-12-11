@@ -11,14 +11,14 @@ A comprehensive GitHub Wiki structure for the AutoBoat project with **9 document
 | # | Page | Size | Description |
 |:--|:-----|:-----|:------------|
 | 1 | **Home.md** | 4.4 KB | Landing page with full navigation to all sections |
-| 2 | **Installation-Guide.md** | 3.8 KB | Complete setup instructions for ROS 2, Gazebo, VRX |
-| 3 | **Quick-Start.md** | 4.2 KB | 5-minute quick start guide with multiple launch options |
-| 4 | **System-Overview.md** | 8.8 KB | Architecture comparison, data flow, design philosophy |
+| 2 | **Installation_Guide.md** | 3.8 KB | Complete setup instructions for ROS 2, Gazebo, VRX |
+| 3 | **Quick_Start.md** | 4.2 KB | 5-minute quick start guide with multiple launch options |
+| 4 | **System_Overview.md** | 8.8 KB | Architecture comparison, data flow, design philosophy |
 | 5 | **SASS.md** | 9.3 KB | Smart Anti-Stuck System deep-dive with Kalman filtering |
-| 6 | **3D-LIDAR-Processing.md** | 13 KB | OKO perception system - most detailed page |
-| 7 | **Common-Issues.md** | 12 KB | Comprehensive troubleshooting guide |
+| 6 | **3D_LIDAR_Processing.md** | 13 KB | OKO perception system - most detailed page |
+| 7 | **Common_Issues.md** | 12 KB | Comprehensive troubleshooting guide |
 | 8 | **UPLOAD_INSTRUCTIONS.md** | 6.7 KB | Step-by-step wiki upload guide (3 methods) |
-| 9 | **README.md** | 4.9 KB | Wiki directory documentation |
+| 9 | **README_WIKI.md** | 4.9 KB | Wiki directory documentation |
 
 **Total**: ~67 KB of documentation
 
@@ -117,17 +117,17 @@ All wiki files are in:
 
 Files ready for upload:
 
-```bash
+```text
 wiki/
 ├── Home.md                     # Wiki landing page
-├── Installation-Guide.md       # Setup instructions
-├── Quick-Start.md              # 5-min quick start
-├── System-Overview.md          # Architecture overview
+├── Installation_Guide.md       # Setup instructions
+├── Quick_Start.md              # 5-min quick start
+├── System_Overview.md          # Architecture overview
 ├── SASS.md                     # Smart Anti-Stuck System
-├── 3D-LIDAR-Processing.md      # OKO perception details
-├── Common-Issues.md            # Troubleshooting
+├── 3D_LIDAR_Processing.md      # OKO perception details
+├── Common_Issues.md            # Troubleshooting
 ├── UPLOAD_INSTRUCTIONS.md      # How to upload to GitHub
-└── README.md                   # Wiki directory docs
+└── README_WIKI.md              # Wiki directory docs
 ```
 
 ---
@@ -249,7 +249,7 @@ Priority 1 pages to create:
 ### Documentation Issues
 
 - **Wiki content questions**: Check UPLOAD_INSTRUCTIONS.md
-- **Technical issues**: See Common-Issues.md
+- **Technical issues**: See Common_Issues.md
 - **Feature requests**: Open GitHub issue
 
 ### Next Author

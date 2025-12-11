@@ -1,6 +1,6 @@
 # Quick Start
 
-Get AutoBoat running in 5 minutes! This guide assumes you've already completed the [Installation Guide](Installation-Guide).
+Get AutoBoat running in 5 minutes! This guide assumes you've already completed the [Installation Guide](Installation_Guide).
 
 ---
 
@@ -94,7 +94,8 @@ python3 -m http.server 8000
 ### Open Dashboard
 
 Open your browser and navigate to:
-```
+
+```bash
 http://localhost:8000
 ```
 
@@ -152,17 +153,20 @@ ros2 run plan vostok1_cli home
 ## What You Should See
 
 ### In Gazebo
+
 - The WAM-V boat moving through the water
 - Boat navigating toward waypoints
 - Thrusters creating water effects
 
 ### In Terminal
+
 - GPS coordinates and heading updates
 - Waypoint progress (e.g., "PT 3/19")
 - Obstacle detection status
 - Distance to target
 
 ### In Dashboard (if running)
+
 - Real-time boat position on map
 - GPS coordinates
 - Mission status and progress
@@ -223,4 +227,4 @@ rm -rf build install log
 colcon build --merge-install
 ```
 
-For more issues, see **[Common Issues](Common-Issues)**.
+For more issues, see **[Common Issues](Common_Issues)**.

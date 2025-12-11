@@ -15,6 +15,7 @@ Deep dive into the OKO perception system — 3D LIDAR point cloud processing for
 **LIDAR** (Light Detection and Ranging) uses laser pulses to create a 3D map of the environment. The WAM-V's 3D LIDAR returns thousands of points per scan, each with X, Y, Z coordinates.
 
 **Key Specifications:**
+
 - **Scan Rate**: ~10-20 Hz
 - **Points per Scan**: 10,000-50,000
 - **Range**: 0-100m (configurable)
@@ -71,6 +72,7 @@ OKO v2.0 uses an 8-step processing pipeline:
 | Extreme reflections | < -15m | Filter out |
 
 **Parameters:**
+
 - `min_height`: -15.0m (default)
 - `max_height`: +10.0m (default)
 
@@ -89,6 +91,7 @@ OKO v2.0 uses an 8-step processing pipeline:
 | **> 50m** | Too distant for navigation decisions |
 
 **Parameters:**
+
 - `min_range`: 5.0m (default)
 - `max_range`: 50.0m (default)
 
@@ -101,15 +104,18 @@ OKO v2.0 uses an 8-step processing pipeline:
 **Purpose**: Filter water surface reflections that aren't actual obstacles
 
 **Algorithm:**
+
 1. Calculate **5th percentile** of Z values (low points = likely water)
 2. Set water plane Z estimate
 3. Remove points within ±0.5m of water plane
 
 **Why 5th percentile?**
+
 - Robust to outliers (not affected by obstacles above water)
 - Adapts to varying water surface height in simulation
 
 **Parameter:**
+
 - `water_plane_threshold`: 0.5m (tolerance)
 
 ---
@@ -128,6 +134,7 @@ OKO v2.0 uses an 8-step processing pipeline:
 
 **Adaptive Front Sector:**
 The front sector width adjusts based on target heading error:
+
 - Small error → Narrow sector (focused ahead)
 - Large error (turning) → Wide sector (check periphery)
 
@@ -150,20 +157,24 @@ If sector is empty → clearance = `max_range` (50m)
 **Purpose**: Reduce false positives from noise or transient reflections
 
 **Algorithm:**
+
 - Maintain **5-scan history** (rolling window)
 - For each sector, count detections in last 5 scans
 - Confirm obstacle only if detected in **≥3 out of 5 scans** (60%)
 
 **Parameters:**
+
 - `temporal_history_size`: 5 (default)
 - `temporal_threshold`: 3 (default)
 
 **Benefits:**
+
 - **Reduces flickering**: Transient reflections don't trigger false alarms
 - **Maintains responsiveness**: 3/5 threshold allows quick detection (≤500ms)
 - **Adapts to scan rate**: Works with varying LIDAR frequencies
 
 **Example:**
+
 ```text
 Scan 1: Front obstacle at 8m ✓
 Scan 2: Front clear (noise)
@@ -198,6 +209,7 @@ else:
 | 5m | 1.0 | 🚨 Critical |
 
 **Benefits:**
+
 - **Smooth thrust reduction**: Gradual slowdown instead of sudden stop
 - **Proportional response**: Closer obstacles → stronger reaction
 - **Better control**: No oscillation between "go" and "stop"
@@ -211,16 +223,19 @@ else:
 **Algorithm**: DBSCAN (Density-Based Spatial Clustering)
 
 **Parameters:**
+
 - `cluster_distance` (eps): 2.0m (max distance between cluster points)
 - `min_cluster_size` (min_samples): 3 (min points to form obstacle)
 
 **Output**: List of obstacles with:
+
 - **Centroid**: Average (x, y) position
 - **Size**: Number of points
 - **Distance**: Range from boat
 - **Angle**: Bearing (degrees)
 
 **Example JSON:**
+
 ```json
 "clusters": [
   {"x": 8.2, "y": 1.5, "size": 25, "distance": 8.5, "angle_deg": 10.3},
@@ -235,16 +250,19 @@ else:
 **Purpose**: Find passable gaps between obstacles for navigation
 
 **Algorithm:**
+
 1. Sort obstacles by angle
 2. Calculate angular gap between consecutive obstacles
 3. Filter gaps > minimum width (3m default)
 
 **Output**: List of gaps with:
+
 - **Angle**: Direction (degrees)
 - **Width**: Gap size (meters)
 - **Distance**: Range to gap
 
 **Example JSON:**
+
 ```json
 "gaps": [
   {"angle_deg": -25.0, "width": 5.2, "distance": 15.0},
@@ -261,14 +279,17 @@ else:
 **Purpose**: Track obstacles across frames to detect movement
 
 **Algorithm:**
+
 1. Match obstacles between consecutive scans (nearest neighbor)
 2. Calculate displacement over time
 3. Estimate velocity vector (vx, vy)
 
 **Parameters:**
+
 - `velocity_history_size`: 5 frames (default)
 
 **Output**: Moving obstacles with velocity:
+
 ```json
 "moving_obstacles": [
   {"id": "obs_0", "vx": 0.5, "vy": 0.1, "speed": 0.51}
@@ -337,6 +358,7 @@ OKO publishes obstacle information to `/perception/obstacle_info` as JSON:
 ### Problem: Too Many False Alarms
 
 **Solution**: Increase temporal filtering
+
 ```yaml
 temporal_history_size: 7
 temporal_threshold: 5  # Require 5/7 detections
@@ -345,6 +367,7 @@ temporal_threshold: 5  # Require 5/7 detections
 ### Problem: Slow Reaction to Obstacles
 
 **Solution**: Reduce temporal filtering
+
 ```yaml
 temporal_history_size: 3
 temporal_threshold: 2  # Require 2/3 detections
@@ -353,6 +376,7 @@ temporal_threshold: 2  # Require 2/3 detections
 ### Problem: Water Reflections Detected as Obstacles
 
 **Solution**: Adjust water plane removal
+
 ```yaml
 water_plane_threshold: 0.8  # More aggressive filtering
 ```
@@ -360,6 +384,7 @@ water_plane_threshold: 0.8  # More aggressive filtering
 ### Problem: Missing Small Obstacles
 
 **Solution**: Reduce cluster size requirement
+
 ```yaml
 min_cluster_size: 2  # Detect obstacles with only 2 points
 ```
@@ -367,6 +392,7 @@ min_cluster_size: 2  # Detect obstacles with only 2 points
 ### Problem: "CRITICAL" Warning at Spawn
 
 **Solution**: Increase minimum range
+
 ```yaml
 min_range: 7.0  # Ignore nearby dock
 ```
@@ -417,6 +443,6 @@ rviz2
 ## Related Pages
 
 - **[Obstacle Avoidance Loop](Obstacle-Avoidance-Loop)** — How OKO integrates with control
-- **[System Overview](System-Overview)** — High-level architecture
+- **[System Overview](System_Overview)** — High-level architecture
 - **[Configuration & Tuning](Configuration-and-Tuning)** — Parameter reference
 - **[Modular Architecture](Modular-Architecture)** — OKO's role in the system
