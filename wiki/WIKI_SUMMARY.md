@@ -111,13 +111,13 @@ The main README should become a **landing page** with:
 
 All wiki files are in:
 
-```
+```bash
 /home/bot/seal_ws/src/uvautoboat/wiki/
 ```
 
 Files ready for upload:
 
-```
+```bash
 wiki/
 ├── Home.md                     # Wiki landing page
 ├── Installation-Guide.md       # Setup instructions
@@ -274,7 +274,7 @@ We've created a **solid foundation** for the AutoBoat GitHub Wiki:
 - ✅ **Upload guide** with 3 methods
 - ✅ **25+ pages planned** for complete coverage
 
-**The wiki is ready to go live! 🚀**
+### The wiki is ready to go live! 🚀
 
 Just follow the upload instructions and you'll have a professional documentation site for your AutoBoat project.
 
