@@ -68,24 +68,24 @@ launch:
     - name: hysteresis_distance
       value: 2.0        # More slack to avoid chatter
     - name: min_height
-      value: -1.2       # Keep more low returns
+      value: -0.8       # Filter water/banks, keep piers (LiDAR@1.8m: water≈-1.8m, piers≈-0.5m)
     - name: max_height
-      value: 2.0        # Focus on pier/boat geometry, ignore tall clutter
+      value: 1.5        # Focus on navigation hazards, ignore tall structures
     - name: min_range
       value: 2.2        # Keep closer returns, still filter hull
     - name: max_range
-      value: 75.0       # Full sensor useful range
+      value: 100.0      # Extended range for early detection (LiDAR max: 130m)
     - name: sample_rate
-      value: 1          # Process ALL points for maximum detection
+      value: 1          # Process ALL points (30k points/scan optimal for detection)
     # Enhanced OKO v2.0 parameters (tuned for faster response)
     - name: temporal_history_size
       value: 3          # Reduced: faster response
     - name: temporal_threshold
       value: 2          # Require 2/3 detections to confirm
     - name: cluster_distance
-      value: 2.5        # Max distance between cluster points (m) - tuned for 3D LiDAR
+      value: 3.0        # Cluster tolerance for high-density LiDAR (1875×16 samples)
     - name: min_cluster_size
-      value: 6          # Allow smaller clusters
+      value: 8          # Require more points due to higher point density
     - name: water_plane_threshold
       value: 0.32       # Balance water rejection vs dropouts
     - name: velocity_history_size
@@ -190,6 +190,8 @@ launch:
       value: 18.0         # Very mild differential steering
     - name: use_vfh_bias
       value: false        # Disable VFH/polar steering bias by default
+    - name: max_avoidance_turn_deg
+      value: 20.0         # Maximum obstacle avoidance turn angle (degrees)
 
 # ============================================================================
 # Waypoint Visualizer - RViz Visualization (Optional but Recommended)

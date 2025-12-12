@@ -854,9 +854,9 @@ Runtime parameter tuning:
 
 ---
 
-## Smart Anti-Stuck System (SASS) 
+## Smart Anti-Stuck System (SASS)
 
-Intelligent recovery system when the boat becomes trapped or immobilized. 
+Intelligent recovery system when the boat becomes trapped or immobilized.
 The Vostok1 (Buran) controller implements the full Smart Anti-Stuck System, featuring multi-phase escape maneuvers (Probe -> Reverse -> Turn -> Forward). The Atlantis controller utilizes a reactive obstacle avoidance logic with reverse recovery capabilities.
 
 ### SASS Features

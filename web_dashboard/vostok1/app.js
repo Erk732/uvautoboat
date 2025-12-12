@@ -1223,11 +1223,10 @@ function sendConfig(pidOnly = false, restart = false) {
     console.log('Config sent to both vostok1 and sputnik:', config);
 
     // Show success feedback toast
-    const paramCount = Object.keys(config).length;
     if (pidOnly) {
-        showFeedback(`✅ PID: All ${paramCount} parameters applied successfully!`, 'success');
+        showFeedback(`✅ PID: All 3 parameters applied successfully!`, 'success');
     } else {
-        showFeedback(`✅ Advanced Config: All ${paramCount} parameters applied successfully!`, 'success');
+        showFeedback(`✅ Advanced Config: All 6 parameters applied successfully!`, 'success');
     }
 }
 
@@ -2013,6 +2012,7 @@ const TUNING_PRESETS = {
             bank_slow_factor: 0.22,
             avoid_diff_gain: 35.0,
             use_vfh_bias: true,
+            max_avoidance_turn_deg: 20.0,
             stuck_timeout: 3.5,
             stuck_threshold: 0.9,
             no_go_zone_radius: 8.0,
@@ -2053,6 +2053,7 @@ const TUNING_PRESETS = {
             bank_slow_factor: 0.2,
             avoid_diff_gain: 40.0,
             use_vfh_bias: true,
+            max_avoidance_turn_deg: 25.0,
             stuck_timeout: 3.0,
             stuck_threshold: 1.0,
             no_go_zone_radius: 6.0,
@@ -2093,6 +2094,7 @@ const TUNING_PRESETS = {
             bank_slow_factor: 0.2,
             avoid_diff_gain: 30.0,
             use_vfh_bias: true,
+            max_avoidance_turn_deg: 15.0,
             stuck_timeout: 4.0,
             stuck_threshold: 0.8,
             no_go_zone_radius: 10.0,
@@ -2133,6 +2135,7 @@ const TUNING_PRESETS = {
             bank_slow_factor: 0.3,
             avoid_diff_gain: 30.0,
             use_vfh_bias: true,
+            max_avoidance_turn_deg: 15.0,
             stuck_timeout: 4.0,
             stuck_threshold: 0.8,
             no_go_zone_radius: 10.0,
@@ -2252,6 +2255,9 @@ function updateBuranInputs(params) {
     document.getElementById('buran-bank-slow').value = params.bank_slow_factor;
     document.getElementById('buran-avoid-gain').value = params.avoid_diff_gain;
     document.getElementById('buran-use-vfh').value = params.use_vfh_bias.toString();
+    if (params.max_avoidance_turn_deg !== undefined) {
+        document.getElementById('buran-max-turn').value = params.max_avoidance_turn_deg;
+    }
     document.getElementById('buran-stuck-timeout').value = params.stuck_timeout;
     document.getElementById('buran-stuck-threshold').value = params.stuck_threshold;
     document.getElementById('buran-no-go-radius').value = params.no_go_zone_radius;
@@ -2327,6 +2333,7 @@ function applyBuranParameters(presetParams = null) {
         bank_slow_factor: parseFloat(document.getElementById('buran-bank-slow').value),
         avoid_diff_gain: parseFloat(document.getElementById('buran-avoid-gain').value),
         use_vfh_bias: document.getElementById('buran-use-vfh').value === 'true',
+        max_avoidance_turn_deg: parseFloat(document.getElementById('buran-max-turn').value),
         stuck_timeout: parseFloat(document.getElementById('buran-stuck-timeout').value),
         stuck_threshold: parseFloat(document.getElementById('buran-stuck-threshold').value),
         no_go_zone_radius: parseFloat(document.getElementById('buran-no-go-radius').value),
@@ -2517,6 +2524,9 @@ window.addEventListener('load', () => {
 const missionHistory = [];
 const MAX_HISTORY_ENTRIES = 100;
 let historyExpanded = false;
+let historyUpdatePending = false;
+let lastHistoryUpdate = 0;
+const HISTORY_UPDATE_THROTTLE = 500; // Update display max once per 500ms
 
 // Initialize mission history
 function initMissionHistory() {
@@ -2569,7 +2579,28 @@ function addHistoryEvent(type, message, data = {}) {
         missionHistory.pop();
     }
 
-    updateHistoryDisplay();
+    // Throttle display updates to prevent rapid flickering
+    scheduleHistoryUpdate();
+}
+
+// Schedule a throttled history display update
+function scheduleHistoryUpdate() {
+    const now = Date.now();
+
+    // If enough time has passed since last update, update immediately
+    if (now - lastHistoryUpdate >= HISTORY_UPDATE_THROTTLE) {
+        updateHistoryDisplay();
+        lastHistoryUpdate = now;
+        historyUpdatePending = false;
+    } else if (!historyUpdatePending) {
+        // Schedule an update for later
+        historyUpdatePending = true;
+        setTimeout(() => {
+            updateHistoryDisplay();
+            lastHistoryUpdate = Date.now();
+            historyUpdatePending = false;
+        }, HISTORY_UPDATE_THROTTLE - (now - lastHistoryUpdate));
+    }
 }
 
 // Update history display in UI

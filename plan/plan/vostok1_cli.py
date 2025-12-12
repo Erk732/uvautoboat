@@ -35,9 +35,12 @@ Usage (Modular - Sputnik Planner - Default):
     
     # Set PID parameters
     ros2 run plan vostok1_cli pid --kp 400 --ki 20 --kd 100
-    
+
     # Set speed
     ros2 run plan vostok1_cli speed --base 500 --max 800
+
+    # Generate with custom parameters (PID, speed, and turn angle)
+    ros2 run plan vostok1_cli generate --kp 500 --ki 20 --kd 150 --base 400 --max 800 --max-turn 20
     
     # Show current status
     ros2 run plan vostok1_cli status
@@ -262,10 +265,10 @@ class MissionCLI(Node):
         self.get_logger().info(f"Sent config: {config}")
         
     def generate_waypoints(self, lanes=8, length=50.0, width=20.0,
-                            kp=None, ki=None, kd=None, base_speed=None, max_speed=None,
+                            kp=None, ki=None, kd=None, base_speed=None, max_speed=None, max_turn=None,
                             hazard=False, hazard_boxes=None, hazard_origin_x=None, hazard_origin_y=None,
                             astar=False, astar_hybrid=False, astar_resolution=None, astar_safety=None, astar_max=None):
-        """Generate waypoints with specified parameters and optional PID/speed/hazard/A* config"""
+        """Generate waypoints with specified parameters and optional PID/speed/turn/hazard/A* config"""
         # Wait for navigation system to be ready
         if not self.wait_for_ready():
             return False
@@ -277,7 +280,7 @@ class MissionCLI(Node):
             'scan_width': width
         }
         
-        # Add PID/speed if specified (for BURAN - it also listens to /sputnik/set_config)
+        # Add PID/speed/turn if specified (for BURAN - it also listens to /sputnik/set_config)
         if kp is not None:
             config['kp'] = kp
         if ki is not None:
@@ -288,6 +291,8 @@ class MissionCLI(Node):
             config['base_speed'] = base_speed
         if max_speed is not None:
             config['max_speed'] = max_speed
+        if max_turn is not None:
+            config['max_avoidance_turn_deg'] = max_turn
 
         # Hazard/A* options
         if hazard:
@@ -623,6 +628,7 @@ Examples:
     gen_parser.add_argument('--kd', type=float, help='PID Derivative gain (optional)')
     gen_parser.add_argument('--base', type=float, help='Base speed in N (optional)')
     gen_parser.add_argument('--max', type=float, help='Max speed in N (optional)')
+    gen_parser.add_argument('--max-turn', type=float, help='Max avoidance turn angle in degrees (optional, BURAN)')
     # Hazard/A* options (forwarded to Sputnik)
     gen_parser.add_argument('--hazard', action='store_true', help='Enable hazard avoidance (Sputnik)')
     gen_parser.add_argument('--hazard-boxes', type=str, help='Hazard world boxes string \"xmin,ymin,xmax,ymax;...\"')
@@ -669,7 +675,7 @@ Examples:
             cli.generate_waypoints(
                 args.lanes, args.length, args.width,
                 kp=args.kp, ki=args.ki, kd=args.kd,
-                base_speed=args.base, max_speed=args.max,
+                base_speed=args.base, max_speed=args.max, max_turn=args.max_turn,
                 hazard=args.hazard, hazard_boxes=args.hazard_boxes,
                 hazard_origin_x=args.hazard_origin_x, hazard_origin_y=args.hazard_origin_y,
                 astar=args.astar, astar_hybrid=args.astar_hybrid,

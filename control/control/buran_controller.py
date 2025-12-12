@@ -165,7 +165,8 @@ class BuranController(Node):
         # Softer avoidance steering to avoid sharp pivots
         self.declare_parameter('avoid_diff_gain', 25.0)  # VFH/polar differential steering gain (reduced from 40)
         self.declare_parameter('use_vfh_bias', False)    # Enable/disable VFH/polar steering bias
-        
+        self.declare_parameter('max_avoidance_turn_deg', 20.0)  # Maximum turn angle during obstacle avoidance (degrees)
+
         # Smart anti-stuck parameters
         self.declare_parameter('stuck_timeout', 3.0)
         self.declare_parameter('stuck_threshold', 0.5)
@@ -196,6 +197,7 @@ class BuranController(Node):
         self.reverse_timeout = self.get_parameter('reverse_timeout').value
         self.max_reverse_distance = float(self.get_parameter('max_reverse_distance').value)
         self.avoid_diff_gain = float(self.get_parameter('avoid_diff_gain').value)
+        self.max_avoidance_turn_deg = float(self.get_parameter('max_avoidance_turn_deg').value)
         self.use_vfh_bias = bool(self.get_parameter('use_vfh_bias').value)
         
         # Smart anti-stuck parameters
@@ -262,7 +264,8 @@ class BuranController(Node):
         self.escape_phase = 0
         self.consecutive_stuck_count = 0
         self.adaptive_escape_duration = 12.0
-        
+        self.no_go_check_counter = 0  # Counter to prevent infinite no-go zone loops
+
         # No-go zones (obstacle memory)
         self.no_go_zones = []  # List of (x, y, radius)
         
@@ -530,6 +533,9 @@ class BuranController(Node):
             if 'use_vfh_bias' in config:
                 self.use_vfh_bias = bool(config['use_vfh_bias'])
                 updated.append(f"use_vfh_bias={self.use_vfh_bias}")
+            if 'max_avoidance_turn_deg' in config:
+                self.max_avoidance_turn_deg = float(config['max_avoidance_turn_deg'])
+                updated.append(f"max_avoid_turn={self.max_avoidance_turn_deg}°")
 
             # Smart Anti-Stuck System (SASS) parameters
             if 'stuck_timeout' in config:
@@ -669,12 +675,14 @@ class BuranController(Node):
                 direction = f"GAP {gap_direction_deg:.0f}° ({gap_width:.0f}° wide)"
             elif self.left_clear > self.right_clear:
                 # Fallback: Turn towards clearer side
-                # Use urgency to scale turn angle: higher urgency = sharper turn, but keep it mild (30°-60°)
-                turn_angle = math.radians(30) + (self.urgency * math.radians(30))  # 30° to 60°
+                # Use urgency to scale turn angle: 0.5 × max_turn to 1.0 × max_turn
+                max_turn = math.radians(self.max_avoidance_turn_deg)
+                turn_angle = 0.5 * max_turn + (self.urgency * 0.5 * max_turn)
                 avoidance_heading = self.current_yaw + turn_angle
                 direction = "GAUCHE/LEFT"
             else:
-                turn_angle = math.radians(30) + (self.urgency * math.radians(30))  # 30° to 60°
+                max_turn = math.radians(self.max_avoidance_turn_deg)
+                turn_angle = 0.5 * max_turn + (self.urgency * 0.5 * max_turn)
                 avoidance_heading = self.current_yaw - turn_angle
                 direction = "DROITE/RIGHT"
 
@@ -896,6 +904,7 @@ class BuranController(Node):
                     self.escape_mode = True
                     self.escape_start_time = self.get_clock().now()
                     self.escape_phase = 0
+                    self.no_go_check_counter = 0  # Reset counter for new escape
                     self.integral_error = 0.0
                     self.last_escape_position = (self.current_x, self.current_y)
                     self.best_escape_direction = None
@@ -1010,12 +1019,17 @@ class BuranController(Node):
         # PHASE 3: Forward test
         elif elapsed < forward_end:
             self.escape_phase = 3
-            if self.is_heading_toward_no_go_zone():
-                self.get_logger().warn("Forward leads to no-go zone - extra turn")
+            # Check no-go zone but limit attempts to prevent infinite loop
+            if self.is_heading_toward_no_go_zone() and self.no_go_check_counter < 10:
+                self.no_go_check_counter += 1
+                self.get_logger().warn(f"Forward leads to no-go zone - extra turn ({self.no_go_check_counter}/10)")
                 self.send_thrust(-300.0, 300.0)
             else:
+                # Force forward after too many no-go checks or if path is clear
+                if self.no_go_check_counter >= 10:
+                    self.get_logger().warn("⚠️ Too many no-go checks - forcing forward to break loop")
                 self.send_thrust(300.0 + drift_comp_left, 300.0 + drift_comp_right)
-            
+
             self.get_logger().info(f"Phase 3: FORWARD TEST ({elapsed:.1f}s/{forward_end:.1f}s)", throttle_duration_sec=1.0)
             return
         
