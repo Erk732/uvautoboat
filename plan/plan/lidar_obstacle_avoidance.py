@@ -47,11 +47,13 @@ class LidarObstacleDetector:
             try:
                 x, y, z = struct.unpack_from('fff', data, i)
                 
+                # Skip invalid points
                 if math.isnan(x) or math.isinf(x) or math.isnan(y) or math.isinf(y):
                     continue
                 
                 distance = math.sqrt(x*x + y*y)
                 
+                # Filters
                 if distance < self.min_distance or distance > self.max_distance:
                     continue
                 if self.z_filter_enabled and (z < self.min_height or z > self.max_height):
@@ -88,32 +90,6 @@ class ObstacleClustering:
             clusters.append(cluster)
         return clusters
 
-class ObstacleClassifier:
-    """
-    Classifies clusters into 'OBSTACLE' or 'SMOKE'
-    """
-    def __init__(self):
-        pass
-
-    def is_smoke(self, cluster: List[Obstacle]) -> bool:
-        """
-        Determines if a cluster is smoke based on Z-height and density.
-        - Smoke: Floats above water (Min Z > 0.5m)
-        - Obstacle: Touches water (Min Z <= 0.5m)
-        """
-        if not cluster: return False
-        
-        # 1. Height Heuristic
-        # Find the lowest point in the cluster
-        min_z = min(o.z for o in cluster)
-        
-        # If the LOWEST point is floating high above water (> 0.5m), it's likely smoke/fog
-        # Real objects (buoys, docks, boats) usually touch the water line (z ~ 0.0)
-        if min_z > 0.6: 
-            return True
-            
-        return False
-
 class ObstacleAvoider:
     def __init__(self, safe_distance: float = 10.0, look_ahead: float = 15.0):
         self.safe_distance = safe_distance
@@ -122,11 +98,12 @@ class ObstacleAvoider:
     def get_avoidance_waypoint(self, clusters, current_pos, target_waypoint):
         if not clusters: return None
         
+        # Find closest obstacle in front
         min_dist = float('inf')
         closest_obs = None
         for cluster in clusters:
             for obs in cluster:
-                if obs.x < 0: continue
+                if obs.x < 0: continue # Ignore behind
                 if obs.distance < min_dist:
                     min_dist = obs.distance
                     closest_obs = obs
@@ -141,18 +118,21 @@ class ObstacleAvoider:
         target_dy = tgt_y - curr_y
         target_dist = math.sqrt(target_dx**2 + target_dy**2)
         
-        if target_dist < 0.1: return None 
+        # FIX: Avoid division by zero or micro-movements
+        if target_dist < 0.1:
+            return None 
         
         target_dx /= target_dist
         target_dy /= target_dist
         
+        # Perpendicular shift
         perp_dx = -target_dy
         perp_dy = target_dx
         
-        if closest_obs.y > 0:
+        if closest_obs.y > 0: # Obstacle Left -> Go Right
             avoidance_x = curr_x + perp_dx * self.safe_distance + target_dx * self.look_ahead
             avoidance_y = curr_y + perp_dy * self.safe_distance + target_dy * self.look_ahead
-        else:
+        else: # Obstacle Right -> Go Left
             avoidance_x = curr_x - perp_dx * self.safe_distance + target_dx * self.look_ahead
             avoidance_y = curr_y - perp_dy * self.safe_distance + target_dy * self.look_ahead
             

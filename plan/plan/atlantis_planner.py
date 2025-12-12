@@ -12,10 +12,10 @@ import time
 import math
 import struct
 
+# Related import (Works when there is __init__.py)
 from .lidar_obstacle_avoidance import (
     LidarObstacleDetector,
     ObstacleClustering,
-    ObstacleClassifier,  # Added
     ObstacleAvoider,
     RealtimeObstacleMonitor
 )
@@ -47,8 +47,6 @@ class AtlantisPlanner(Node):
         self.pub_waypoints = self.create_publisher(String, '/atlantis/waypoints', 10)
         self.pub_config = self.create_publisher(String, '/atlantis/config', 10)
         self.pub_obstacle_map = self.create_publisher(String, '/atlantis/obstacle_map', 10)
-        self.pub_smoke = self.create_publisher(String, '/atlantis/smoke_status', 10) # NEW
-        
         self.create_subscription(Empty, '/atlantis/replan', self.replan_callback, 10)
         self.create_subscription(PointCloud2, '/wamv/sensors/lidars/lidar_wamv_sensor/points', self.lidar_callback, 10)
         
@@ -58,6 +56,7 @@ class AtlantisPlanner(Node):
         self.create_timer(1.0, self.publish_path)
         self.create_timer(1.0, self.publish_config)
         self.create_timer(0.5, self.publish_obstacle_map)
+        self.create_timer(2.0, self.publish_lidar_statistics)
 
         # State
         self.path_msg = Path()
@@ -68,6 +67,12 @@ class AtlantisPlanner(Node):
         self.path_version = 0
         self.mission_enabled = False
         
+        # Stats
+        self.lidar_signal_count = 0
+        self.lidar_obstacle_detections = 0
+        self.lidar_clear_detections = 0
+        self.lidar_detection_rate = 0.0
+        
         # --- OBSTACLE AVOIDANCE MODULES ---
         self.lidar_detector = LidarObstacleDetector(
             min_distance=self.get_parameter('obstacle_min_distance').value,
@@ -76,8 +81,6 @@ class AtlantisPlanner(Node):
         self.clusterer = ObstacleClustering(
             cluster_radius=self.get_parameter('obstacle_cluster_radius').value
         )
-        self.classifier = ObstacleClassifier() # NEW
-        
         self.avoider = ObstacleAvoider(
             safe_distance=self.get_parameter('planner_safe_dist').value,
             look_ahead=self.get_parameter('obstacle_lookahead').value
@@ -85,13 +88,14 @@ class AtlantisPlanner(Node):
         self.monitor = RealtimeObstacleMonitor()
         
         self.current_obstacles = []
-        
+        self.current_clusters = []
+
         # Auto Start
         threading.Timer(2.0, self.generate_lawnmower_path).start()
         self.input_thread = threading.Thread(target=self.input_loop, daemon=True)
         self.input_thread.start()
         
-        self.get_logger().info("Atlantis Planner Started (Smoke Detection Enabled)")
+        self.get_logger().info("Atlantis Planner Started")
 
     def input_loop(self):
         time.sleep(1.0)
@@ -109,74 +113,88 @@ class AtlantisPlanner(Node):
 
     def lidar_callback(self, msg):
         try:
+            self.lidar_signal_count += 1
             sampling_factor = self.get_parameter('lidar_sampling_factor').value
             
-            # 1. Get ALL raw points
-            all_obstacles = self.lidar_detector.process_pointcloud(
+            # Extract raw pointcloud → includes smoke
+            self.current_obstacles = self.lidar_detector.process_pointcloud(
                 msg.data, msg.point_step, sampling_factor
             )
-            
-            # 2. Cluster them
-            clusters = self.clusterer.cluster_obstacles(all_obstacles)
-            
-            # 3. Classify: Split into SMOKE and SOLIDS
-            solid_points = []
-            smoke_detected = False
-            smoke_pos = None
-            
-            for cluster in clusters:
-                if self.classifier.is_smoke(cluster):
-                    smoke_detected = True
-                    # Avg pos
-                    cx = sum(o.x for o in cluster)/len(cluster)
-                    cy = sum(o.y for o in cluster)/len(cluster)
-                    smoke_pos = (cx, cy)
-                else:
-                    solid_points.extend(cluster)
-            
-            # 4. Pipeline A: Obstacle Avoidance (Solids Only)
-            self.current_obstacles = solid_points
+
+            # ---------------------------------------------------------
+            # 🔥 SMOKE FILTERING AREA (ADD THIS BLOCK)
+            # ---------------------------------------------------------
+            filtered = []
+            for obs in self.current_obstacles:
+
+                # 1. Smoke intensity is extremely low (optional: only if you have intensity)
+                try:
+                    if hasattr(obs, "intensity") and obs.intensity < 5.0:
+                        continue
+                except:
+                    pass
+
+                # 2. Smoke floats → remove high points
+                if abs(obs.z) > 0.5:  
+                    continue
+
+                # 3. Smoke is very close to sensor (0–2 m)
+                dist = math.sqrt(obs.x**2 + obs.y**2)
+                if dist < 2.0:
+                    continue
+
+                filtered.append(obs)
+
+            # Replace obstacles with filtered list
+            self.current_obstacles = filtered
+            # ---------------------------------------------------------
+
+            # Detection counts
+            if len(self.current_obstacles) > 0:
+                self.lidar_obstacle_detections += 1
+            else:
+                self.lidar_clear_detections += 1
+
+            if self.lidar_signal_count > 0:
+                self.lidar_detection_rate = (
+                    self.lidar_obstacle_detections / self.lidar_signal_count * 100.0
+                )
+
+            # Proceed normally with filtered obstacles
+            self.current_clusters = self.clusterer.cluster_obstacles(self.current_obstacles)
             self.monitor.analyze_sectors(self.current_obstacles)
             self.known_obstacles = [(obs.x, obs.y) for obs in self.current_obstacles]
-            
-            # 5. Pipeline B: Smoke Reporting
-            if smoke_detected:
-                # Log to terminal (throttled logic implied by repeated calls, use simple counter or random)
-                if int(time.time() * 10) % 20 == 0: # approx 2Hz log
-                    self.get_logger().warn(f"🌫️ SMOKE DETECTED at ({smoke_pos[0]:.1f}, {smoke_pos[1]:.1f})!")
-                
-                status_msg = json.dumps({
-                    'smoke_detected': True,
-                    'position': {'x': round(smoke_pos[0], 1), 'y': round(smoke_pos[1], 1)}
-                })
-                self.pub_smoke.publish(String(data=status_msg))
-            else:
-                self.pub_smoke.publish(String(data=json.dumps({'smoke_detected': False})))
                     
         except Exception as e:
             self.get_logger().error(f"LIDAR callback error: {e}")
 
+
     def is_point_safe(self, x, y):
         safe_dist = self.get_parameter('planner_safe_dist').value
-        # Only checks known_obstacles (which now excludes smoke)
         for obs_x, obs_y in self.known_obstacles:
             dist = math.sqrt((x - obs_x)**2 + (y - obs_y)**2)
             if dist < safe_dist:
                 return False, obs_x, obs_y
         return True, None, None
 
+    # --- NEW: SAFETY LINE CHECK ---
     def is_line_safe(self, x1, y1, x2, y2):
+        """Walks along the line checking for obstacles every 2m"""
         dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
         steps = int(dist / 2.0)
+        
         if steps == 0: return True
+
         for i in range(steps + 1):
             t = i / steps
             check_x = x1 + (x2 - x1) * t
             check_y = y1 + (y2 - y1) * t
+            
             is_safe, _, _ = self.is_point_safe(check_x, check_y)
             if not is_safe:
                 return False
         return True
+    # -----------------------------
 
     def adjust_point_for_obstacles(self, x, y, target_x=None, target_y=None):
         is_safe, obs_x, obs_y = self.is_point_safe(x, y)
@@ -284,6 +302,10 @@ class AtlantisPlanner(Node):
 
         self.get_logger().info(f"GENERATED: Mission Path ({len(self.waypoints)} points)")
         self.publish_path()
+
+    def publish_lidar_statistics(self):
+        # Kept brief for brevity
+        pass
 
     def publish_path(self):
         self.path_msg.header.stamp = self.get_clock().now().to_msg()
