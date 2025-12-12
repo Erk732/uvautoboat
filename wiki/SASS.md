@@ -34,6 +34,7 @@ SASS triggers when the boat is **stuck**:
 | **Thrust applied** | Yes (not idle) |
 
 **Example Log:**
+
 ```text
 🚨 BLOQUÉ! | STUCK! - No progress for 3.5s
 🔧 SASS PHASE 0: PROBE - Scanning best escape direction...
@@ -46,7 +47,8 @@ SASS triggers when the boat is **stuck**:
 SASS executes a carefully designed sequence:
 
 ### Phase 0: PROBE (0-2s)
-**Multi-direction scanning to find best escape route**
+
+#### Multi-direction scanning to find best escape route
 
 | Direction | Check |
 |:----------|:------|
@@ -63,7 +65,8 @@ The system chooses the direction with **maximum clearance**.
 ```
 
 ### Phase 1: REVERSE (2s-~6s)
-**Back away from obstacle**
+
+#### Back away from obstacle
 
 - **Thrust**: Both thrusters in reverse
 - **Power**: -400 to -500 N (configurable)
@@ -74,7 +77,8 @@ The system chooses the direction with **maximum clearance**.
 ```
 
 ### Phase 2: TURN (~6s-~10s)
-**Rotate toward best escape direction**
+
+#### Rotate toward best escape direction
 
 - **Left turn**: Left=-500, Right=+500
 - **Right turn**: Left=+500, Right=-500
@@ -85,7 +89,8 @@ The system chooses the direction with **maximum clearance**.
 ```
 
 ### Phase 3: FORWARD (~10s-~12s)
-**Test forward movement with drift compensation**
+
+#### Test forward movement with drift compensation
 
 - **Thrust**: Forward with Kalman-filtered drift correction
 - **Monitoring**: Checks if movement resumes
@@ -113,6 +118,7 @@ Maximum: 20 seconds
 ```
 
 **Example:**
+
 - **First stuck attempt**, obstacle at 8m → 10s + 2s = **12s total**
 - **Second attempt**, obstacle at 4m → 10s + 4s + 2s + 2s = **18s total**
 - **Third attempt**, obstacle at 3m → **20s** (capped at maximum)
@@ -130,10 +136,12 @@ After each successful escape, SASS **remembers** the stuck location:
 | **Persistence** | Mission duration | Cleared on reset |
 
 **Visualization in Dashboard:**
+
 - 🔴 Red circles on trajectory map
 - Boat avoids returning to these areas
 
 **Log Output:**
+
 ```text
 ✅ SASS SUCCESS: Adding no-go zone #3 at (45.2, -12.8) [radius: 8.0m]
 ```
@@ -165,11 +173,13 @@ R = 0.1                   # Measurement noise (GPS/IMU error)
 ### Dashboard Display
 
 **Uncertainty Colors:**
+
 - 🟢 **< 0.05** — High confidence
 - 🟡 **0.05 - 0.15** — Moderate confidence
 - 🔴 **> 0.15** — Low confidence (more measurements needed)
 
 **Example:**
+
 ```text
 Drift Estimate: vx=0.12 m/s, vy=-0.05 m/s
 Uncertainty: 0.03 (🟢 confident)
@@ -192,6 +202,7 @@ When SASS fails **3 times** at the same waypoint, it requests a **detour**:
 ```
 
 The planner (SPUTNIK) calculates a detour waypoint:
+
 - **Distance**: 12m from current position (configurable)
 - **Direction**: Perpendicular to obstacle (90° from blocked direction)
 
@@ -238,6 +249,7 @@ Two complementary strategies for handling blocked waypoints:
 | **Waypoint Skip** | Obstacle blocking for 45s | Skip to next waypoint |
 
 **Typical Flow:**
+
 1. Boat approaches waypoint
 2. Obstacle detected → slow down and navigate around
 3. If stuck → SASS activates (Phase 0-3)
@@ -280,6 +292,7 @@ T=12s:  SASS SUCCESS
 ### Dashboard Panel
 
 The dashboard shows:
+
 - **Current phase** (Probe/Reverse/Turn/Forward)
 - **No-go zones** (red circles on map)
 - **Drift vector** (arrow showing current/wind)
@@ -305,6 +318,7 @@ ros2 topic echo /control/anti_stuck_status
 ```
 
 **JSON Format:**
+
 ```json
 {
   "active": true,
@@ -329,6 +343,7 @@ ros2 topic echo /control/anti_stuck_status
 **Cause**: Stuck detection too sensitive
 
 **Solution**: Increase timeout or threshold
+
 ```bash
 ros2 param set /buran_controller stuck_timeout 5.0
 ros2 param set /buran_controller stuck_threshold 1.0
@@ -339,6 +354,7 @@ ros2 param set /buran_controller stuck_threshold 1.0
 **Cause**: Escape duration too short for complex obstacles
 
 **Solution**: Severity calculation should automatically extend duration, but you can manually increase:
+
 - Check if `critical_distance` is appropriate for your obstacles
 - Verify drift compensation is working (check Kalman uncertainty)
 
@@ -347,6 +363,7 @@ ros2 param set /buran_controller stuck_threshold 1.0
 **Cause**: Boat getting stuck repeatedly in obstacle-dense areas
 
 **Solution**:
+
 - Enable A* path planning to avoid obstacle fields
 - Reduce `no_go_zone_radius` if zones overlap too much
 - Use waypoint skip strategy to move past difficult areas

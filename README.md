@@ -1,6 +1,6 @@
 # AutoBoat — Autonomous Navigation for Unmanned Surface Vehicles
 
-![alt text](image1.png)
+![AutoBoat Banner](images/image1.png)
 [![ROS 2](https://img.shields.io/badge/ROS_2-Jazzy-blue)](https://docs.ros.org/en/jazzy/)
 [![Gazebo](https://img.shields.io/badge/Gazebo-Harmonic-orange)](https://gazebosim.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
@@ -16,7 +16,7 @@
 1. [Abstract](#abstract)
 2. [Project Overview](#project-overview)
    - [Project Status](#project-status)
-   - [Project Structure](#project-structure-dont-forget-to-change)
+   - [Project Structure](#project-structure)
    - [Additional Documentation](#additional-documentation)
    - [System Requirements](#system-requirements)
    - [Key Features](#key-features)
@@ -31,15 +31,17 @@
 11. [Waypoint Skip Strategy](#waypoint-skip-strategy)
 12. [Terminal Mission Control (CLI)](#terminal-mission-control)
 13. [Technical Documentation](#technical-documentation)
+    - [Performance Specifications](#performance-specifications)
     - [SPUTNIK Planner](#sputnik-planner)
     - [A* Path Planning](#a-path-planning)
 14. [Troubleshooting](#troubleshooting)
-15. [Command Cheatsheet](#command-cheatsheet)
-16. [Future Roadmap](#future-roadmap)
-17. [Contributing](#contributing)
-18. [References](#references)
-19. [Acknowledgments](#acknowledgments)
-20. [License](#license)
+15. [Utility Scripts](#utility-scripts)
+16. [Command Cheatsheet](#command-cheatsheet)
+17. [Future Roadmap](#future-roadmap)
+18. [Contributing](#contributing)
+19. [References](#references)
+20. [Acknowledgments](#acknowledgments)
+21. [License](#license)
 
 ---
 
@@ -73,43 +75,80 @@ The project implements a hierarchical autonomous navigation framework combining 
 
 See [Board.md](Board.md) for detailed milestones and progress tracking.
 
-### Project Structure !DONT FORGET TO CHANGE
+### Project Structure
 
 ```text
 uvautoboat/
 ├── control/                    # ROS 2 Control Package
-│   └── control/
-│       ├── atlantis_controller.py   # Integrated controller (Atlantis team)
-│       ├── buran_controller.py      # Modular controller (BURAN)
-│       ├── keyboard_teleop.py       # Manual control interface
-│       ├── lidar_obstacle_avoidance.py
-│       └── gps_imu_pose.py
+│   ├── control/
+│   │   ├── atlantis_controller.py   # Integrated controller (Atlantis team)
+│   │   ├── buran_controller.py      # Modular controller (BURAN)
+│   │   ├── keyboard_teleop.py       # Manual control interface
+│   │   ├── lidar_obstacle_avoidance.py  # Shared obstacle detection library
+│   │   ├── gps_imu_pose.py          # GPS/IMU pose estimation
+│   │   ├── pose_filter.py           # Pose filtering utilities
+│   │   └── all_in_one_stack.py      # Legacy integrated solution
+│   ├── config/
+│   │   └── hazard_world_boxes.yaml  # Pre-defined no-go zones
+│   └── launch/
+│       ├── all_in_one_bringup.launch.py  # Legacy integrated launch
+│       └── README_QUICKSTART.md     # Quick start guide
 ├── plan/                       # ROS 2 Planning Package
-│   ├── brain/
-│   │   ├── vostok1.py               # Integrated navigation system
+│   ├── plan/
 │   │   ├── oko_perception.py        # 3D LIDAR perception (OKO)
-│   │   ├── sputnik_planner.py       # Waypoint planner (SPUTNIK)
+│   │   ├── sputnik_planner.py       # Waypoint planner (SPUTNIK) + A* path planning
 │   │   ├── atlantis_planner.py      # Alternative planner (Atlantis)
 │   │   ├── vostok1_cli.py           # Terminal mission control
-│   │   └── lidar_obstacle_avoidance.py
+│   │   ├── lidar_obstacle_avoidance.py  # LIDAR processing module
+│   │   ├── grid_map.py              # Grid mapping for A* planning
+│   │   ├── pollutant_planner.py     # Pollutant tracking utility
+│   │   ├── waypoint_visualizer.py   # RViz visualization
+│   │   ├── mission_trigger.py       # Mission triggering logic
+│   │   ├── simple_perception.py     # Simplified perception module
+│   │   ├── tf_broadcaster.py        # Transform broadcasting
+│   │   ├── tf_broadcaster_gazebo.py # Gazebo-specific TF
+│   │   └── tf_broadcaster_gps.py    # GPS-based TF
 │   └── launch/
-│       └── vostok1_modular_navigation.launch.py
+│       ├── vostok1_modular_navigation.launch.py
+│       ├── atlantis.launch.yaml     # Atlantis-specific config
+│       └── demo.launch.py           # Demo/testing launch
 ├── environment_plugins/        # Gazebo plugins (smoke dead-zone)
-│   └── src/dead_zone_plugin.cc      # Kills wildlife in smoke radius, flips belly-up
+│   └── src/dead_zone_plugin.cc      # Kills wildlife in smoke radius
 ├── launch/                     # Top-level launch files
 │   ├── vostok1.launch.yaml         # Modular system configuration
-│   └── atlantis.launch.yaml        # Atlantis system configuration
+│   └── atlantis.launch.py          # Atlantis system configuration
 ├── web_dashboard/              # Real-time monitoring interfaces
 │   ├── vostok1/                     # Vostok1 dashboard
+│   │   └── README_vostok1_dashboard.md
 │   └── atlantis/                    # Atlantis dashboard
+│       └── README_atlantis_dashboard.md
 ├── test_environment/           # Custom Gazebo worlds and models
-│   ├── sydney_regatta_DEFAULT.sdf  # Original VRX world (reference/template)
+│   ├── sydney_regatta_DEFAULT.sdf  # Original VRX world (reference)
 │   ├── sydney_regatta_custom.sdf   # Custom world with obstacles
-│   ├── sydney_regatta_smoke_wildlife.sdf # Combined smoke + wildlife with kill-zone plugin
-│   ├── wamv_3d_lidar.xacro         # Default 3D LIDAR config (backup reference)
+│   ├── sydney_regatta_smoke.sdf    # Smoke dead-zone testing
+│   ├── sydney_regatta_smoke_wildlife.sdf # Smoke + wildlife + kill-zone
+│   ├── sydney_regatta_randomsmoke.sdf   # Random smoke generation
+│   ├── wamv_3d_lidar.xacro         # Default 3D LIDAR config (backup)
 │   └── cardboardbox/                # Custom obstacle model
+├── wiki/                       # GitHub Wiki documentation
+│   ├── Home.md                      # Wiki landing page
+│   ├── Installation-Guide.md        # Setup instructions
+│   ├── Quick-Start.md               # 5-minute quick start
+│   ├── System-Overview.md           # Architecture deep-dive
+│   ├── SASS.md                      # Smart Anti-Stuck System
+│   ├── 3D-LIDAR-Processing.md       # OKO perception details
+│   └── Common-Issues.md             # Troubleshooting guide
+├── one_click_launch_all/       # Automated launcher scripts
+│   └── launch_vostok1_complete.sh   # One-click full system launch
+├── legacy/                     # Deprecated code (for reference only)
+│   ├── vostok1_integrated.py        # Old monolithic navigation (DEPRECATED)
+│   └── DEPRECATED.md                # Deprecation notes
 ├── images/                     # Documentation images
+├── quick_test.sh               # Quick system diagnostics
+├── diagnose_boat.sh            # Detailed boat diagnosis
+├── monitor_boat.sh             # Real-time system monitoring
 ├── Board.md                    # Development progress tracking
+├── AVOIDANCE_CODE_EXPLANATION.md   # Technical obstacle avoidance docs
 └── README.md                   # This file
 ```
 
@@ -123,12 +162,23 @@ uvautoboat/
 
 | Document | Description |
 |:---------|:------------|
-| [LIDAR_OBSTACLE_AVOIDANCE_GUIDE.md](LIDAR_OBSTACLE_AVOIDANCE_GUIDE.md) | Detailed LIDAR processing and obstacle detection |
-| [MISSION_CONTROL_GUIDE.md](MISSION_CONTROL_GUIDE.md) | Mission control interface usage |
-| [LAUNCH_YAML_GUIDE.md](LAUNCH_YAML_GUIDE.md) | YAML launch file configuration |
-| [CODE_REVIEW.md](CODE_REVIEW.md) | Code review notes and standards |
+| [Board.md](Board.md) | Development progress tracking and milestones |
 | [Vostok1 Dashboard Guide](web_dashboard/vostok1/README_vostok1_dashboard.md) | Web dashboard setup (rosbridge + web_video_server) and camera panel |
-| `one_click_launch_all/launch_vostok1_complete.sh` | One-click launcher for Gazebo, rosbridge, navigation, camera, RViz, dashboard |
+| [Atlantis Dashboard Guide](web_dashboard/atlantis/README_atlantis_dashboard.md) | Atlantis dashboard setup and usage |
+| [Control Quick Start](control/launch/README_QUICKSTART.md) | Quick start guide for control stack |
+| [AVOIDANCE_CODE_EXPLANATION.md](AVOIDANCE_CODE_EXPLANATION.md) | Technical obstacle avoidance documentation (Chinese) |
+
+**Wiki Documentation** (see [wiki/](wiki/) folder):
+
+| Wiki Page | Description |
+|:----------|:------------|
+| [Home](wiki/Home.md) | Wiki landing page with navigation |
+| [Installation Guide](wiki/Installation_Guide.md) | Step-by-step setup instructions |
+| [Quick Start](wiki/Quick_Start.md) | 5-minute quick start guide |
+| [System Overview](wiki/System_Overview.md) | Architecture and design philosophy |
+| [SASS](wiki/SASS.md) | Smart Anti-Stuck System deep-dive |
+| [3D LIDAR Processing](wiki/3D_LIDAR_Processing.md) | OKO perception system details |
+| [Common Issues](wiki/Common_Issues.md) | Comprehensive troubleshooting guide |
 
 ### System Requirements
 
@@ -426,9 +476,9 @@ AutoBoat provides multiple navigation systems:
 | **Anti-Stuck** | SASS v2.0 | SASS v2.0 | Adaptive Escape with SASS (Work in progress) |
 | **Best For** | Production use | Custom tuning | Robust Path Validation |
 
-### Modular Architecture (TNO Style) !DONT FORGET TO CHANGE
+### Modular Architecture (OKO-SPUTNIK-BURAN)
 
-The modular system uses below programs to work:
+The modular system uses the following distributed nodes:
 
 | Node | Name | Function |
 |:-----|:-----|:---------|
@@ -1077,8 +1127,8 @@ ros2 run plan vostok1_cli home
      v
 [Generate Waypoints] --(GPS missing)--> [Wait for GPS]
      |
-     v
-[Confirm Waypoints] -> state=READY/WAITING_CONFIRM
+     v                 state=WAITING_CONFIRM
+[Confirm Waypoints] -----------------------> state=READY
      |
      v
 [Start Mission]
@@ -1095,16 +1145,29 @@ ros2 run plan vostok1_cli home
 
 Interrupts:
 - STOP: dashboard/CLI burst -> state=PAUSED, mission_armed=false, thrust zero; Resume enabled.
-- RESUME: from PAUSED/STOP with waypoints -> state=DRIVING, mission_armed=true.
-- RESET: clears waypoints, state->INIT/IDLE, thrust zero; must Generate/Confirm again.
+- RESUME: from PAUSED/JOYSTICK/WAITING_CONFIRM/READY with waypoints -> state=DRIVING, mission_armed=true.
+- RESET: clears waypoints, state->INIT, thrust zero; must Generate/Confirm again.
 - JOYSTICK ON: state->JOYSTICK, mission_armed=false; BURAN stops, manual teleop.
 - JOYSTICK OFF: if waypoints exist -> state=PAUSED (Resume works); else INIT.
-- GO HOME: replace waypoints with spawn, state=DRIVING, mission_armed=true.
+- GO HOME: replace waypoints with spawn, state=DRIVING, mission_armed=true, go_home_mode=true.
 ```
 
 ---
 
 ## Technical Documentation
+
+### Performance Specifications
+
+| Metric | Value | Notes |
+|:-------|:------|:------|
+| **Control Loop Frequency** | 30 Hz | BURAN/Atlantis controller update rate |
+| **LIDAR Processing Rate** | 10-20 Hz | Depends on Gazebo simulation speed |
+| **GPS Update Rate** | 10 Hz | VRX default sensor rate |
+| **IMU Update Rate** | 100 Hz | VRX default sensor rate |
+| **WebSocket Latency** | < 50 ms | rosbridge to dashboard |
+| **Obstacle Detection Range** | 5-50 m | Configurable via `min_range`/`max_range` |
+| **Waypoint Arrival Tolerance** | 2.0 m | Default `waypoint_tolerance` |
+| **Thrust Range** | -1000 to +1000 N | Per thruster |
 
 ### GPS Navigation
 
@@ -1293,6 +1356,67 @@ ros2 topic echo /vostok1/anti_stuck_status
 
 ---
 
+## Utility Scripts
+
+The repository includes several diagnostic and automation scripts in the root directory:
+
+### System Diagnostics
+
+| Script | Purpose | Usage |
+|:-------|:--------|:------|
+| `quick_test.sh` | Quick system diagnostics | `./quick_test.sh` |
+| `diagnose_boat.sh` | Detailed boat system diagnosis | `./diagnose_boat.sh` |
+| `monitor_boat.sh` | Real-time system monitoring | `./monitor_boat.sh` |
+
+```bash
+# Make scripts executable (first time only)
+chmod +x quick_test.sh diagnose_boat.sh monitor_boat.sh
+
+# Run quick diagnostics
+./quick_test.sh
+
+# Detailed diagnosis (checks ROS2, workspace, topics, nodes)
+./diagnose_boat.sh
+
+# Real-time monitoring (live topic data)
+./monitor_boat.sh
+```
+
+### One-Click Launch
+
+The `one_click_launch_all/` directory contains automated launcher scripts that start the complete system with a single command:
+
+```bash
+# Make executable (first time only)
+chmod +x one_click_launch_all/launch_vostok1_complete.sh
+
+# Launch complete system (Gazebo + rosbridge + navigation + camera + dashboard)
+./one_click_launch_all/launch_vostok1_complete.sh
+
+# Launch with custom world
+./one_click_launch_all/launch_vostok1_complete.sh --world sydney_regatta_smoke
+
+# Launch without dashboard (headless)
+./one_click_launch_all/launch_vostok1_complete.sh --skip-dashboard
+
+# Combine options
+./one_click_launch_all/launch_vostok1_complete.sh --world sydney_regatta_custom --skip-dashboard
+```
+
+**What it launches:**
+
+| Component | Description |
+|:----------|:------------|
+| Gazebo Simulation | VRX competition environment |
+| rosbridge WebSocket | Dashboard communication (port 9090) |
+| web_video_server | Camera MJPEG stream (port 8080) |
+| Navigation System | Vostok1 modular navigation |
+| Web Dashboard | HTTP server (port 8000) |
+
+> **Note:** The script opens multiple terminal windows. Use `Ctrl+C` in the main terminal to stop all processes.
+
+---
+
 ## Command Cheatsheet
 
 ### Kill Processes
@@ -1450,11 +1574,11 @@ S = Start, G = Goal, X = Obstacle
 
 ### Technical Debt
 
-| Issue | Description |
-|:------|:------------|
-| **ROS 2 Parameter Migration** | Hardcoded parameters can be migrated to ROS 2 parameter server, but these settings may not always work reliably |
-| **Multi-Terminal Launch** | Lack of shell script (.sh file) to open multiple terminals and run multiple nodes simultaneously |
-| **Debugging Required** | Complex planning and obstacle detection still need debugging |
+| Issue | Status | Description |
+|:------|:------:|:------------|
+| **ROS 2 Parameter Migration** | ✅ Done | Parameters now configurable via `vostok1.launch.yaml` |
+| **Multi-Terminal Launch** | ✅ Done | `one_click_launch_all/launch_vostok1_complete.sh` now available |
+| **Debugging Required** | 🔄 In Progress | Complex planning and obstacle detection still need debugging |
 
 ---
 

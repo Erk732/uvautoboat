@@ -23,6 +23,7 @@ Before installing AutoBoat, you need to install the following dependencies:
 ### 1. ROS 2 Jazzy
 
 Follow the official installation guide:
+
 - **[ROS 2 Jazzy Installation](https://docs.ros.org/en/jazzy/Installation.html)**
 
 ```bash
@@ -34,6 +35,7 @@ sudo apt install ros-jazzy-desktop-full
 ### 2. Gazebo Harmonic
 
 Follow the official installation guide:
+
 - **[Gazebo Harmonic Installation](https://gazebosim.org/docs/harmonic/install_ubuntu/)**
 
 ```bash
@@ -45,6 +47,7 @@ sudo apt-get install gz-harmonic
 ### 3. VRX Simulation
 
 Clone the VRX repository:
+
 - **[VRX GitHub Repository](https://github.com/osrf/vrx)**
 
 ```bash
@@ -199,7 +202,7 @@ pip3 install numpy scipy matplotlib
 
 Once installation is complete:
 
-1. **[Quick Start](Quick-Start)** — Launch your first mission
+1. **[Quick Start](Quick_Start)** — Launch your first mission
 2. **[First Mission Tutorial](First-Mission-Tutorial)** — Detailed walkthrough
 3. **[Configuration & Tuning](Configuration-and-Tuning)** — Customize parameters
 

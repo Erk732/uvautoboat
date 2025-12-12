@@ -11,12 +11,12 @@ The following pages have been created and are ready for upload:
 | Page | Description | Status |
 |:-----|:------------|:------:|
 | **Home.md** | Wiki landing page with navigation | ✅ Ready |
-| **Installation-Guide.md** | Complete setup instructions | ✅ Ready |
-| **Quick-Start.md** | 5-minute getting started guide | ✅ Ready |
-| **System-Overview.md** | Architecture and design philosophy | ✅ Ready |
+| **Installation_Guide.md** | Complete setup instructions | ✅ Ready |
+| **Quick_Start.md** | 5-minute getting started guide | ✅ Ready |
+| **System_Overview.md** | Architecture and design philosophy | ✅ Ready |
 | **SASS.md** | Smart Anti-Stuck System deep-dive | ✅ Ready |
-| **3D-LIDAR-Processing.md** | OKO perception system explained | ✅ Ready |
-| **Common-Issues.md** | Troubleshooting guide | ✅ Ready |
+| **3D_LIDAR_Processing.md** | OKO perception system explained | ✅ Ready |
+| **Common_Issues.md** | Troubleshooting guide | ✅ Ready |
 | **UPLOAD_INSTRUCTIONS.md** | How to upload these pages | ✅ Ready |
 
 ---
@@ -44,6 +44,7 @@ git push origin master
 These pages are referenced in the wiki but not yet created:
 
 ### Priority 1 (High Usage)
+
 - [ ] `Terminal-Mission-Control.md` — CLI usage guide
 - [ ] `Web-Dashboard-Guide.md` — Dashboard features
 - [ ] `Configuration-and-Tuning.md` — Parameter reference
@@ -51,30 +52,35 @@ These pages are referenced in the wiki but not yet created:
 - [ ] `FAQ.md` — Frequently asked questions
 
 ### Priority 2 (Architecture)
+
 - [ ] `Vostok1-Architecture.md` — Integrated system
 - [ ] `Modular-Architecture.md` — OKO-SPUTNIK-BURAN
 - [ ] `Atlantis-Architecture.md` — Control group approach
 - [ ] `ROS2-Topic-Flow.md` — Topic communication diagrams
 
 ### Priority 3 (Concepts)
+
 - [ ] `GPS-Navigation.md` — Coordinate systems
 - [ ] `PID-Control.md` — Controller fundamentals
 - [ ] `Differential-Thrust.md` — Two-thruster control
 - [ ] `Kalman-Filtering.md` — State estimation theory
 
 ### Priority 4 (Features)
+
 - [ ] `Waypoint-Skip-Strategy.md` — Skip logic
 - [ ] `Obstacle-Avoidance-Loop.md` — Continuous control
 - [ ] `Hazard-Zone-Management.md` — No-go areas
 - [ ] `First-Mission-Tutorial.md` — Step-by-step walkthrough
 
 ### Priority 5 (Development)
+
 - [ ] `Contributing.md` — Contribution guidelines
 - [ ] `Code-Review-Standards.md` — Best practices
 - [ ] `Testing-Guide.md` — Unit tests
 - [ ] `API-Reference.md` — ROS 2 API docs
 
 ### Priority 6 (Misc)
+
 - [ ] `Keyboard-Teleop.md` — Manual control
 - [ ] `Launch-Files-Reference.md` — Launch file guide
 - [ ] `Debug-Commands.md` — Advanced diagnostics
@@ -87,6 +93,7 @@ These pages are referenced in the wiki but not yet created:
 ## Content Sources
 
 Wiki content was extracted and reorganized from:
+
 - `README.md` (main documentation)
 - `LIDAR_OBSTACLE_AVOIDANCE_GUIDE.md`
 - `MISSION_CONTROL_GUIDE.md`
@@ -99,6 +106,7 @@ Wiki content was extracted and reorganized from:
 ## Wiki Structure Philosophy
 
 ### What Stays in README
+
 - Quick project overview
 - Installation quickstart
 - Basic usage (2-terminal setup)
@@ -106,6 +114,7 @@ Wiki content was extracted and reorganized from:
 - Project status and key features
 
 ### What Goes in Wiki
+
 - Detailed explanations
 - Architecture deep-dives
 - Comprehensive tutorials
@@ -133,6 +142,7 @@ Wiki content was extracted and reorganized from:
 1. Edit `.md` file locally
 2. Test markdown rendering
 3. Upload changes:
+
    ```bash
    cd wiki-repo
    git add <modified-file>.md
@@ -144,6 +154,7 @@ Wiki content was extracted and reorganized from:
 
 1. Add image to `images/` in main repo
 2. Reference in wiki:
+
    ```markdown
    ![Alt](https://raw.githubusercontent.com/Erk732/uvautoboat/main/images/file.png)
    ```

@@ -8,8 +8,8 @@
 |---|---|
 | **Project** | AutoBoat Navigation System |
 | **Repository** | [Erk732/uvautoboat](https://github.com/Erk732/uvautoboat) |
-| **Last Updated** | 08/12/2025 |
-| **Status** | 🟢 Vostok1 Production Ready (dashboard camera stream + waypoint persistence) |
+| **Last Updated** | 11/12/2025 |
+| **Status** | 🟢 Vostok1 Production Ready (A* path planning + one-click launcher + wiki docs) |
 
 ---
 
@@ -22,12 +22,13 @@
 | 3 | Coverage Planning | ⏸️ | 0% |
 | 4 | Integration & Testing | 🔄 | 90% |
 
-### Active Systems
+### Active System
 
 | System | Architecture | Sensors | Features |
 |--------|--------------|---------|----------|
-| **Vostok1** | Integrated | 3D PointCloud | PID control, SASS v2.0, waypoint skip, web dashboard + camera panel, waypoint persistence |
-| **Modular** | Distributed | 3D PointCloud | ОКО + СПУТНИК + БУРАН, runtime config, dashboard camera panel, waypoint persistence |
+| **Vostok1 Modular** | Distributed (OKO + SPUTNIK + BURAN) | 3D PointCloud | A* path planning, SASS v2.0, runtime config, web dashboard + camera, waypoint persistence |
+
+> **Note:** The integrated Vostok1 has been deprecated and moved to `legacy/`. Use the modular system.
 
 ---
 
@@ -50,15 +51,10 @@
 
 **Completed**: 28/11/2025
 
-### Apollo11 (Planning Team)
-
-- Modular architecture with external planner/controller
-- 2D LaserScan obstacle detection
-- GPS-based waypoint navigation
-
-### Vostok1 (Control Team)
+### Vostok1 Navigation System
 
 - Integrated perception + planning + control
+- Modular variant: OKO + SPUTNIK + BURAN distributed architecture
 - 3D PointCloud processing (height/distance filtering)
 - Smart Anti-Stuck System (SASS) v2.0
   - Kalman-filtered drift compensation
@@ -87,21 +83,23 @@
 
 ## Phase 4: Integration & Testing 🔄
 
-**Progress**: 75%
+**Progress**: 90%
 
 ### Completed ✅
 
-| Test | Vostok1 | Modular |
-|------|:-------:|:-------:|
-| GPS waypoint following | ✅ | ✅ |
-| Obstacle detection (3D) | ✅ | ✅ |
-| Multi-waypoint missions | ✅ | ✅ |
-| Stuck detection/recovery | ✅ | ✅ |
-| Waypoint skip strategy | ✅ | ✅ |
-| Runtime config updates | ✅ | ✅ |
-| Web dashboard (map, mission, camera) | ✅ | ✅ |
-| Terminal CLI | ✅ | ✅ |
-| Min-range spawn fix (5m) | ✅ | ✅ |
+| Test | Status |
+|------|:------:|
+| GPS waypoint following | ✅ |
+| Obstacle detection (3D) | ✅ |
+| Multi-waypoint missions | ✅ |
+| Stuck detection/recovery | ✅ |
+| Waypoint skip strategy | ✅ |
+| Runtime config updates | ✅ |
+| Web dashboard (map, mission, camera) | ✅ |
+| Terminal CLI | ✅ |
+| Min-range spawn fix (5m) | ✅ |
+| A* path planning (hybrid + runtime) | ✅ |
+| One-click launcher script | ✅ |
 
 ### Pending ⬜
 
@@ -155,12 +153,14 @@
 | 25/11/2025 | Project Kickoff | ✅ |
 | 26/11/2025 | Basic Navigation | ✅ |
 | 27/11/2025 | End-to-End Pipeline | ✅ |
-| 28/11/2025 | Apollo11 & Vostok1 Complete | ✅ |
+| 28/11/2025 | Vostok1 Navigation Complete | ✅ |
 | 01/12/2025 | SASS v2.0 + Mission CLI | ✅ |
 | 03/12/2025 | Waypoint Skip + Runtime Config | ✅ |
 | 03/12/2025 | Go Home Optimization (detour insertion) | ✅ |
 | 03/12/2025 | README Consolidation + Cleanup | ✅ |
-| TBD | A* Path Planning | ⏸️ |
+| 08/12/2025 | A* Path Planning (Hybrid + Runtime modes) | ✅ |
+| 09/12/2025 | One-Click Launcher Script | ✅ |
+| 11/12/2025 | Wiki Documentation + README Update | ✅ |
 | TBD | Coverage Planning | ⏸️ |
 
 ---
@@ -178,23 +178,32 @@
 
 | Feature | Priority | Description |
 |---------|:--------:|-------------|
-| **A* Path Planning** | High | Pre-compute obstacle-free paths using occupancy grid |
 | **Dynamic Replanning** | High | Replan when new obstacles detected mid-route |
 | **Go-To-Point** | Medium | Navigate to arbitrary GPS coordinate with obstacle avoidance |
 | **Multi-Goal Navigation** | Medium | Sequence of random points (patrol mode) |
 | **Coverage Planning** | Low | Boustrophedon pattern for area scanning |
 
-### A* Path Planning (Proposed)
+### Recently Completed ✅
+
+| Feature | Status | Description |
+|---------|:------:|-------------|
+| **A* Path Planning** | ✅ Done | Hybrid mode (pre-plan) + Runtime mode (detours) in SPUTNIK |
+| **One-Click Launcher** | ✅ Done | `launch_vostok1_complete.sh` for full system startup |
+| **Wiki Documentation** | ✅ Done | Comprehensive wiki pages in `wiki/` folder |
+
+### A* Path Planning (Implemented)
 
 ```text
-/goal_point ──────┐
-                  ├──→ [pathfinder.py] ──→ /planned_waypoints ──→ [vostok1/sputnik]
-/oko/obstacles ───┘
+/oko/obstacles ────>┌─────────────────────┐
+                    │  AStarSolver        │
+Hazard boxes ──────>│  (in SPUTNIK)       │────> Detour waypoints inserted into /planning/waypoints
+                    │                     │
+Current position ──>└─────────────────────┘
 ```
 
-- Occupancy grid (10m cells) from LIDAR
-- A* algorithm for optimal path
-- Dynamic replanning on obstacle detection
+- Occupancy grid (3m cells) with 8-connected A*
+- **Hybrid Mode**: Pre-plan routes between lawnmower waypoints
+- **Runtime Mode**: Plan detours when stuck or blocked
 
 ---
 
@@ -209,15 +218,17 @@
 
 ### Technical Debt
 
-- Hardcoded parameters can be migrated to ROS 2 parameter server, but these settings may not always work reliably
-- Lack of shell script (.sh file) to open multiple terminals and run multiple nodes simultaneously
-- Complex planning and obstacle detection still need debugging
+| Issue | Status | Description |
+|:------|:------:|:------------|
+| **ROS 2 Parameter Migration** | ✅ Done | Parameters now configurable via `vostok1.launch.yaml` |
+| **Multi-Terminal Launch** | ✅ Done | `one_click_launch_all/launch_vostok1_complete.sh` available |
+| **Debugging Required** | 🔄 In Progress | Complex planning and obstacle detection still need debugging |
 
 ---
 
 ## 📜 Acknowledgments
 
-**Document Version**: 6.0 | **Last Updated**: 04/12/2025
+**Document Version**: 7.0 | **Last Updated**: 11/12/2025
 
 **Maintained By**: AutoBoat Development Team
 

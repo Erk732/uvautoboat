@@ -38,12 +38,14 @@ AutoBoat provides three navigation architectures to suit different needs:
 | **Best For** | Production use | Custom tuning | Robust Path Validation |
 
 ### Vostok1 (Recommended)
+
 - **Single-node** integrated system
 - All functionality in one executable
 - Simplest to deploy and use
 - Ideal for **production missions**
 
 ### Modular (TNO)
+
 - **Distributed architecture** with three nodes:
   - **OKO**: Perception (3D LIDAR)
   - **SPUTNIK**: Planning (waypoints)
@@ -52,6 +54,7 @@ AutoBoat provides three navigation architectures to suit different needs:
 - Ideal for **research and tuning**
 
 ### Atlantis
+
 - Control group's approach
 - Zero-latency obstacle reaction
 - Embedded LIDAR processing in controller
@@ -92,6 +95,7 @@ AutoBoat provides three navigation architectures to suit different needs:
 ## Core Subsystems
 
 ### 1. Perception
+
 - **3D LIDAR Processing** (OKO v2.0)
 - Real-time point cloud filtering
 - Sector-based obstacle detection
@@ -100,6 +104,7 @@ AutoBoat provides three navigation architectures to suit different needs:
 - Moving obstacle tracking
 
 ### 2. Planning
+
 - **GPS Waypoint Navigation** (SPUTNIK)
 - Lawnmower pattern generation
 - A* path planning for obstacles
@@ -108,6 +113,7 @@ AutoBoat provides three navigation architectures to suit different needs:
 - Detour insertion
 
 ### 3. Control
+
 - **PID Heading Control** (BURAN)
 - Differential thrust control
 - Obstacle reaction
@@ -116,6 +122,7 @@ AutoBoat provides three navigation architectures to suit different needs:
 - Speed adaptation near obstacles
 
 ### 4. Monitoring
+
 - **Web Dashboard**
 - Real-time position visualization
 - Mission status and progress
@@ -128,17 +135,20 @@ AutoBoat provides three navigation architectures to suit different needs:
 ## Key Features Explained
 
 ### Autonomous Navigation
+
 - GPS-based waypoint following
 - Automatic lawnmower pattern generation
 - Dynamic path adjustment for obstacles
 
 ### 3D Obstacle Avoidance
+
 - Real-time LIDAR point cloud processing
 - Front/Left/Right sector clearance analysis
 - Continuous obstacle monitoring (~10 Hz)
 - Distance-weighted urgency scoring
 
 ### Smart Anti-Stuck System (SASS)
+
 - 4-phase escape sequence (Probe → Reverse → Turn → Forward)
 - Multi-direction scanning before escape
 - No-go zone memory (up to 20 zones)
@@ -146,11 +156,13 @@ AutoBoat provides three navigation architectures to suit different needs:
 - Adaptive duration based on severity
 
 ### Waypoint Skip Strategy
+
 - Automatic skip after timeout (default: 45s)
 - Go Home mode uses detour insertion instead
 - Ensures mission completion in complex environments
 
 ### A* Path Planning
+
 - Grid-based pathfinding (default: 3m cells)
 - Obstacle inflation for safe clearance
 - Pre-defined hazard zones
@@ -177,6 +189,7 @@ AutoBoat provides three navigation architectures to suit different needs:
 ```
 
 ### Technologies Used
+
 - **ROS 2 Jazzy**: Robot middleware
 - **Gazebo Harmonic**: 3D simulation
 - **Python 3.10+**: Implementation language
@@ -189,23 +202,27 @@ AutoBoat provides three navigation architectures to suit different needs:
 ## Design Philosophy
 
 ### Modularity
+
 - Clear separation of perception, planning, and control
 - Reusable components
 - Multiple architecture options
 
 ### Robustness
+
 - Temporal filtering reduces false detections
 - SASS ensures recovery from stuck states
 - Waypoint skip prevents mission failures
 - Kalman filtering for state estimation
 
 ### Flexibility
+
 - Runtime parameter tuning
 - Multiple control interfaces (CLI, dashboard, manual)
 - Configurable via YAML launch files
 - Support for custom waypoint patterns
 
 ### Real-Time Performance
+
 - Optimized point cloud processing
 - Efficient sector-based detection
 - Continuous perception-control loop
@@ -235,6 +252,6 @@ Learn more about specific components:
 - **[Vostok1 Architecture](Vostok1-Architecture)** — Integrated system details
 - **[Modular Architecture](Modular-Architecture)** — OKO-SPUTNIK-BURAN design
 - **[ROS 2 Topic Flow](ROS2-Topic-Flow)** — Communication patterns
-- **[3D LIDAR Processing](3D-LIDAR-Processing)** — OKO perception deep-dive
+- **[3D LIDAR Processing](3D_LIDAR_Processing)** — OKO perception deep-dive
 - **[SASS](SASS)** — Smart Anti-Stuck System explained
 - **[A* Path Planning](Astar-Path-Planning)** — Grid-based pathfinding

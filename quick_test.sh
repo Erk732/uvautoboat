@@ -1,51 +1,51 @@
 #!/bin/bash
-# 快速系统诊断脚本
-# 使用: ./quick_test.sh
+# Quick system diagnostic script
+# Usage: ./quick_test.sh
 
 set -e
 
 echo "================================"
-echo "UVAutoboat 快速诊断"
+echo "UVAutoboat Quick Diagnostics"
 echo "================================"
 echo ""
 
-# 颜色定义
+# Color definitions
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# 检查 1: ROS2 是否安装
-echo "1️⃣  检查 ROS2 安装..."
+# Check 1: ROS2 installation
+echo "1. Checking ROS2 installation..."
 if command -v ros2 &> /dev/null; then
     ros2_version=$(ros2 --version | cut -d' ' -f2)
-    echo -e "${GREEN}✅ ROS2 ${ros2_version} 已安装${NC}"
+    echo -e "${GREEN}[OK] ROS2 ${ros2_version} installed${NC}"
 else
-    echo -e "${RED}❌ ROS2 未安装${NC}"
+    echo -e "${RED}[X]  ROS2 not installed${NC}"
     exit 1
 fi
 echo ""
 
-# 检查 2: 工作空间是否编译
-echo "2️⃣  检查工作空间编译..."
+# Check 2: Workspace compilation
+echo "2. Checking workspace compilation..."
 if [ -d "build" ] && [ -d "install" ]; then
-    echo -e "${GREEN}✅ 工作空间已编译${NC}"
+    echo -e "${GREEN}[OK] Workspace compiled${NC}"
 else
-    echo -e "${YELLOW}⚠️  工作空间未编译，建议运行: colcon build${NC}"
+    echo -e "${YELLOW}[!]  Workspace not compiled, suggest running: colcon build${NC}"
 fi
 echo ""
 
-# 检查 3: launch 文件语法
-echo "3️⃣  检查 launch 文件语法..."
+# Check 3: Launch file syntax
+echo "3. Checking launch file syntax..."
 if python3 -m py_compile control/launch/all_in_one_bringup.launch.py 2>/dev/null; then
-    echo -e "${GREEN}✅ launch 文件语法正确${NC}"
+    echo -e "${GREEN}[OK] Launch file syntax correct${NC}"
 else
-    echo -e "${RED}❌ launch 文件有语法错误${NC}"
+    echo -e "${RED}[X]  Launch file has syntax errors${NC}"
 fi
 echo ""
 
-# 检查 4: 检查关键文件是否存在
-echo "4️⃣  检查关键文件..."
+# Check 4: Check if critical files exist
+echo "4. Checking critical files..."
 files=(
     "control/control/all_in_one_stack.py"
     "control/control/gps_imu_pose.py"
@@ -56,38 +56,38 @@ files=(
 all_exist=true
 for file in "${files[@]}"; do
     if [ -f "$file" ]; then
-        echo -e "${GREEN}✅ $file${NC}"
+        echo -e "${GREEN}[OK] $file${NC}"
     else
-        echo -e "${RED}❌ $file 缺失${NC}"
+        echo -e "${RED}[X]  $file missing${NC}"
         all_exist=false
     fi
 done
 echo ""
 
 if [ "$all_exist" = false ]; then
-    echo -e "${RED}❌ 某些文件缺失，请检查${NC}"
+    echo -e "${RED}[X]  Some files missing, please check${NC}"
     exit 1
 fi
 
 echo ""
 echo "================================"
-echo "✅ 所有基础检查通过！"
+echo "[OK] All basic checks passed!"
 echo "================================"
 echo ""
 
-echo "📝 建议的下一步操作："
+echo "Suggested next steps:"
 echo ""
-echo "1️⃣  启动系统："
+echo "1. Start the system:"
 echo "   ros2 launch control all_in_one_bringup.launch.py"
 echo ""
-echo "2️⃣  在另一个终端，验证节点是否运行："
+echo "2. In another terminal, verify nodes are running:"
 echo "   ros2 node list"
 echo ""
-echo "3️⃣  发送测试目标："
+echo "3. Send a test goal:"
 echo "   ros2 topic pub /planning/goal geometry_msgs/PoseStamped \\"
 echo "     \"{header: {frame_id: 'world'}, pose: {position: {x: 100.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}\" --once"
 echo ""
-echo "4️⃣  监看系统输出："
+echo "4. Monitor system output:"
 echo "   ros2 launch control all_in_one_bringup.launch.py 2>&1 | grep -E 'goal|avoid|distance'"
 echo ""
-echo "更多诊断命令，查看: TESTING_DIAGNOSTIC_GUIDE.md"
+echo "For more diagnostic commands, see: TESTING_DIAGNOSTIC_GUIDE.md"

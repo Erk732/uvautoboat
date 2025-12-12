@@ -4,8 +4,9 @@
   <version>1.0.0</version>
   <description>Custom Gazebo (gz-sim) world plugins for uvautoboat environments.</description>
 
-  <maintainer email="uvautoboat@virginia.edu">UVA Autoboat Team</maintainer>
+  <maintainer email="yinpuchen0@gmail.com">ghostzero</maintainer>
   <license>Apache-2.0</license>
+  <url type="repository">https://github.com/Erk732/uvautoboat</url>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
