@@ -461,37 +461,64 @@
                     <div class="config-section">
                         <h3>PID Control | Contrôle PID</h3>
                         <div class="config-item">
-                            <label for="cfg-kp">Kp (Proportional):</label>
-                            <input type="number" id="cfg-kp" min="0" max="2000" step="50" value="400">
+                            <label for="cfg-kp">
+                                Kp (Proportional):
+                                <span class="info-tooltip" title="Controls heading correction strength. Higher = faster response, may overshoot | Contrôle la force de correction de cap">ℹ️</span>
+                            </label>
+                            <input type="number" id="cfg-kp" min="0" max="2000" step="50" value="400" data-default="400">
+                            <span class="value-display"></span>
                         </div>
                         <div class="config-item">
-                            <label for="cfg-ki">Ki (Integral):</label>
-                            <input type="number" id="cfg-ki" min="0" max="200" step="5" value="20">
+                            <label for="cfg-ki">
+                                Ki (Integral):
+                                <span class="info-tooltip" title="Eliminates steady-state error. Too high causes oscillation | Élimine l'erreur en régime permanent">ℹ️</span>
+                            </label>
+                            <input type="number" id="cfg-ki" min="0" max="200" step="5" value="20" data-default="20">
+                            <span class="value-display"></span>
                         </div>
                         <div class="config-item">
-                            <label for="cfg-kd">Kd (Derivative):</label>
-                            <input type="number" id="cfg-kd" min="0" max="500" step="10" value="100">
+                            <label for="cfg-kd">
+                                Kd (Derivative):
+                                <span class="info-tooltip" title="Dampens oscillations. Higher = smoother but slower | Amortit les oscillations">ℹ️</span>
+                            </label>
+                            <input type="number" id="cfg-kd" min="0" max="500" step="10" value="100" data-default="100">
+                            <span class="value-display"></span>
                         </div>
                     </div>
                     <div class="config-section">
                         <h3>Speed | Vitesse</h3>
                         <div class="config-item">
-                            <label for="cfg-base-speed">Base:</label>
-                            <input type="number" id="cfg-base-speed" min="100" max="2000" step="50" value="500">
+                            <label for="cfg-base-speed">
+                                Base:
+                                <span class="info-tooltip" title="Normal cruising speed (thrust units) | Vitesse de croisière normale">ℹ️</span>
+                            </label>
+                            <input type="number" id="cfg-base-speed" min="100" max="2000" step="50" value="500" data-default="500">
+                            <span class="value-display"></span>
                         </div>
                         <div class="config-item">
-                            <label for="cfg-max-speed">Max:</label>
-                            <input type="number" id="cfg-max-speed" min="100" max="2000" step="50" value="800">
+                            <label for="cfg-max-speed">
+                                Max:
+                                <span class="info-tooltip" title="Maximum speed during navigation (thrust units) | Vitesse maximale">ℹ️</span>
+                            </label>
+                            <input type="number" id="cfg-max-speed" min="100" max="2000" step="50" value="800" data-default="800">
+                            <span class="value-display"></span>
                         </div>
                         <div class="config-item">
-                            <label for="cfg-safe-dist">Safe Dist. | Dist. Sécurité (m):</label>
-                            <input type="number" id="cfg-safe-dist" min="5" max="50" step="1" value="15">
+                            <label for="cfg-safe-dist">
+                                Safe Dist. (m):
+                                <span class="info-tooltip" title="Minimum safe distance from obstacles. Boat slows down within this range | Distance minimale des obstacles">ℹ️</span>
+                            </label>
+                            <input type="number" id="cfg-safe-dist" min="5" max="50" step="1" value="15" data-default="15">
+                            <span class="value-display"></span>
                         </div>
                     </div>
                 </div>
                 <div class="config-buttons">
+                    <button id="btn-reset-config" class="config-btn reset">
+                        🔄 Reset Defaults | Réinitialiser
+                    </button>
                     <button id="btn-apply-config" class="config-btn apply">
-                        Apply Config | Appliquer
+                        ✅ Apply Config | Appliquer
                     </button>
                 </div>
                 <input type="hidden" id="cfg-lanes" value="8">

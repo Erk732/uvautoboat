@@ -876,6 +876,45 @@ h2 {
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
+.config-btn.reset {
+    background: #6c757d;
+    color: white;
+    margin-right: 10px;
+}
+
+.config-btn.reset:hover {
+    background: #5a6268;
+    transform: translateY(-2px);
+}
+
+/* Config value tracking */
+.config-item input.modified {
+    border-color: #ff9800;
+    border-width: 2px;
+    background: #fff8f0;
+}
+
+.value-display {
+    font-size: 11px;
+    margin-left: 8px;
+    font-style: italic;
+    min-width: 100px;
+    text-align: right;
+}
+
+.info-tooltip {
+    cursor: help;
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 12px;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.info-tooltip:hover {
+    opacity: 1;
+}
+
 /* ========== TERMINAL PANEL ========== */
 .terminal-header {
     display: flex;
