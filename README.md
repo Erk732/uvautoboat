@@ -157,7 +157,16 @@ uvautoboat/
 >
 > 1. **Quick reference** - No need to navigate through VRX package folders
 > 2. **Template base** - Starting point for creating custom worlds with obstacles, buoys, etc.
-> 3. **Parameter backup** - The `wamv_3d_lidar.xacro` contains default LIDAR parameters. If you modify your LIDAR config and need to reset, refer to this file.
+> 3. **Parameter backup** - The `wamv_3d_lidar.xacro` contains default LIDAR parameters. If you modify your LIDAR config and need to reset, refer to this file. For the sake of the lidar sensor we are reccomending these changes on the xacro file:
+
+  <xacro:macro name="wamv_3d_lidar" params="name
+                                            x:=0.7 y:=0 z:=1.8
+                                            R:=0 P:=0 Y:=0
+                                            post_Y:=0 post_z_from:=1.2965
+                                            update_rate:=10 vertical_lasers:=16 samples:=1875 resolution:=1
+                                            min_angle:=-2.617 max_angle:=2.617 
+                                            min_vertical_angle:=${-pi/12} max_vertical_angle:=${pi/12}
+                                            max_range:=130 noise_stddev:=0.01">
 
 ### Additional Documentation
 
