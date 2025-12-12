@@ -31,6 +31,7 @@ Topics:
 
 import rclpy
 from rclpy.node import Node
+from rcl_interfaces.msg import SetParametersResult
 import math
 import struct
 import json
@@ -71,23 +72,18 @@ class OkoPerception(Node):
         self.declare_parameter('water_plane_threshold', 0.5)  # Tolerance for water plane removal
         self.declare_parameter('velocity_history_size', 5)    # Reduced: faster velocity estimate
 
-        # Get parameters
-        self.min_safe_distance = self.get_parameter('min_safe_distance').value
-        self.critical_distance = self.get_parameter('critical_distance').value
-        self.hysteresis_distance = self.get_parameter('hysteresis_distance').value
-        self.min_height = self.get_parameter('min_height').value
-        self.max_height = self.get_parameter('max_height').value
-        self.min_range = self.get_parameter('min_range').value
-        self.max_range = self.get_parameter('max_range').value
-        self.sample_rate = self.get_parameter('sample_rate').value
-        
-        # Enhanced parameters
-        self.temporal_history_size = self.get_parameter('temporal_history_size').value
-        self.temporal_threshold = self.get_parameter('temporal_threshold').value
-        self.cluster_distance = self.get_parameter('cluster_distance').value
-        self.min_cluster_size = self.get_parameter('min_cluster_size').value
-        self.water_plane_threshold = self.get_parameter('water_plane_threshold').value
-        self.velocity_history_size = self.get_parameter('velocity_history_size').value
+        # Smoke detection parameters (v2.1) - Now dynamic!
+        self.declare_parameter('smoke_filter_enabled', True)   # Enable smoke filtering
+        self.declare_parameter('smoke_min_height', 0.5)        # Smoke floats above this height
+        self.declare_parameter('smoke_max_height', 4.0)        # Smoke typically below this
+        self.declare_parameter('solid_min_height', -2.0)       # Solid obstacles min height
+        self.declare_parameter('solid_max_height', 0.5)        # Solid obstacles touch water line
+
+        # Load initial parameter values
+        self._load_parameters()
+
+        # Register callback for dynamic parameter updates
+        self.add_on_set_parameters_callback(self.parameter_callback)
 
         # --- STATE ---
         self.obstacle_detected = False
@@ -146,6 +142,14 @@ class OkoPerception(Node):
             10
         )
 
+        # Subscribe to runtime config updates (for web dashboard tuning)
+        self.create_subscription(
+            String,
+            '/sputnik/set_config',
+            self.config_callback,
+            10
+        )
+
         # --- PUBLISHERS ---
         self.pub_obstacle_info = self.create_publisher(
             String, '/perception/obstacle_info', 10
@@ -158,21 +162,85 @@ class OkoPerception(Node):
         self.create_timer(0.05, self.publish_status)
 
         self.get_logger().info("=" * 60)
-        self.get_logger().info("OKO v2.0 - Enhanced Obstacle Detection System")
+        self.get_logger().info("OKO v2.1 - Enhanced Obstacle Detection with Dynamic Parameters")
         self.get_logger().info("=" * 60)
         self.get_logger().info(f"Safe Distance: {self.min_safe_distance}m | Critical: {self.critical_distance}m")
         self.get_logger().info(f"Height Filter: {self.min_height}m to {self.max_height}m")
         self.get_logger().info(f"Temporal Filter: {self.temporal_threshold}/{self.temporal_history_size} scans")
         self.get_logger().info(f"Clustering: {self.cluster_distance}m eps, {self.min_cluster_size} min points")
+        if self.smoke_filter_enabled:
+            self.get_logger().info(f"Smoke Filter: {self.smoke_min_height}m to {self.smoke_max_height}m")
         self.get_logger().info("=" * 60)
-    
+
+    def _load_parameters(self):
+        """Load/reload all parameters from parameter server"""
+        # Basic parameters
+        self.min_safe_distance = self.get_parameter('min_safe_distance').value
+        self.critical_distance = self.get_parameter('critical_distance').value
+        self.hysteresis_distance = self.get_parameter('hysteresis_distance').value
+        self.min_height = self.get_parameter('min_height').value
+        self.max_height = self.get_parameter('max_height').value
+        self.min_range = self.get_parameter('min_range').value
+        self.max_range = self.get_parameter('max_range').value
+        self.sample_rate = self.get_parameter('sample_rate').value
+
+        # Enhanced parameters
+        self.temporal_history_size = self.get_parameter('temporal_history_size').value
+        self.temporal_threshold = self.get_parameter('temporal_threshold').value
+        self.cluster_distance = self.get_parameter('cluster_distance').value
+        self.min_cluster_size = self.get_parameter('min_cluster_size').value
+        self.water_plane_threshold = self.get_parameter('water_plane_threshold').value
+        self.velocity_history_size = self.get_parameter('velocity_history_size').value
+
+        # Smoke detection parameters
+        self.smoke_filter_enabled = self.get_parameter('smoke_filter_enabled').value
+        self.smoke_min_height = self.get_parameter('smoke_min_height').value
+        self.smoke_max_height = self.get_parameter('smoke_max_height').value
+        self.solid_min_height = self.get_parameter('solid_min_height').value
+        self.solid_max_height = self.get_parameter('solid_max_height').value
+
+    def parameter_callback(self, params):
+        """Called when parameters are changed via set_parameters service (DYNAMIC UPDATES)"""
+        for param in params:
+            param_name = param.name
+
+            # Check if it's one of our parameters
+            if param_name in ['min_safe_distance', 'critical_distance', 'hysteresis_distance',
+                             'min_height', 'max_height', 'min_range', 'max_range', 'sample_rate',
+                             'temporal_history_size', 'temporal_threshold', 'cluster_distance',
+                             'min_cluster_size', 'water_plane_threshold', 'velocity_history_size',
+                             'smoke_filter_enabled', 'smoke_min_height', 'smoke_max_height',
+                             'solid_min_height', 'solid_max_height']:
+
+                # Reload all parameters
+                self._load_parameters()
+
+                self.get_logger().info(
+                    f"🔄 Parameter updated: {param_name} = {param.value}",
+                    throttle_duration_sec=0.5
+                )
+
+                # Resize history deques if temporal_history_size changed
+                if param_name == 'temporal_history_size':
+                    self.detection_history = deque(maxlen=self.temporal_history_size)
+                    self.sector_history = {
+                        'front': deque(maxlen=self.temporal_history_size),
+                        'left': deque(maxlen=self.temporal_history_size),
+                        'right': deque(maxlen=self.temporal_history_size)
+                    }
+                    self.get_logger().info("✅ Temporal history buffers resized")
+
+                break  # Only reload once per callback
+
+        return SetParametersResult(successful=True)
+
     def target_callback(self, msg):
         """Update target direction for adaptive sectors"""
         try:
             data = json.loads(msg.data)
             target_heading = data.get('target_heading', 0.0)
             self.target_angle = math.radians(target_heading)
-            
+
             # Adaptive front sector width based on target direction
             # Narrower when heading straight, wider when turning
             heading_diff = abs(self.target_angle)
@@ -180,8 +248,47 @@ class OkoPerception(Node):
         except:
             pass
 
+    def config_callback(self, msg):
+        """Handle runtime configuration changes from web dashboard"""
+        try:
+            import json
+            config = json.loads(msg.data)
+            updated = []
+
+            # Update parameters that are in the config
+            param_map = {
+                'min_height': ('min_height', float),
+                'max_height': ('max_height', float),
+                'min_range': ('min_range', float),
+                'max_range': ('max_range', float),
+                'min_safe_distance': ('min_safe_distance', float),
+                'critical_distance': ('critical_distance', float),
+                'hysteresis_distance': ('hysteresis_distance', float),
+                'cluster_distance': ('cluster_distance', float),
+                'min_cluster_size': ('min_cluster_size', int),
+                'temporal_history_size': ('temporal_history_size', int),
+                'temporal_threshold': ('temporal_threshold', int),
+                'water_plane_threshold': ('water_plane_threshold', float),
+                'smoke_filter_enabled': ('smoke_filter_enabled', bool),
+                'smoke_min_height': ('smoke_min_height', float),
+                'smoke_max_height': ('smoke_max_height', float),
+                'solid_min_height': ('solid_min_height', float),
+                'solid_max_height': ('solid_max_height', float)
+            }
+
+            for config_key, (attr_name, type_func) in param_map.items():
+                if config_key in config:
+                    setattr(self, attr_name, type_func(config[config_key]))
+                    updated.append(f"{attr_name}={getattr(self, attr_name)}")
+
+            if updated:
+                self.get_logger().info(f"⚙️ OKO config updated: {', '.join(updated)}")
+
+        except Exception as e:
+            self.get_logger().error(f"OKO config parse error: {e}")
+
     def lidar_callback(self, msg):
-        """Process 3D LIDAR point cloud for obstacle detection (Enhanced v2.0)"""
+        """Process 3D LIDAR point cloud for obstacle detection (Enhanced v2.1)"""
         points = []
         all_z_values = []  # For water plane estimation
         total_points = 0
@@ -190,6 +297,7 @@ class OkoPerception(Node):
         range_filtered = 0
         behind_filtered = 0
         water_filtered = 0
+        smoke_filtered = 0  # FIX: Initialize smoke counter
         
         point_step = msg.point_step
         data = msg.data
@@ -214,38 +322,28 @@ class OkoPerception(Node):
                 if self.min_range < dist_2d < self.max_range:
                     all_z_values.append(z)
 
-                    
-                ''' Old lines for water plane estimation
-                # Filter by height
+                # 1. SMOKE CLASSIFICATION (v2.1 - Dynamic parameters)
+                if self.smoke_filter_enabled:
+                    # Smoke floats above water surface
+                    is_smoke_candidate = (self.smoke_min_height < z < self.smoke_max_height)
+                    # Solid obstacles touch the water line
+                    is_solid_obstacle = (self.solid_min_height < z <= self.solid_max_height)
+
+                    if is_smoke_candidate:
+                        smoke_filtered += 1
+                        continue
+
+                    if not is_solid_obstacle:
+                        height_filtered += 1
+                        continue
+
+                # 2. HEIGHT FILTERING (Respects dashboard parameters)
                 if z < self.min_height or z > self.max_height:
                     height_filtered += 1
                     continue
-                '''
-                # SMOKE CLASSIFICATION FOR DETECTION
-                # Smoke usually floats: 0.5m < Z < 3.0m
-                # Solid obstacles (buoys) usually touch water: Z < 0.5m
-                
-                is_smoke_candidate = (z > 0.5 and z < 4.0)
-                is_solid_obstacle = (z <= 0.5 and z > -2.0) # Water line objects
 
-                if is_smoke_candidate:
-                    # Optional: Check intensity if available (smoke is less reflective)
-                    # For now, just ignoring it prevents "Obstacle Detected" panic.
-                    smoke_filtered += 1
-                    continue 
-                
-                # Only add if it looks like a solid object (solid means for this sim touching water)
-                if not is_solid_obstacle:
-                    continue
-
-                # (Keep existing filters below...)
-                # Filter by range...
-
-
-                # Calculate horizontal distance
+                # 3. RANGE FILTERING
                 dist = math.sqrt(x*x + y*y)
-                
-                # Filter by range
                 if dist < self.min_range or dist > self.max_range:
                     range_filtered += 1
                     continue
@@ -299,8 +397,9 @@ class OkoPerception(Node):
         # Debug logging (throttled)
         self.get_logger().info(
             f"LiDAR: {total_points} pts, valid={valid_points}, "
-            f"h_filt={height_filtered}, r_filt={range_filtered}, water={water_filtered}, "
-            f"final={len(points)}",
+            f"h_filt={height_filtered}, r_filt={range_filtered}, "
+            f"smoke_filt={smoke_filtered}, water={water_filtered}, "
+            f"behind={behind_filtered}, final={len(points)}",
             throttle_duration_sec=2.0
         )
         

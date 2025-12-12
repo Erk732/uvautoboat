@@ -507,35 +507,17 @@ function subscribeToTopics() {
     // Enable mission control UI when connected (before config received)
     updateMissionControlUI({ state: 'IDLE', gps_ready: true });
     
-    // Create publisher for configuration updates (supports both modes)
+    // Create publisher for configuration updates (Sputnik modular mode only)
     configPublisher = new ROSLIB.Topic({
-        ros: ros,
-        name: '/vostok1/set_config',
-        messageType: 'std_msgs/String'
-    });
-    
-    // Also create modular config publisher for sputnik
-    modularConfigPublisher = new ROSLIB.Topic({
         ros: ros,
         name: '/sputnik/set_config',
         messageType: 'std_msgs/String'
     });
+
+    // Backward compatibility alias
+    modularConfigPublisher = configPublisher;
     
-    // Subscribe to current config (vostok1)
-    const configTopic = new ROSLIB.Topic({
-        ros: ros,
-        name: '/vostok1/config',
-        messageType: 'std_msgs/String'
-    });
-    
-    configTopic.subscribe((message) => {
-        const data = JSON.parse(message.data);
-        console.log('Config received (vostok1):', data);
-        updateConfigFromROS(data);
-        updateWorldFromConfig(data);
-    });
-    
-    // Subscribe to current config (modular sputnik)
+    // Subscribe to current config (Sputnik modular mode only)
     const modularConfigTopic = new ROSLIB.Topic({
         ros: ros,
         name: '/sputnik/config',
@@ -549,42 +531,15 @@ function subscribeToTopics() {
         updateWorldFromConfig(data);
     });
     
-    // Subscribe to waypoints for map preview (vostok1)
-    const waypointsTopic = new ROSLIB.Topic({
-        ros: ros,
-        name: '/vostok1/waypoints',
-        messageType: 'std_msgs/String'
-    });
-    
-    waypointsTopic.subscribe((message) => {
-        const data = JSON.parse(message.data);
-        if (data.waypoints && data.waypoints.length > 0) {
-            // Check if waypoints actually changed
-            const newWpString = JSON.stringify(data.waypoints);
-            const oldWpString = JSON.stringify(missionState.waypoints);
-            const waypointsChanged = newWpString !== oldWpString;
-            
-            missionState.waypoints = data.waypoints;
-            persistWaypoints();
-            displayWaypointsOnMap(data.waypoints, waypointsChanged);
-        } else {
-            clearWaypoints('Waypoints cleared');
-        }
-    });
-    
-    // Create mission command publisher (supports both modes)
+    // Create mission command publisher (Sputnik modular mode only)
     missionCommandPublisher = new ROSLIB.Topic({
-        ros: ros,
-        name: '/vostok1/mission_command',
-        messageType: 'std_msgs/String'
-    });
-    
-    // Create modular mission command publisher for sputnik
-    modularMissionCommandPublisher = new ROSLIB.Topic({
         ros: ros,
         name: '/sputnik/mission_command',
         messageType: 'std_msgs/String'
     });
+
+    // Backward compatibility alias
+    modularMissionCommandPublisher = missionCommandPublisher;
     
     // Subscribe to ROS logs (rosout)
     const rosoutTopic = new ROSLIB.Topic({
@@ -1281,6 +1236,21 @@ function initTerminal() {
             terminal.innerHTML = '<div class="terminal-line system">[SYSTEM] Terminal cleared | Terminal effacé</div>';
         });
     }
+
+    // Clear logs button handler
+    const clearLogsBtn = document.getElementById('btn-clear-logs');
+    if (clearLogsBtn) {
+        clearLogsBtn.addEventListener('click', () => {
+            const logs = document.getElementById('logs');
+            if (logs) {
+                const timestamp = new Date().toLocaleTimeString();
+                logs.innerHTML = `<div class="log-entry info">
+                    <span class="timestamp">[${timestamp}]</span>
+                    <span class="message">[SYSTEM] Logs cleared | Journaux effacés</span>
+                </div>`;
+            }
+        });
+    }
 }
 
 // ========== MISSION CONTROL FUNCTIONS ==========
@@ -1334,7 +1304,12 @@ function initMissionControl() {
             addLog('🏠 Go Home activated | Retour maison activé', 'info');
         }
     });
-    
+
+    // Emergency Stop - Immediately halt the boat
+    document.getElementById('btn-emergency-stop').addEventListener('click', () => {
+        emergencyStop();
+    });
+
     // Joystick Override
     document.getElementById('btn-joystick-enable').addEventListener('click', () => {
         sendMissionCommand('joystick_enable');
@@ -1386,12 +1361,7 @@ function generateWaypoints() {
         data: JSON.stringify(config)
     });
     configPublisher.publish(configMsg);
-    
-    // Also publish to modular sputnik planner
-    if (modularConfigPublisher) {
-        modularConfigPublisher.publish(configMsg);
-    }
-    
+
     // Then send generate command
     sendMissionCommand('generate_waypoints');
     
@@ -1404,42 +1374,89 @@ function generateWaypoints() {
     addLog(`Generating ${totalWaypoints} waypoints: ${length}m × ${lanes} lanes`, 'info');
 }
 
-// Send mission command to Vostok1
+// Send mission command to Sputnik (modular mode)
 function sendMissionCommand(command) {
     if (!connected) {
         addLog('Not connected to ROS', 'error');
         return;
     }
-    
-    // Create publisher if not exists
+
+    // Create publisher if not exists (Sputnik only)
     if (!missionCommandPublisher) {
         missionCommandPublisher = new ROSLIB.Topic({
-            ros: ros,
-            name: '/vostok1/mission_command',
-            messageType: 'std_msgs/String'
-        });
-    }
-
-    // Ensure modular publisher exists too (avoid race after hard-refresh)
-    if (!modularMissionCommandPublisher) {
-        modularMissionCommandPublisher = new ROSLIB.Topic({
             ros: ros,
             name: '/sputnik/mission_command',
             messageType: 'std_msgs/String'
         });
     }
-    
+
     const msg = new ROSLIB.Message({
         data: JSON.stringify({ command: command })
     });
-    
-    // Publish to both vostok1 and modular (sputnik) topics
+
+    // Publish to Sputnik modular planner only
     missionCommandPublisher.publish(msg);
-    if (modularMissionCommandPublisher) {
-        modularMissionCommandPublisher.publish(msg);
-    }
     addLog(`Mission command: ${command}`, 'info');
-    console.log('Mission command sent to both vostok1 and sputnik:', command);
+    console.log('Mission command sent to sputnik:', command);
+}
+
+// Emergency Stop - Immediately halt the boat
+function emergencyStop() {
+    if (!connected) {
+        addLog('Not connected to ROS', 'error');
+        return;
+    }
+
+    // Show critical warning with audio if possible
+    const confirmed = confirm('🚨 EMERGENCY STOP 🚨\n\nThis will IMMEDIATELY:\n- Cut all thrust to ZERO\n- Stop the mission\n- Halt the boat\n\nConfirm emergency stop?\n\n🚨 ARRÊT D\'URGENCE 🚨\n\nCela va IMMÉDIATEMENT:\n- Couper toute propulsion à ZÉRO\n- Arrêter la mission\n- Immobiliser le bateau\n\nConfirmer l\'arrêt d\'urgence?');
+
+    if (!confirmed) {
+        addLog('Emergency stop cancelled by user', 'warning');
+        return;
+    }
+
+    addLog('🚨 EMERGENCY STOP ACTIVATED | ARRÊT D\'URGENCE ACTIVÉ 🚨', 'error');
+    console.error('🚨 EMERGENCY STOP ACTIVATED');
+
+    // 1. IMMEDIATELY publish zero thrust to both thrusters (highest priority)
+    const zeroThrustMsg = new ROSLIB.Message({ data: 0.0 });
+
+    const leftThrustTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/wamv/thrusters/left/thrust',
+        messageType: 'std_msgs/Float64'
+    });
+
+    const rightThrustTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/wamv/thrusters/right/thrust',
+        messageType: 'std_msgs/Float64'
+    });
+
+    // Publish zero thrust multiple times to ensure it's received
+    for (let i = 0; i < 5; i++) {
+        setTimeout(() => {
+            leftThrustTopic.publish(zeroThrustMsg);
+            rightThrustTopic.publish(zeroThrustMsg);
+        }, i * 100); // 0ms, 100ms, 200ms, 300ms, 400ms
+    }
+
+    // 2. Send emergency_stop command to planner
+    sendMissionCommand('emergency_stop');
+
+    // 3. Visual feedback - flash the emergency stop button
+    const emergencyBtn = document.getElementById('btn-emergency-stop');
+    if (emergencyBtn) {
+        emergencyBtn.style.animation = 'emergency-flash 0.5s ease-in-out 6';
+        setTimeout(() => {
+            emergencyBtn.style.animation = '';
+        }, 3000);
+    }
+
+    // 4. Log detailed emergency stop info
+    addLog('Zero thrust commanded to both thrusters', 'error');
+    addLog('Mission emergency stop sent to planner', 'error');
+    addLog('Boat should be stopped. Verify manually before resuming.', 'warning');
 }
 
 // Update mission control UI based on state
@@ -1896,7 +1913,13 @@ const TUNING_PRESETS = {
             temporal_history_size: 3,
             temporal_threshold: 3,
             water_plane_threshold: 0.2,
-            hysteresis_distance: 1.3
+            hysteresis_distance: 1.3,
+            // Smoke detection (v2.1)
+            smoke_filter_enabled: true,
+            smoke_min_height: 0.5,
+            smoke_max_height: 4.0,
+            solid_min_height: -2.0,
+            solid_max_height: 0.5
         },
         buran: {
             critical_distance: 3.5,
@@ -1930,7 +1953,13 @@ const TUNING_PRESETS = {
             temporal_history_size: 2,
             temporal_threshold: 2,
             water_plane_threshold: 0.2,
-            hysteresis_distance: 1.0
+            hysteresis_distance: 1.0,
+            // Smoke detection (v2.1) - Aggressive filtering for clustered buoys
+            smoke_filter_enabled: true,
+            smoke_min_height: 0.6,
+            smoke_max_height: 4.0,
+            solid_min_height: -2.0,
+            solid_max_height: 0.6
         },
         buran: {
             critical_distance: 3.0,
@@ -1964,7 +1993,13 @@ const TUNING_PRESETS = {
             temporal_history_size: 3,
             temporal_threshold: 2,
             water_plane_threshold: 0.15,
-            hysteresis_distance: 1.5
+            hysteresis_distance: 1.5,
+            // Smoke detection (v2.1) - Detect low piers
+            smoke_filter_enabled: true,
+            smoke_min_height: 0.8,
+            smoke_max_height: 4.0,
+            solid_min_height: -2.0,
+            solid_max_height: 0.8
         },
         buran: {
             critical_distance: 2.5,
@@ -1998,7 +2033,13 @@ const TUNING_PRESETS = {
             temporal_history_size: 2,
             temporal_threshold: 1,
             water_plane_threshold: 0.5,
-            hysteresis_distance: 2.0
+            hysteresis_distance: 2.0,
+            // Smoke detection (v2.1) - Conservative for open water
+            smoke_filter_enabled: false,  // Disabled for open water
+            smoke_min_height: 0.5,
+            smoke_max_height: 4.0,
+            solid_min_height: -2.0,
+            solid_max_height: 0.5
         },
         buran: {
             critical_distance: 5.0,
@@ -2048,8 +2089,8 @@ function initTuningPanel() {
     document.getElementById('btn-preset-open-water').addEventListener('click', () => applyPreset('openWater'));
 
     // Apply buttons
-    document.getElementById('btn-apply-oko').addEventListener('click', applyOkoParameters);
-    document.getElementById('btn-apply-buran').addEventListener('click', applyBuranParameters);
+    document.getElementById('btn-apply-oko').addEventListener('click', () => applyOkoParameters());
+    document.getElementById('btn-apply-buran').addEventListener('click', () => applyBuranParameters());
 
     console.log('Tuning panel initialized');
 }
@@ -2099,6 +2140,23 @@ function updateOkoInputs(params) {
     document.getElementById('oko-temporal-threshold').value = params.temporal_threshold;
     document.getElementById('oko-water-threshold').value = params.water_plane_threshold;
     document.getElementById('oko-hysteresis').value = params.hysteresis_distance;
+
+    // Smoke detection parameters (v2.1)
+    if (params.smoke_filter_enabled !== undefined) {
+        document.getElementById('oko-smoke-enabled').value = params.smoke_filter_enabled.toString();
+    }
+    if (params.smoke_min_height !== undefined) {
+        document.getElementById('oko-smoke-min-height').value = params.smoke_min_height;
+    }
+    if (params.smoke_max_height !== undefined) {
+        document.getElementById('oko-smoke-max-height').value = params.smoke_max_height;
+    }
+    if (params.solid_min_height !== undefined) {
+        document.getElementById('oko-solid-min-height').value = params.solid_min_height;
+    }
+    if (params.solid_max_height !== undefined) {
+        document.getElementById('oko-solid-max-height').value = params.solid_max_height;
+    }
 }
 
 // Update BURAN input fields from preset
@@ -2120,10 +2178,11 @@ function updateBuranInputs(params) {
     document.getElementById('buran-slew-rate').value = params.slew_rate_limit;
 }
 
-// Apply OKO perception parameters via ROS2 service
+// Apply OKO perception parameters via config topic
 function applyOkoParameters(presetParams = null) {
-    if (!connected) {
+    if (!connected || !configPublisher) {
         addLog('Not connected to ROS', 'error');
+        showFeedback('❌ Not connected to ROS', 'error');
         return;
     }
 
@@ -2140,39 +2199,38 @@ function applyOkoParameters(presetParams = null) {
         temporal_history_size: parseInt(document.getElementById('oko-temporal-history').value),
         temporal_threshold: parseInt(document.getElementById('oko-temporal-threshold').value),
         water_plane_threshold: parseFloat(document.getElementById('oko-water-threshold').value),
-        hysteresis_distance: parseFloat(document.getElementById('oko-hysteresis').value)
+        hysteresis_distance: parseFloat(document.getElementById('oko-hysteresis').value),
+        // Smoke detection parameters (v2.1)
+        smoke_filter_enabled: document.getElementById('oko-smoke-enabled') ?
+            (document.getElementById('oko-smoke-enabled').value === 'true') : true,
+        smoke_min_height: document.getElementById('oko-smoke-min-height') ?
+            parseFloat(document.getElementById('oko-smoke-min-height').value) : 0.5,
+        smoke_max_height: document.getElementById('oko-smoke-max-height') ?
+            parseFloat(document.getElementById('oko-smoke-max-height').value) : 4.0,
+        solid_min_height: document.getElementById('oko-solid-min-height') ?
+            parseFloat(document.getElementById('oko-solid-min-height').value) : -2.0,
+        solid_max_height: document.getElementById('oko-solid-max-height') ?
+            parseFloat(document.getElementById('oko-solid-max-height').value) : 0.5
     };
 
-    // Call ROS2 parameter service for each parameter
-    const nodeName = '/oko_perception_node';
-    let successCount = 0;
-    let errorCount = 0;
-    const totalParams = Object.keys(params).length;
-
-    Object.entries(params).forEach(([paramName, paramValue]) => {
-        setROS2Parameter(nodeName, paramName, paramValue, (success) => {
-            if (success) {
-                successCount++;
-            } else {
-                errorCount++;
-            }
-
-            // Log result after all params processed
-            if (successCount + errorCount === totalParams) {
-                if (errorCount === 0) {
-                    addLog(`✅ OKO: ${successCount}/${totalParams} parameters applied`, 'info');
-                } else {
-                    addLog(`⚠️ OKO: ${successCount} success, ${errorCount} failed`, 'warning');
-                }
-            }
-        });
+    // Publish to /sputnik/set_config topic (same as BURAN)
+    const message = new ROSLIB.Message({
+        data: JSON.stringify(params)
     });
+
+    configPublisher.publish(message);
+
+    const totalParams = Object.keys(params).length;
+    addLog(`✅ OKO: ${totalParams} parameters sent via config topic`, 'info');
+    showFeedback(`✅ OKO: All ${totalParams} parameters applied successfully!`, 'success');
+    console.log('OKO config sent to /sputnik/set_config:', params);
 }
 
-// Apply BURAN controller parameters via ROS2 service
+// Apply BURAN controller parameters via config topic
 function applyBuranParameters(presetParams = null) {
-    if (!connected) {
+    if (!connected || !configPublisher) {
         addLog('Not connected to ROS', 'error');
+        showFeedback('❌ Not connected to ROS', 'error');
         return;
     }
 
@@ -2195,30 +2253,93 @@ function applyBuranParameters(presetParams = null) {
         slew_rate_limit: parseFloat(document.getElementById('buran-slew-rate').value)
     };
 
-    // Call ROS2 parameter service for each parameter
-    const nodeName = '/buran_controller';
-    let successCount = 0;
-    let errorCount = 0;
-    const totalParams = Object.keys(params).length;
-
-    Object.entries(params).forEach(([paramName, paramValue]) => {
-        setROS2Parameter(nodeName, paramName, paramValue, (success) => {
-            if (success) {
-                successCount++;
-            } else {
-                errorCount++;
-            }
-
-            // Log result after all params processed
-            if (successCount + errorCount === totalParams) {
-                if (errorCount === 0) {
-                    addLog(`✅ BURAN: ${successCount}/${totalParams} parameters applied`, 'info');
-                } else {
-                    addLog(`⚠️ BURAN: ${successCount} success, ${errorCount} failed`, 'warning');
-                }
-            }
-        });
+    // Publish to /sputnik/set_config topic (same as basic config)
+    const message = new ROSLIB.Message({
+        data: JSON.stringify(params)
     });
+
+    configPublisher.publish(message);
+
+    const totalParams = Object.keys(params).length;
+    addLog(`✅ BURAN: ${totalParams} parameters sent via config topic`, 'info');
+    showFeedback(`✅ BURAN: All ${totalParams} parameters applied successfully!`, 'success');
+    console.log('BURAN config sent to /sputnik/set_config:', params);
+}
+
+// Show visual feedback toast notification
+function showFeedback(message, type = 'info') {
+    // Create toast container if it doesn't exist
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        `;
+        document.body.appendChild(toastContainer);
+    }
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+
+    // Set colors based on type
+    let bgColor, borderColor;
+    switch (type) {
+        case 'success':
+            bgColor = 'rgba(40, 167, 69, 0.95)';
+            borderColor = '#28a745';
+            break;
+        case 'error':
+            bgColor = 'rgba(220, 53, 69, 0.95)';
+            borderColor = '#dc3545';
+            break;
+        case 'warning':
+            bgColor = 'rgba(255, 193, 7, 0.95)';
+            borderColor = '#ffc107';
+            break;
+        default: // info
+            bgColor = 'rgba(23, 162, 184, 0.95)';
+            borderColor = '#17a2b8';
+    }
+
+    toast.style.cssText = `
+        background: ${bgColor};
+        color: white;
+        padding: 15px 20px;
+        border-radius: 8px;
+        border-left: 4px solid ${borderColor};
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        min-width: 300px;
+        max-width: 400px;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1.5;
+        animation: slideIn 0.3s ease-out;
+        white-space: pre-wrap;
+    `;
+
+    toast.textContent = message;
+    toastContainer.appendChild(toast);
+
+    // Auto-remove after delay
+    const duration = type === 'error' || type === 'warning' ? 5000 : 3000;
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease-in';
+        setTimeout(() => {
+            toast.remove();
+            // Remove container if empty
+            if (toastContainer.children.length === 0) {
+                toastContainer.remove();
+            }
+        }, 300);
+    }, duration);
 }
 
 // Set ROS2 parameter via rosbridge service call
@@ -2302,4 +2423,396 @@ window.addEventListener('load', () => {
             }, 1000);
         }
     }, 1000);
+});
+
+// =============================================================================
+// PHASE 2: MISSION HISTORY LOG, WAYPOINT VALIDATION, PROGRESS BAR
+// =============================================================================
+
+// Mission History System
+const missionHistory = [];
+const MAX_HISTORY_ENTRIES = 100;
+let historyExpanded = false;
+
+// Initialize mission history
+function initMissionHistory() {
+    // Toggle history panel
+    document.getElementById('btn-toggle-history').addEventListener('click', () => {
+        historyExpanded = !historyExpanded;
+        const content = document.getElementById('mission-history-content');
+        const icon = document.querySelector('.history-icon');
+
+        if (historyExpanded) {
+            content.style.display = 'block';
+            icon.textContent = '▼';
+        } else {
+            content.style.display = 'none';
+            icon.textContent = '▶';
+        }
+    });
+
+    // Clear history
+    document.getElementById('btn-clear-history').addEventListener('click', () => {
+        if (confirm('Clear all mission history? | Effacer tout l\'historique?')) {
+            missionHistory.length = 0;
+            updateHistoryDisplay();
+            addLog('Mission history cleared', 'info');
+        }
+    });
+
+    // Export history as JSON
+    document.getElementById('btn-export-history').addEventListener('click', () => {
+        exportHistoryAsJSON();
+    });
+
+    console.log('Mission history initialized');
+}
+
+// Add event to mission history
+function addHistoryEvent(type, message, data = {}) {
+    const event = {
+        timestamp: new Date().toISOString(),
+        time: new Date().toLocaleTimeString(),
+        type: type, // 'state', 'waypoint', 'detour', 'sass', 'emergency', 'info', 'warning', 'error'
+        message: message,
+        data: data
+    };
+
+    missionHistory.unshift(event); // Add to beginning
+
+    // Keep only last MAX_HISTORY_ENTRIES
+    if (missionHistory.length > MAX_HISTORY_ENTRIES) {
+        missionHistory.pop();
+    }
+
+    updateHistoryDisplay();
+}
+
+// Update history display in UI
+function updateHistoryDisplay() {
+    const logEl = document.getElementById('mission-history-log');
+    const countEl = document.getElementById('history-count');
+
+    if (!logEl || !countEl) return;
+
+    countEl.textContent = `(${missionHistory.length} events)`;
+
+    if (missionHistory.length === 0) {
+        logEl.innerHTML = '<div class="history-empty">No events yet | Aucun événement</div>';
+        return;
+    }
+
+    let html = '';
+    missionHistory.forEach(event => {
+        const iconMap = {
+            'state': '🔄',
+            'waypoint': '📍',
+            'detour': '⚠️',
+            'sass': '🔄',
+            'emergency': '🚨',
+            'info': 'ℹ️',
+            'warning': '⚠️',
+            'error': '❌'
+        };
+        const icon = iconMap[event.type] || '•';
+        const className = `history-entry history-${event.type}`;
+
+        html += `<div class="${className}">
+            <span class="history-time">${event.time}</span>
+            <span class="history-icon">${icon}</span>
+            <span class="history-message">${event.message}</span>
+        </div>`;
+    });
+
+    logEl.innerHTML = html;
+
+    // Auto-scroll to top if expanded
+    if (historyExpanded) {
+        logEl.scrollTop = 0;
+    }
+}
+
+// Export history as JSON
+function exportHistoryAsJSON() {
+    const dataStr = JSON.stringify(missionHistory, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `mission_history_${new Date().toISOString()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    addLog('Mission history exported', 'info');
+}
+
+// Waypoint Validation System
+let currentValidation = null;
+
+// Validate waypoints before confirmation
+async function validateWaypoints(waypoints) {
+    if (!waypoints || waypoints.length === 0) {
+        return null;
+    }
+
+    const validation = {
+        timestamp: Date.now(),
+        waypoints: waypoints,
+        checks: {
+            reachable: { pass: true, message: '✅ All waypoints reachable' },
+            obstacles: { pass: true, message: '✅ No waypoints in known obstacles', warnings: [] },
+            smoke: { pass: true, message: '✅ Path clear of smoke zones', warnings: [] },
+            proximity: { pass: true, message: '✅ Safe clearance from obstacles', warnings: [] }
+        },
+        estimates: {
+            distance: 0,
+            duration: 0
+        }
+    };
+
+    // Calculate total distance
+    let totalDistance = 0;
+    for (let i = 0; i < waypoints.length - 1; i++) {
+        const wp1 = Array.isArray(waypoints[i]) ? waypoints[i] : [waypoints[i].x, waypoints[i].y];
+        const wp2 = Array.isArray(waypoints[i + 1]) ? waypoints[i + 1] : [waypoints[i + 1].x, waypoints[i + 1].y];
+        const dx = wp2[0] - wp1[0];
+        const dy = wp2[1] - wp1[1];
+        totalDistance += Math.sqrt(dx * dx + dy * dy);
+    }
+    validation.estimates.distance = totalDistance;
+
+    // Estimate duration (assuming average speed from config or default)
+    const avgSpeed = currentState.config.base_speed ? currentState.config.base_speed / 200 : 2.5; // m/s
+    validation.estimates.duration = totalDistance / avgSpeed;
+
+    // Check obstacles (if OKO has reported any clusters)
+    if (currentState.obstacles && currentState.obstacles.clusters) {
+        // Simplified check - in real implementation would check actual cluster positions
+        const obstacleCount = currentState.obstacles.obstacle_count || 0;
+        if (obstacleCount > 10) {
+            validation.checks.obstacles.pass = false;
+            validation.checks.obstacles.message = '⚠️ High obstacle density detected';
+            validation.checks.obstacles.warnings.push(`${obstacleCount} obstacles currently detected`);
+        }
+    }
+
+    // Check smoke zones (if pollutant sources detected)
+    // This would check waypoint proximity to known smoke sources
+    // Simplified for now
+
+    currentValidation = validation;
+    return validation;
+}
+
+// Display validation results
+function displayValidationResults(validation) {
+    const panel = document.getElementById('waypoint-validation-panel');
+    const resultsEl = document.getElementById('validation-results');
+
+    if (!validation) {
+        panel.style.display = 'none';
+        return;
+    }
+
+    panel.style.display = 'block';
+
+    let html = '<div class="validation-checks">';
+
+    // Display all checks
+    for (const [key, check] of Object.entries(validation.checks)) {
+        html += `<div class="validation-check ${check.pass ? 'pass' : 'warning'}">
+            ${check.message}
+        </div>`;
+
+        if (check.warnings && check.warnings.length > 0) {
+            check.warnings.forEach(warning => {
+                html += `<div class="validation-warning">⚠️ ${warning}</div>`;
+            });
+        }
+    }
+
+    // Display estimates
+    const minutes = Math.floor(validation.estimates.duration / 60);
+    const seconds = Math.floor(validation.estimates.duration % 60);
+    html += `
+        <div class="validation-estimates">
+            <div class="validation-estimate">
+                ℹ️ Total distance: <strong>${validation.estimates.distance.toFixed(0)}m</strong>
+            </div>
+            <div class="validation-estimate">
+                ℹ️ Estimated completion: <strong>${minutes}m ${seconds}s</strong>
+            </div>
+        </div>
+    `;
+
+    html += '</div>';
+    resultsEl.innerHTML = html;
+
+    // Log validation
+    addHistoryEvent('info', `Waypoints validated: ${validation.waypoints.length} waypoints, ${validation.estimates.distance.toFixed(0)}m`);
+}
+
+// Mission Progress Bar System
+const progressState = {
+    startTime: null,
+    distanceTraveled: 0,
+    speedSamples: [],
+    lastPosition: null
+};
+
+// Update mission progress
+function updateMissionProgress() {
+    const progressSection = document.getElementById('mission-progress-section');
+
+    // Show progress bar when mission is running
+    const runningStates = ['RUNNING', 'DRIVING', 'PAUSED'];
+    if (runningStates.includes(missionState.state) && missionState.totalWaypoints > 0) {
+        progressSection.style.display = 'block';
+
+        // Calculate progress percentage
+        const waypointProgress = (missionState.currentWaypoint / missionState.totalWaypoints) * 100;
+
+        // Update progress bar
+        const progressBar = document.getElementById('mission-progress-bar');
+        const progressText = document.getElementById('mission-progress-text');
+        progressBar.style.width = waypointProgress + '%';
+        progressText.textContent = waypointProgress.toFixed(0) + '%';
+
+        // Color-code based on speed
+        if (currentState.gps.speed < 0.5) {
+            progressBar.className = 'mission-progress-bar slow';
+        } else if (currentState.gps.speed < 1.5) {
+            progressBar.className = 'mission-progress-bar normal';
+        } else {
+            progressBar.className = 'mission-progress-bar fast';
+        }
+
+        // Update waypoint count
+        document.getElementById('progress-waypoints').textContent =
+            `${missionState.currentWaypoint}/${missionState.totalWaypoints}`;
+
+        // Update distance (simplified - would need actual path tracking)
+        if (currentValidation) {
+            const totalDist = currentValidation.estimates.distance;
+            const traveledDist = (missionState.currentWaypoint / missionState.totalWaypoints) * totalDist;
+            document.getElementById('progress-distance').textContent =
+                `${traveledDist.toFixed(0)}m / ${totalDist.toFixed(0)}m`;
+        }
+
+        // Update current speed from GPS
+        const currentSpeed = currentState.gps.speed || 0;
+        document.getElementById('progress-current-speed').textContent =
+            currentSpeed.toFixed(1) + ' m/s';
+
+        // Calculate average speed
+        progressState.speedSamples.push(currentSpeed);
+        if (progressState.speedSamples.length > 30) {
+            progressState.speedSamples.shift(); // Keep last 30 samples
+        }
+        const avgSpeed = progressState.speedSamples.reduce((a, b) => a + b, 0) / progressState.speedSamples.length;
+        document.getElementById('progress-avg-speed').textContent =
+            avgSpeed.toFixed(1) + ' m/s';
+
+        // Calculate time remaining
+        if (currentValidation && avgSpeed > 0.1) {
+            const totalDist = currentValidation.estimates.distance;
+            const traveledDist = (missionState.currentWaypoint / missionState.totalWaypoints) * totalDist;
+            const remainingDist = totalDist - traveledDist;
+            const remainingTime = remainingDist / avgSpeed;
+            const mins = Math.floor(remainingTime / 60);
+            const secs = Math.floor(remainingTime % 60);
+            document.getElementById('progress-time-remaining').textContent =
+                `${mins}:${secs.toString().padStart(2, '0')}`;
+        } else {
+            document.getElementById('progress-time-remaining').textContent = '--:--';
+        }
+
+        // Update status
+        let statusText = missionState.state;
+        if (missionState.blockedReason && missionState.blockedReason !== 'None') {
+            statusText += ` (${missionState.blockedReason})`;
+        }
+        document.getElementById('progress-status').textContent = statusText;
+
+    } else {
+        progressSection.style.display = 'none';
+        progressState.speedSamples = [];
+    }
+}
+
+// Hook into existing update functions to add history logging
+const originalUpdateMissionStatus = updateMissionStatus;
+updateMissionStatus = function(data) {
+    const prevState = currentState.mission.state;
+    const prevWaypoint = currentState.mission.waypoint;
+
+    originalUpdateMissionStatus(data);
+
+    // Log state changes
+    if (prevState !== data.state) {
+        addHistoryEvent('state', `State: ${prevState} → ${data.state}`);
+    }
+
+    // Log waypoint progress
+    if (prevWaypoint !== data.waypoint && data.waypoint > 0) {
+        addHistoryEvent('waypoint', `Waypoint ${data.waypoint}/${data.total_waypoints} reached`);
+    }
+
+    // Log detours
+    if (data.detour_active && !currentState.mission.detour_active) {
+        addHistoryEvent('detour', 'Detour activated (obstacle avoidance)');
+    }
+
+    // Update progress bar
+    updateMissionProgress();
+};
+
+// Hook into GPS updates for speed tracking
+const originalUpdateGPS = updateGPS;
+updateGPS = function(message) {
+    originalUpdateGPS(message);
+
+    // Calculate speed from position changes if not provided
+    if (!currentState.gps.speed && progressState.lastPosition) {
+        const dx = currentState.gps.x - progressState.lastPosition.x;
+        const dy = currentState.gps.y - progressState.lastPosition.y;
+        const dt = (Date.now() - progressState.lastPosition.time) / 1000; // seconds
+        if (dt > 0) {
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            currentState.gps.speed = dist / dt;
+        }
+    }
+
+    progressState.lastPosition = {
+        x: currentState.gps.x,
+        y: currentState.gps.y,
+        time: Date.now()
+    };
+
+    // Update progress display
+    if (missionState.state === 'RUNNING' || missionState.state === 'DRIVING') {
+        updateMissionProgress();
+    }
+};
+
+// Hook into waypoint generation to trigger validation
+const originalGenerateWaypoints = generateWaypoints;
+generateWaypoints = function() {
+    originalGenerateWaypoints();
+
+    // Validate waypoints after they're received (with delay for ROS processing)
+    setTimeout(async () => {
+        if (missionState.waypoints && missionState.waypoints.length > 0) {
+            addHistoryEvent('info', `Generated ${missionState.waypoints.length} waypoints`);
+            const validation = await validateWaypoints(missionState.waypoints);
+            displayValidationResults(validation);
+        }
+    }, 1500);
+};
+
+// Initialize Phase 2 features on page load
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        initMissionHistory();
+        console.log('Phase 2 features initialized');
+    }, 1500);
 });

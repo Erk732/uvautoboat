@@ -364,7 +364,7 @@ echo "  List all nodes:     ros2 node list"
 echo "  Kill everything:    pkill -9 gz && pkill -9 ros2 && pkill -9 rosbridge"
 echo ""
 echo -e "${BLUE}Press Ctrl+C in any terminal tab to stop that component${NC}"
-echo -e "${BLUE}Press Ctrl+C here to stop EVERYTHING (cleanup will kill all components)${NC}"
+echo -e "${BLUE}Press Ctrl+C here in this terminal to stop EVERYTHING (cleanup will kill all components)${NC}"
 echo ""
 
 # Keep script running until user interrupts (Ctrl+C triggers cleanup trap)
