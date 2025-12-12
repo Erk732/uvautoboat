@@ -318,22 +318,15 @@ class BuranController(Node):
             self.mission_status_callback,
             10
         )
-        # High-priority mission commands (STOP/RESUME)
+        # High-priority mission commands (STOP/RESUME) - modular architecture
         self.create_subscription(
             String,
-            '/vostok1/mission_command',
+            '/sputnik/mission_command',
             self.mission_command_callback,
             10
         )
         
-        # Subscribe to runtime config updates (PID, speed)
-        self.create_subscription(
-            String,
-            '/vostok1/set_config',
-            self.config_callback,
-            10
-        )
-        # Also listen to modular config topic
+        # Subscribe to runtime config updates (PID, speed) - modular architecture
         self.create_subscription(
             String,
             '/sputnik/set_config',
@@ -537,7 +530,29 @@ class BuranController(Node):
             if 'use_vfh_bias' in config:
                 self.use_vfh_bias = bool(config['use_vfh_bias'])
                 updated.append(f"use_vfh_bias={self.use_vfh_bias}")
-                
+
+            # Smart Anti-Stuck System (SASS) parameters
+            if 'stuck_timeout' in config:
+                self.stuck_timeout = float(config['stuck_timeout'])
+                updated.append(f"stuck_timeout={self.stuck_timeout}")
+            if 'stuck_threshold' in config:
+                self.stuck_threshold = float(config['stuck_threshold'])
+                updated.append(f"stuck_threshold={self.stuck_threshold}")
+            if 'no_go_zone_radius' in config:
+                self.no_go_zone_radius = float(config['no_go_zone_radius'])
+                updated.append(f"no_go_zone_radius={self.no_go_zone_radius}")
+            if 'detour_distance' in config:
+                self.detour_distance = float(config['detour_distance'])
+                updated.append(f"detour_distance={self.detour_distance}")
+
+            # Control smoothness parameters
+            if 'turn_deadband_deg' in config:
+                self.turn_deadband_deg = float(config['turn_deadband_deg'])
+                updated.append(f"turn_deadband={self.turn_deadband_deg}")
+            if 'slew_rate_limit' in config:
+                self.slew_rate_limit = float(config['slew_rate_limit'])
+                updated.append(f"slew_rate={self.slew_rate_limit}")
+
             if updated:
                 self.get_logger().info(f"⚙️ Config updated: {', '.join(updated)}")
                 

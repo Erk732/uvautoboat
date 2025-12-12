@@ -216,6 +216,60 @@
                     </div>
                 </div>
 
+                <!-- Mission Progress Bar -->
+                <div id="mission-progress-section" class="mission-progress-section" style="display: none;">
+                    <h3>📊 Mission Progress | Progrès de la Mission</h3>
+                    <div class="progress-bar-container">
+                        <div id="mission-progress-bar" class="mission-progress-bar" style="width: 0%">
+                            <span id="mission-progress-text" class="progress-text">0%</span>
+                        </div>
+                    </div>
+                    <div class="progress-stats">
+                        <div class="progress-stat-item">
+                            <span class="stat-label">Waypoints:</span>
+                            <span id="progress-waypoints" class="stat-value">0/0</span>
+                        </div>
+                        <div class="progress-stat-item">
+                            <span class="stat-label">Distance:</span>
+                            <span id="progress-distance" class="stat-value">0m / 0m</span>
+                        </div>
+                        <div class="progress-stat-item">
+                            <span class="stat-label">Current Speed:</span>
+                            <span id="progress-current-speed" class="stat-value">0.0 m/s</span>
+                        </div>
+                        <div class="progress-stat-item">
+                            <span class="stat-label">Avg Speed:</span>
+                            <span id="progress-avg-speed" class="stat-value">0.0 m/s</span>
+                        </div>
+                        <div class="progress-stat-item">
+                            <span class="stat-label">Time Remaining:</span>
+                            <span id="progress-time-remaining" class="stat-value">--:--</span>
+                        </div>
+                        <div class="progress-stat-item full-width">
+                            <span class="stat-label">Status:</span>
+                            <span id="progress-status" class="stat-value">Idle</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mission History Log -->
+                <div class="mission-history-section">
+                    <button class="mission-history-header" id="btn-toggle-history">
+                        <span class="history-icon">▶</span>
+                        <span class="history-title">Mission History | Historique Mission</span>
+                        <span id="history-count" class="history-count">(0 events)</span>
+                    </button>
+                    <div id="mission-history-content" class="mission-history-content" style="display: none;">
+                        <div class="history-controls">
+                            <button id="btn-clear-history" class="history-btn">Clear | Effacer</button>
+                            <button id="btn-export-history" class="history-btn">Export JSON</button>
+                        </div>
+                        <div id="mission-history-log" class="mission-history-log">
+                            <div class="history-empty">No events yet | Aucun événement</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Step 1: Configure Waypoints -->
                 <div class="mission-step">
                     <h3>Step 1: Route Configuration | Configuration du Trajet</h3>
@@ -283,6 +337,16 @@
                     </div>
                 </div>
 
+                <!-- Waypoint Validation Results -->
+                <div id="waypoint-validation-panel" class="mission-step validation-panel" style="display: none;">
+                    <h3>📋 Waypoint Validation | Validation des Points</h3>
+                    <div id="validation-results" class="validation-results">
+                        <div class="validation-loading">
+                            ⏳ Validating waypoints... | Validation en cours...
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Step 2: Confirm or Cancel -->
                 <div class="mission-step">
                     <h3>Step 2: Confirmation</h3>
@@ -317,6 +381,14 @@
                         <button id="btn-go-home" class="mission-btn home">
                             🏠 RETURN HOME | RETOUR BASE
                         </button>
+                    </div>
+                    <div class="mission-buttons-row" style="margin-top: 15px;">
+                        <button id="btn-emergency-stop" class="mission-btn emergency">
+                            🚨 EMERGENCY STOP | ARRÊT D'URGENCE
+                        </button>
+                    </div>
+                    <div class="emergency-note">
+                        ⚠️ Emergency stop will immediately cut all thrust and halt the boat | L'arrêt d'urgence coupera immédiatement la propulsion
                     </div>
                 </div>
 
@@ -543,6 +615,42 @@
                                         <label for="oko-hysteresis">Hysteresis (m):</label>
                                         <input type="number" id="oko-hysteresis" step="0.1" value="1.3">
                                         <span class="param-hint">Prevent oscillation</span>
+                                    </div>
+                                </div>
+
+                                <div class="param-group">
+                                    <h4>Smoke Detection (v2.1) | Détection Fumée</h4>
+                                    <div class="param-item">
+                                        <label for="oko-smoke-enabled">Enable Smoke Filter:</label>
+                                        <select id="oko-smoke-enabled">
+                                            <option value="true">Enabled</option>
+                                            <option value="false">Disabled</option>
+                                        </select>
+                                        <span class="param-hint">Toggle smoke filtering</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="oko-smoke-min-height">Smoke Min Height (m):</label>
+                                        <input type="number" id="oko-smoke-min-height" step="0.1" value="0.5">
+                                        <span class="param-hint">Smoke floats above this</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="oko-smoke-max-height">Smoke Max Height (m):</label>
+                                        <input type="number" id="oko-smoke-max-height" step="0.1" value="4.0">
+                                        <span class="param-hint">Smoke below this</span>
+                                    </div>
+                                </div>
+
+                                <div class="param-group">
+                                    <h4>Solid Objects (v2.1) | Objets Solides</h4>
+                                    <div class="param-item">
+                                        <label for="oko-solid-min-height">Solid Min Height (m):</label>
+                                        <input type="number" id="oko-solid-min-height" step="0.1" value="-2.0">
+                                        <span class="param-hint">Solid obstacles min</span>
+                                    </div>
+                                    <div class="param-item">
+                                        <label for="oko-solid-max-height">Solid Max Height (m):</label>
+                                        <input type="number" id="oko-solid-max-height" step="0.1" value="0.5">
+                                        <span class="param-hint">Touch water line</span>
                                     </div>
                                 </div>
                             </div>

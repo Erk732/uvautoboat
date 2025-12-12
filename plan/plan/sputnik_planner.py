@@ -1121,7 +1121,14 @@ class SputnikPlanner(Node):
 
     def _publish_current_target_immediate(self):
         """Immediately publish current target (called on resume/go_home for instant BURAN response)"""
-        if self.current_gps is None or not self.waypoints or self.current_wp_index >= len(self.waypoints):
+        if self.current_gps is None:
+            self.get_logger().warn("⚠️ Cannot publish target: GPS not available")
+            return
+        if not self.waypoints:
+            self.get_logger().warn("⚠️ Cannot publish target: No waypoints")
+            return
+        if self.current_wp_index >= len(self.waypoints):
+            self.get_logger().warn(f"⚠️ Cannot publish target: Waypoint index {self.current_wp_index} >= {len(self.waypoints)}")
             return
 
         curr_x, curr_y = self.latlon_to_meters(self.current_gps[0], self.current_gps[1])

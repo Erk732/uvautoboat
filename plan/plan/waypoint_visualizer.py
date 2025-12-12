@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Waypoint Visualizer for RViz
+Waypoint Visualizer for RViz - Modular Architecture
 
-Subscribes to Vostok1's status topic and publishes visualization markers
-for waypoints, current target, boat path, and no-go zones.
+Subscribes to Sputnik planner's mission status and waypoints topics,
+and publishes visualization markers for waypoints, current target,
+boat path, and no-go zones.
 
-Run this alongside vostok1.py to see waypoints in RViz.
+Run this alongside the modular Sputnik planner to see waypoints in RViz.
 """
 
 import rclpy
@@ -38,30 +39,14 @@ class WaypointVisualizer(Node):
         self.ref_lat = None
         self.ref_lon = None
         
-        # Subscribe to both Vostok1 (integrated) and Sputnik (modular) topics
-        # Vostok1 topics (integrated mode)
-        self.create_subscription(
-            String,
-            '/vostok1/mission_status',
-            self.mission_status_callback,
-            10
-        )
-        
-        self.create_subscription(
-            String,
-            '/vostok1/waypoints',
-            self.waypoints_callback,
-            10
-        )
-        
-        # Sputnik topics (modular mode)
+        # Subscribe to modular architecture topics only
         self.create_subscription(
             String,
             '/planning/mission_status',
             self.mission_status_callback_modular,
             10
         )
-        
+
         self.create_subscription(
             String,
             '/planning/waypoints',
@@ -99,29 +84,6 @@ class WaypointVisualizer(Node):
         if len(self.path_points) > 500:
             self.path_points.pop(0)
             
-    def mission_status_callback(self, msg):
-        """Parse mission status for current waypoint"""
-        try:
-            data = json.loads(msg.data)
-            if 'waypoint' in data:
-                self.current_wp_index = data['waypoint'] - 1  # Convert 1-indexed to 0-indexed
-            if 'total_waypoints' in data:
-                self.total_waypoints = data['total_waypoints']
-        except json.JSONDecodeError:
-            pass
-            
-    def waypoints_callback(self, msg):
-        """Receive waypoint list from Vostok1 (integrated mode)"""
-        try:
-            data = json.loads(msg.data)
-            if 'waypoints' in data:
-                self.waypoints = [(wp['x'], wp['y']) for wp in data['waypoints']]
-                self.get_logger().info(f"📍 Received {len(self.waypoints)} waypoints (Vostok1)")
-            if 'no_go_zones' in data:
-                self.no_go_zones = data['no_go_zones']
-        except json.JSONDecodeError:
-            pass
-
     def mission_status_callback_modular(self, msg):
         """Parse mission status from Sputnik (modular mode)"""
         try:
@@ -134,7 +96,7 @@ class WaypointVisualizer(Node):
             pass
 
     def waypoints_callback_modular(self, msg):
-        """Receive waypoint list from Sputnik (modular mode) - handles both formats"""
+        """Receive waypoint list from Sputnik planner - handles both formats"""
         try:
             data = json.loads(msg.data)
             if 'waypoints' in data:
@@ -142,12 +104,12 @@ class WaypointVisualizer(Node):
                 raw_waypoints = data['waypoints']
                 if raw_waypoints and len(raw_waypoints) > 0:
                     if isinstance(raw_waypoints[0], (list, tuple)):
-                        # Tuple/list format from Sputnik
+                        # Tuple/list format
                         self.waypoints = [(wp[0], wp[1]) for wp in raw_waypoints]
                     elif isinstance(raw_waypoints[0], dict):
-                        # Dict format from Vostok1
+                        # Dict format
                         self.waypoints = [(wp['x'], wp['y']) for wp in raw_waypoints]
-                    self.get_logger().info(f"📍 Received {len(self.waypoints)} waypoints (Sputnik)")
+                    self.get_logger().info(f"📍 Received {len(self.waypoints)} waypoints")
             if 'no_go_zones' in data:
                 self.no_go_zones = data['no_go_zones']
         except (json.JSONDecodeError, KeyError, IndexError) as e:
