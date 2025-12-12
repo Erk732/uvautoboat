@@ -26,20 +26,11 @@ class PoseFilter(Node):
             10
         )
 
-        self.logged_once = False
-
         self.get_logger().info(f'Pose filter relay: {input_topic} -> {output_topic}')
 
     def pose_callback(self, msg: PoseStamped) -> None:
         # Pass through PoseStamped messages as-is
         self.pub.publish(msg)
-        if not self.logged_once:
-            p = msg.pose.position
-            self.get_logger().info(
-                f'Initial pose (first message) frame={msg.header.frame_id}: '
-                f'x={p.x:.2f}, y={p.y:.2f}, z={p.z:.2f}'
-            )
-            self.logged_once = True
 
 
 def main(args=None):
@@ -56,3 +47,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+

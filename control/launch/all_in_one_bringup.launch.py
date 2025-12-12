@@ -83,9 +83,8 @@ def generate_launch_description():
                 'side_angle_deg': 60.0,            # Side sector angle (deg)
                 'hazard_world_auto_origin': True,  # Auto-convert world hazard boxes using first pose
                 # ==================== Auto Goal Sequence ====================
-                # Leave disabled when using a separate goal sequencer on another machine
-                'auto_goal_enable': False,         # Enable auto-publishing next goals
-                # Format: "x1,y1;x2,y2" in same frame as pose (world/local ENU); ignored if auto_goal_enable=False
+                'auto_goal_enable': True,         # Enable auto-publishing next goals
+                # Format: "x1,y1;x2,y2" in same frame as pose (world/local ENU)
                 'auto_next_goals': '130,0;130,50;80,60',
                 
                 # ==================== Stuck Detection & Recovery ====================
