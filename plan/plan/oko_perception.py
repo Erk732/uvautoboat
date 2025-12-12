@@ -226,12 +226,29 @@ class OkoPerception(Node):
                 if dist < self.min_range or dist > self.max_range:
                     range_filtered += 1
                     continue
-                
-                # Only consider points in front (positive x) CHNAGE HERE TO 0.2m
+                '''
+                # Only consider points in front (positive x) CHNAGE HERE TO 0.2m ORIGINAL LINES FOR BOAT REFLECTIONS
                 if x < 0.2:
                     behind_filtered += 1
                     continue
+                '''
+                # BOAT SELF-FILTER for points behind the LiDARs (IF YOU WANT TO FILTER BEHIND THE BOAT)
+                # The WAM-V is approx 5m long and 2.4m wide.
+                # Filter out any points INSIDE this box.
+                
+                # Check if point is within the boat's width (Left/Right)
+                # Boat is ~2.4m wide, so +/- 1.3m covers the pontoons safely.
+                is_in_width = abs(y) < 1.3
 
+                # Check if point is within the boat's length (Front/Back)
+                # Lidar is at x=0.7. Stern is at x=-4.0. Bow is at x=2.5.
+                # We filter from the stern up to just in front of the sensor.
+                is_in_length = (x > -4.5 and x < 1.0)
+
+                # If the point is INSIDE the boat box, ignore it.
+                if is_in_width and is_in_length:
+                    behind_filtered += 1
+                    continue
                 '''
                 if you want to filter a specific area behind the boat, uncomment this
                 # Filter specific area behind boat (e.g., reflections from yellow box)
