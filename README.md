@@ -845,9 +845,10 @@ Runtime parameter tuning:
 
 ---
 
-## Smart Anti-Stuck System (SASS)
+## Smart Anti-Stuck System (SASS) 
 
-Intelligent recovery system when the boat becomes trapped or immobilized. Both the Vostok1 and Atlantis controllers implement the Smart Anti-Stuck System, features multi phase escape maneuvers (Probe -> Reverse -> Turn -> Forward)
+Intelligent recovery system when the boat becomes trapped or immobilized. 
+The Vostok1 (Buran) controller implements the full Smart Anti-Stuck System, featuring multi-phase escape maneuvers (Probe -> Reverse -> Turn -> Forward). The Atlantis controller utilizes a reactive obstacle avoidance logic with reverse recovery capabilities.
 
 ### SASS Features
 
@@ -1303,11 +1304,17 @@ Lane 3: End <────────────────────┘
 
 | Feature | Description |
 |:--------|:------------|
-| **Waypoint Skip** | Skips waypoints blocked for too long |
-| **Go Home Mode** | Returns to spawn with detour insertion (not skipping) |
-| **Hazard Zones** | Pre-defined rectangular no-go areas |
-| **A-star Planning** | Integrated pathfinding for obstacle avoidance |
-| **Pollutant Detection** | Logs when boat passes near smoke generators |
+| **Autonomous Navigation** | GPS-based waypoint following with lawnmower pattern generation |
+| **3D Obstacle Avoidance** | Real-time LIDAR point cloud processing with sector analysis |
+| **A\* Path Planning** | Integrated A* algorithm dynamically plans detours around obstacle clusters and hazard zones |
+| **Hybrid Route Generation** | Pre-calculates A* paths between waypoints to avoid known static hazards |
+| **Pollutant Detection** | Automatically identifies and logs proximity to smoke/pollutant sources defined in the world |
+| **Smart Anti-Stuck (SASS)** | 4-phase escape maneuver (Probe/Reverse/Turn/Forward) for recovery (Vostok1/Buran) |
+| **XTE Path Correction** | "Lookahead" steering logic that actively pulls the boat back to the ideal path line |
+| **Waypoint Skip** | Automatic skip for blocked waypoints after timeout |
+| **Go Home** | One-click return to spawn point |
+| **Web Dashboard** | Real-time monitoring with interactive map |
+| **Bilingual Interface** | French/English terminal output |
 
 ## Troubleshooting
 
