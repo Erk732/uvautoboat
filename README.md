@@ -164,7 +164,7 @@ uvautoboat/
                                             R:=0 P:=0 Y:=0
                                             post_Y:=0 post_z_from:=1.2965
                                             update_rate:=10 vertical_lasers:=16 samples:=1875 resolution:=1
-                                            min_angle:=-2.617 max_angle:=2.617 
+                                            min_angle:=-2.617 max_angle:=2.617
                                             min_vertical_angle:=${-pi/12} max_vertical_angle:=${pi/12}
                                             max_range:=130 noise_stddev:=0.01">
 
