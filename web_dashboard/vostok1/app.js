@@ -985,7 +985,83 @@ function initConfigPanel() {
         addLog('Config sent - waiting for confirmation...', 'info');
     });
 
+    // Reset to defaults button
+    document.getElementById('btn-reset-config').addEventListener('click', () => {
+        if (confirm('Reset all configuration values to defaults? | Réinitialiser toutes les valeurs par défaut?')) {
+            resetConfigToDefaults();
+        }
+    });
+
+    // Initialize value displays and change indicators
+    initConfigValueTracking();
+
     console.log('Config panel initialized');
+}
+
+// Reset configuration to default values
+function resetConfigToDefaults() {
+    const configInputs = [
+        'cfg-kp', 'cfg-ki', 'cfg-kd',
+        'cfg-base-speed', 'cfg-max-speed', 'cfg-safe-dist'
+    ];
+
+    configInputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (input && input.dataset.default) {
+            input.value = input.dataset.default;
+            input.classList.remove('modified');
+            dirtyInputs.delete(id);
+            updateValueDisplay(input);
+        }
+    });
+
+    addLog('Configuration reset to defaults | Configuration réinitialisée', 'info');
+}
+
+// Initialize value tracking and displays
+function initConfigValueTracking() {
+    const configInputs = [
+        'cfg-kp', 'cfg-ki', 'cfg-kd',
+        'cfg-base-speed', 'cfg-max-speed', 'cfg-safe-dist'
+    ];
+
+    configInputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            // Initialize value display
+            updateValueDisplay(input);
+
+            // Track changes
+            input.addEventListener('input', () => {
+                const defaultValue = parseFloat(input.dataset.default);
+                const currentValue = parseFloat(input.value);
+
+                if (currentValue !== defaultValue) {
+                    input.classList.add('modified');
+                } else {
+                    input.classList.remove('modified');
+                }
+
+                updateValueDisplay(input);
+            });
+        }
+    });
+}
+
+// Update value display next to input
+function updateValueDisplay(input) {
+    const valueDisplay = input.nextElementSibling;
+    if (valueDisplay && valueDisplay.classList.contains('value-display')) {
+        const defaultValue = parseFloat(input.dataset.default);
+        const currentValue = parseFloat(input.value);
+
+        if (currentValue !== defaultValue) {
+            valueDisplay.textContent = `(default: ${defaultValue})`;
+            valueDisplay.style.color = '#ff9800';
+        } else {
+            valueDisplay.textContent = '';
+        }
+    }
 }
 
 // Clear dirty state for specified inputs
