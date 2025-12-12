@@ -68,7 +68,7 @@ launch:
     - name: hysteresis_distance
       value: 2.0        # More slack to avoid chatter
     - name: min_height
-      value: -0.8       # Filter water/banks, keep piers (LiDAR@1.8m: water≈-1.8m, piers≈-0.5m)
+      value: -1.2       # Lower threshold to detect low piers (LiDAR@1.8m: piers≈-1.0 to -0.3m)
     - name: max_height
       value: 1.5        # Focus on navigation hazards, ignore tall structures
     - name: min_range
@@ -170,13 +170,13 @@ launch:
       value: 0.6        # Scale speed when inside slow distance
     # Smart Anti-Stuck System (SASS)
     - name: stuck_timeout
-      value: 6.0          # Wait longer before declaring stuck
+      value: 8.0          # More patient before declaring stuck (increased from 6.0)
     - name: stuck_threshold
-      value: 1.0          # Require more lack of progress
+      value: 0.8          # More tolerant threshold (was 1.0)
     - name: no_go_zone_radius
-      value: 10.0         # Larger keep-out after stuck
+      value: 6.0          # Smaller keep-out radius (was 10.0)
     - name: detour_distance
-      value: 8.0          # Shorter detours for milder escape
+      value: 10.0         # Longer detours for better clearance
     - name: drift_compensation_gain
       value: 0.3          # Compensation gain for estimated drift/current
     - name: kalman_process_noise

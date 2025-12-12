@@ -41,7 +41,16 @@ Usage (Modular - Sputnik Planner - Default):
 
     # Generate with custom parameters (PID, speed, and turn angle)
     ros2 run plan vostok1_cli generate --kp 500 --ki 20 --kd 150 --base 400 --max 800 --max-turn 20
-    
+
+    # Generate with SASS parameters (for pier navigation tuning)
+    ros2 run plan vostok1_cli generate --stuck-timeout 8.0 --stuck-threshold 0.8 --no-go-radius 6.0 --detour-dist 10.0
+
+    # Generate with OKO parameters (for low pier detection)
+    ros2 run plan vostok1_cli generate --min-height -1.2
+
+    # Full custom configuration (all parameters)
+    ros2 run plan vostok1_cli generate --kp 500 --base 400 --max 800 --max-turn 20 --stuck-timeout 8.0 --no-go-radius 6.0 --min-height -1.2
+
     # Show current status
     ros2 run plan vostok1_cli status
     
@@ -266,6 +275,8 @@ class MissionCLI(Node):
         
     def generate_waypoints(self, lanes=8, length=50.0, width=20.0,
                             kp=None, ki=None, kd=None, base_speed=None, max_speed=None, max_turn=None,
+                            stuck_timeout=None, stuck_threshold=None, no_go_radius=None, detour_dist=None,
+                            min_height=None,
                             hazard=False, hazard_boxes=None, hazard_origin_x=None, hazard_origin_y=None,
                             astar=False, astar_hybrid=False, astar_resolution=None, astar_safety=None, astar_max=None):
         """Generate waypoints with specified parameters and optional PID/speed/turn/hazard/A* config"""
@@ -293,6 +304,20 @@ class MissionCLI(Node):
             config['max_speed'] = max_speed
         if max_turn is not None:
             config['max_avoidance_turn_deg'] = max_turn
+
+        # SASS parameters (for BURAN)
+        if stuck_timeout is not None:
+            config['stuck_timeout'] = stuck_timeout
+        if stuck_threshold is not None:
+            config['stuck_threshold'] = stuck_threshold
+        if no_go_radius is not None:
+            config['no_go_zone_radius'] = no_go_radius
+        if detour_dist is not None:
+            config['detour_distance'] = detour_dist
+
+        # OKO parameters
+        if min_height is not None:
+            config['min_height'] = min_height
 
         # Hazard/A* options
         if hazard:
@@ -629,6 +654,13 @@ Examples:
     gen_parser.add_argument('--base', type=float, help='Base speed in N (optional)')
     gen_parser.add_argument('--max', type=float, help='Max speed in N (optional)')
     gen_parser.add_argument('--max-turn', type=float, help='Max avoidance turn angle in degrees (optional, BURAN)')
+    # SASS parameters (for BURAN)
+    gen_parser.add_argument('--stuck-timeout', type=float, help='Stuck detection timeout in seconds (optional, BURAN)')
+    gen_parser.add_argument('--stuck-threshold', type=float, help='Stuck detection threshold in meters (optional, BURAN)')
+    gen_parser.add_argument('--no-go-radius', type=float, help='No-go zone radius in meters (optional, BURAN)')
+    gen_parser.add_argument('--detour-dist', type=float, help='Detour distance in meters (optional, BURAN)')
+    # OKO parameters
+    gen_parser.add_argument('--min-height', type=float, help='Min LiDAR height threshold in meters (optional, OKO)')
     # Hazard/A* options (forwarded to Sputnik)
     gen_parser.add_argument('--hazard', action='store_true', help='Enable hazard avoidance (Sputnik)')
     gen_parser.add_argument('--hazard-boxes', type=str, help='Hazard world boxes string \"xmin,ymin,xmax,ymax;...\"')
@@ -676,6 +708,9 @@ Examples:
                 args.lanes, args.length, args.width,
                 kp=args.kp, ki=args.ki, kd=args.kd,
                 base_speed=args.base, max_speed=args.max, max_turn=args.max_turn,
+                stuck_timeout=args.stuck_timeout, stuck_threshold=args.stuck_threshold,
+                no_go_radius=args.no_go_radius, detour_dist=args.detour_dist,
+                min_height=args.min_height,
                 hazard=args.hazard, hazard_boxes=args.hazard_boxes,
                 hazard_origin_x=args.hazard_origin_x, hazard_origin_y=args.hazard_origin_y,
                 astar=args.astar, astar_hybrid=args.astar_hybrid,

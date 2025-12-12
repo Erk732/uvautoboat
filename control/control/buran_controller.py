@@ -591,7 +591,10 @@ class BuranController(Node):
         
         # Update position history for drift estimation
         self.update_position_history()
-        
+
+        # Clear old no-go zones that we've successfully passed
+        self.clear_passed_no_go_zones()
+
         # Check for stuck condition (if not already in escape mode)
         if not self.escape_mode:
             self.check_stuck_condition()
@@ -888,17 +891,24 @@ class BuranController(Node):
         """Detect if boat is stuck - Enhanced with smart detection"""
         if self.escape_mode:
             return
-        
+
         # Calculate distance moved
         dx = self.current_x - self.last_position[0]
         dy = self.current_y - self.last_position[1]
         distance_moved = math.hypot(dx, dy)
-        
+
         # Check elapsed time
         elapsed = (self.get_clock().now() - self.stuck_check_time).nanoseconds / 1e9
-        
+
         if elapsed >= self.stuck_timeout:
-            if distance_moved < self.stuck_threshold:
+            # More lenient stuck detection during obstacle avoidance
+            # The boat is navigating slowly around obstacles, not necessarily stuck
+            effective_threshold = self.stuck_threshold
+            if self.obstacle_detected and self.min_obstacle_distance < self.min_safe_distance:
+                # Double the threshold during active obstacle avoidance
+                effective_threshold = self.stuck_threshold * 2.0
+
+            if distance_moved < effective_threshold:
                 if not self.is_stuck:
                     self.is_stuck = True
                     self.escape_mode = True
@@ -960,9 +970,9 @@ class BuranController(Node):
         
         # Phase boundaries
         probe_end = 1.5
-        reverse_end = probe_end + self.adaptive_escape_duration * 0.35
-        turn_end = reverse_end + self.adaptive_escape_duration * 0.35
-        forward_end = turn_end + self.adaptive_escape_duration * 0.30
+        reverse_end = probe_end + self.adaptive_escape_duration * 0.30
+        turn_end = reverse_end + self.adaptive_escape_duration * 0.30
+        forward_end = turn_end + self.adaptive_escape_duration * 0.40  # Increased to escape no-go zone
         
         # Get drift compensation
         drift_comp_left, drift_comp_right = self.calculate_drift_compensation()
@@ -1022,13 +1032,17 @@ class BuranController(Node):
             # Check no-go zone but limit attempts to prevent infinite loop
             if self.is_heading_toward_no_go_zone() and self.no_go_check_counter < 10:
                 self.no_go_check_counter += 1
-                self.get_logger().warn(f"Forward leads to no-go zone - extra turn ({self.no_go_check_counter}/10)")
+                # Only log at key intervals to reduce spam
+                if self.no_go_check_counter in [1, 5, 10]:
+                    self.get_logger().warn(f"Forward leads to no-go zone - extra turn ({self.no_go_check_counter}/10)")
                 self.send_thrust(-300.0, 300.0)
             else:
                 # Force forward after too many no-go checks or if path is clear
+                # Use stronger thrust to ensure we escape the no-go zone radius
+                forward_thrust = 500.0  # Increased from 300 to escape further
                 if self.no_go_check_counter >= 10:
-                    self.get_logger().warn("⚠️ Too many no-go checks - forcing forward to break loop")
-                self.send_thrust(300.0 + drift_comp_left, 300.0 + drift_comp_right)
+                    self.get_logger().warn("⚠️ Too many no-go checks - forcing forward with strong thrust")
+                self.send_thrust(forward_thrust + drift_comp_left, forward_thrust + drift_comp_right)
 
             self.get_logger().info(f"Phase 3: FORWARD TEST ({elapsed:.1f}s/{forward_end:.1f}s)", throttle_duration_sec=1.0)
             return
@@ -1039,6 +1053,7 @@ class BuranController(Node):
             self.escape_mode = False
             self.is_stuck = False
             self.escape_phase = 0
+            self.no_go_check_counter = 0  # Reset counter after successful escape
             self.integral_error = 0.0
             self.previous_error = 0.0
             self.last_position = (self.current_x, self.current_y)
@@ -1075,10 +1090,31 @@ class BuranController(Node):
             if math.hypot(x - zone_x, y - zone_y) < radius:
                 return True
         return False
+
+    def clear_passed_no_go_zones(self):
+        """Remove no-go zones that boat has successfully passed by a safe margin"""
+        if not self.no_go_zones:
+            return
+
+        cleared_zones = []
+        safe_distance = self.no_go_zone_radius * 2.0  # Must be 2x radius away to clear
+
+        for i, (zone_x, zone_y, radius) in enumerate(self.no_go_zones):
+            distance = math.hypot(self.current_x - zone_x, self.current_y - zone_y)
+
+            # If we're far enough away, clear this zone
+            if distance > safe_distance:
+                cleared_zones.append(i)
+
+        # Remove cleared zones (reverse order to maintain indices)
+        for i in reversed(cleared_zones):
+            zone = self.no_go_zones.pop(i)
+            self.get_logger().info(f"✅ Cleared no-go zone at ({zone[0]:.1f}, {zone[1]:.1f}) - distance: {math.hypot(self.current_x - zone[0], self.current_y - zone[1]):.1f}m")
     
     def is_heading_toward_no_go_zone(self):
         """Check if current heading leads to no-go zone"""
-        look_ahead = 10.0
+        # Reduced look-ahead to match smaller no-go zone radius
+        look_ahead = 8.0  # Was 10.0, now matches zone management
         future_x = self.current_x + look_ahead * math.cos(self.current_yaw)
         future_y = self.current_y + look_ahead * math.sin(self.current_yaw)
         return self.is_in_no_go_zone(future_x, future_y)
