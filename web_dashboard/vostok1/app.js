@@ -1221,6 +1221,14 @@ function sendConfig(pidOnly = false, restart = false) {
     }
     addLog('Config sent! | Configuration envoyée!', 'info');
     console.log('Config sent to both vostok1 and sputnik:', config);
+
+    // Show success feedback toast
+    const paramCount = Object.keys(config).length;
+    if (pidOnly) {
+        showFeedback(`✅ PID: All ${paramCount} parameters applied successfully!`, 'success');
+    } else {
+        showFeedback(`✅ Advanced Config: All ${paramCount} parameters applied successfully!`, 'success');
+    }
 }
 
 function getSelectedNavMode() {
