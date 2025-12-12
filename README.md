@@ -493,7 +493,7 @@ The modular system uses the following distributed nodes:
 | **Planner** | `atlantis_planner` | checks between waypoints |
 | **Controller** | `atlantis_controller` | TO BE CHANGED|
 
-The additional feauture for Atlantis method is that' unlike distributed architectures, Atlantis embeds the LidarObstacleDetector class directly within the controller loop. This ensures zero-latency obstacle reaction, allowing the boat to make steering decisions in the exact same millisecond that the Lidar scan is received. 
+The additional feauture for Atlantis method is that' unlike distributed architectures, Atlantis embeds the LidarObstacleDetector class directly within the controller loop. This ensures zero-latency obstacle reaction, allowing the boat to make steering decisions in the exact same millisecond that the Lidar scan is received.
 
 PLEASE REMIND THAT ATLANTIS FEATURES ARE INTEGRATED INTO THE sputnik_planner and, buran_controller!
 
@@ -1601,7 +1601,7 @@ S = Start, G = Goal, X = Obstacle
 3. **Testing**: Include unit tests for new features
 4. **Commits**: Use clear, descriptive messages
 
-### Legcay
+### Legacy Directory
 
 Old python codes, files etc. all of them moved into the "Legacy" directory to avoid confusion. If you want to take more deep look please feel free to check Legacy directory, but please mind that codes in the Legacy can be out of date!
 
