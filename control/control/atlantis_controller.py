@@ -7,7 +7,7 @@ import math
 import json
 import time
 
-# NEW: Relative Import
+# Relative Import
 from .lidar_obstacle_avoidance import LidarObstacleDetector
 
 class AtlantisController(Node):
@@ -154,20 +154,27 @@ class AtlantisController(Node):
         self.current_yaw = math.atan2(siny_cosp, cosy_cosp)
 
     def lidar_callback(self, msg):
-        # ... (Same logic as before, detecting front/left/right clearance)
-        detected_obstacles = self.lidar_detector.process_pointcloud(msg.data, msg.point_step, sampling_factor=10)
+        # Sampling 2 to catch thin poles
+        detected_obstacles = self.lidar_detector.process_pointcloud(msg.data, msg.point_step, sampling_factor=2)
+        
+        # --- SMOKE FILTERING FOR REACTIVE CONTROL ---
         points = []
         for obs in detected_obstacles:
-            is_forward = obs.x > -2.0 and obs.x < 25.0 
-            is_width = abs(obs.y) < 15.0 
-            if is_forward and is_width:
+            # 1. Ignore boat tail (x < -1.5)
+            # 2. Ignore far objects (x > 25.0)
+            # 3. Ignore side noise (abs(y) > 15.0)
+            # 4. Ignore SMOKE (Floating > 0.6m)
+            if (obs.x > -1.5 and obs.x < 25.0 and 
+                abs(obs.y) < 15.0 and 
+                obs.z <= 0.6):  # Only keep solids <= 0.6m
+                
                 points.append((obs.x, obs.y, obs.z, obs.distance))
 
         if points:
             distances = [p[3] for p in points]
             self.min_obstacle_distance = min(distances)
             
-            front_obs = [p[3] for p in points if abs(p[1]) < 2.0 and p[0] > 2.5]
+            front_obs = [p[3] for p in points if abs(p[1]) < 5.0 and p[0] > 0]
             front_dist = min(front_obs) if front_obs else 100.0
             
             # Simple Hysteresis

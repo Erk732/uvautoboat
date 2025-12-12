@@ -213,12 +213,35 @@ class OkoPerception(Node):
                 dist_2d = math.sqrt(x*x + y*y)
                 if self.min_range < dist_2d < self.max_range:
                     all_z_values.append(z)
-                
+
+                    
+                ''' Old lines for water plane estimation
                 # Filter by height
                 if z < self.min_height or z > self.max_height:
                     height_filtered += 1
                     continue
+                '''
+                # SMOKE CLASSIFICATION FOR DETECTION
+                # Smoke usually floats: 0.5m < Z < 3.0m
+                # Solid obstacles (buoys) usually touch water: Z < 0.5m
                 
+                is_smoke_candidate = (z > 0.5 and z < 4.0)
+                is_solid_obstacle = (z <= 0.5 and z > -2.0) # Water line objects
+
+                if is_smoke_candidate:
+                    # Optional: Check intensity if available (smoke is less reflective)
+                    # For now, just ignoring it prevents "Obstacle Detected" panic.
+                    smoke_filtered += 1
+                    continue 
+                
+                # Only add if it looks like a solid object (solid means for this sim touching water)
+                if not is_solid_obstacle:
+                    continue
+
+                # (Keep existing filters below...)
+                # Filter by range...
+
+
                 # Calculate horizontal distance
                 dist = math.sqrt(x*x + y*y)
                 

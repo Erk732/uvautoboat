@@ -47,13 +47,11 @@ class LidarObstacleDetector:
             try:
                 x, y, z = struct.unpack_from('fff', data, i)
                 
-                # Skip invalid points
                 if math.isnan(x) or math.isinf(x) or math.isnan(y) or math.isinf(y):
                     continue
                 
                 distance = math.sqrt(x*x + y*y)
                 
-                # Filters
                 if distance < self.min_distance or distance > self.max_distance:
                     continue
                 if self.z_filter_enabled and (z < self.min_height or z > self.max_height):
@@ -90,6 +88,32 @@ class ObstacleClustering:
             clusters.append(cluster)
         return clusters
 
+class ObstacleClassifier:
+    """
+    Classifies clusters into 'OBSTACLE' or 'SMOKE'
+    """
+    def __init__(self):
+        pass
+
+    def is_smoke(self, cluster: List[Obstacle]) -> bool:
+        """
+        Determines if a cluster is smoke based on Z-height and density.
+        - Smoke: Floats above water (Min Z > 0.5m)
+        - Obstacle: Touches water (Min Z <= 0.5m)
+        """
+        if not cluster: return False
+        
+        # 1. Height Heuristic
+        # Find the lowest point in the cluster
+        min_z = min(o.z for o in cluster)
+        
+        # If the LOWEST point is floating high above water (> 0.5m), it's likely smoke/fog
+        # Real objects (buoys, docks, boats) usually touch the water line (z ~ 0.0)
+        if min_z > 0.6: 
+            return True
+            
+        return False
+
 class ObstacleAvoider:
     def __init__(self, safe_distance: float = 10.0, look_ahead: float = 15.0):
         self.safe_distance = safe_distance
@@ -98,12 +122,11 @@ class ObstacleAvoider:
     def get_avoidance_waypoint(self, clusters, current_pos, target_waypoint):
         if not clusters: return None
         
-        # Find closest obstacle in front
         min_dist = float('inf')
         closest_obs = None
         for cluster in clusters:
             for obs in cluster:
-                if obs.x < 0: continue # Ignore behind
+                if obs.x < 0: continue
                 if obs.distance < min_dist:
                     min_dist = obs.distance
                     closest_obs = obs
@@ -118,21 +141,18 @@ class ObstacleAvoider:
         target_dy = tgt_y - curr_y
         target_dist = math.sqrt(target_dx**2 + target_dy**2)
         
-        # FIX: Avoid division by zero or micro-movements
-        if target_dist < 0.1:
-            return None 
+        if target_dist < 0.1: return None 
         
         target_dx /= target_dist
         target_dy /= target_dist
         
-        # Perpendicular shift
         perp_dx = -target_dy
         perp_dy = target_dx
         
-        if closest_obs.y > 0: # Obstacle Left -> Go Right
+        if closest_obs.y > 0:
             avoidance_x = curr_x + perp_dx * self.safe_distance + target_dx * self.look_ahead
             avoidance_y = curr_y + perp_dy * self.safe_distance + target_dy * self.look_ahead
-        else: # Obstacle Right -> Go Left
+        else:
             avoidance_x = curr_x - perp_dx * self.safe_distance + target_dx * self.look_ahead
             avoidance_y = curr_y - perp_dy * self.safe_distance + target_dy * self.look_ahead
             
@@ -168,98 +188,3 @@ class RealtimeObstacleMonitor:
         return (self.front_distance < threshold or 
                 self.left_distance < threshold or 
                 self.right_distance < threshold)
-
-
-class LidarObstacleAvoidanceNode(Node):
-    """Lightweight ROS2 node wrapping the library for quick CLI testing."""
-
-    def __init__(self):
-        super().__init__('lidar_obstacle_avoidance')
-
-        # Parameters mirror the underlying helper classes
-        self.declare_parameter('sampling_factor', 10)
-        self.declare_parameter('cluster_radius', 2.0)
-        self.declare_parameter('safe_distance', 10.0)
-        self.declare_parameter('look_ahead', 15.0)
-        self.declare_parameter('min_distance', 0.3)
-        self.declare_parameter('max_distance', 50.0)
-        self.declare_parameter('min_height', -0.2)
-        self.declare_parameter('max_height', 3.0)
-        self.declare_parameter('z_filter_enabled', True)
-
-        # Core processing helpers
-        self.detector = LidarObstacleDetector(
-            min_distance=self.get_parameter('min_distance').value,
-            max_distance=self.get_parameter('max_distance').value,
-            min_height=self.get_parameter('min_height').value,
-            max_height=self.get_parameter('max_height').value,
-            z_filter_enabled=self.get_parameter('z_filter_enabled').value,
-        )
-        self.clusterer = ObstacleClustering(
-            cluster_radius=self.get_parameter('cluster_radius').value
-        )
-        self.avoider = ObstacleAvoider(
-            safe_distance=self.get_parameter('safe_distance').value,
-            look_ahead=self.get_parameter('look_ahead').value,
-        )
-        self.monitor = RealtimeObstacleMonitor()
-
-        # ROS I/O
-        self.create_subscription(
-            PointCloud2,
-            '/wamv/sensors/lidars/lidar_wamv_sensor/points',
-            self.lidar_callback,
-            rclpy.qos.qos_profile_sensor_data,
-        )
-        self.status_pub = self.create_publisher(String, '/perception/lidar_obstacle_status', 10)
-
-        self.get_logger().info("Lidar obstacle avoidance node ready (listening to lidar_wamv_sensor).")
-
-    def lidar_callback(self, msg: PointCloud2):
-        try:
-            sampling_factor = int(self.get_parameter('sampling_factor').value)
-            obstacles = self.detector.process_pointcloud(msg.data, msg.point_step, sampling_factor)
-            clusters = self.clusterer.cluster_obstacles(obstacles)
-            self.monitor.analyze_sectors(obstacles)
-
-            critical_thresh = float(self.get_parameter('safe_distance').value)
-            critical = self.monitor.is_critical(critical_thresh)
-
-            status = {
-                'obstacle_count': len(obstacles),
-                'cluster_count': len(clusters),
-                'front_distance': round(self.monitor.front_distance, 2),
-                'left_distance': round(self.monitor.left_distance, 2),
-                'right_distance': round(self.monitor.right_distance, 2),
-                'best_direction': self.monitor.get_best_direction(),
-                'critical': critical,
-            }
-            msg_out = String()
-            msg_out.data = json.dumps(status)
-            self.status_pub.publish(msg_out)
-
-            log_fn = self.get_logger().warn if critical else self.get_logger().info
-            log_fn(
-                f"LIDAR obs: {status['obstacle_count']} pts, clusters={status['cluster_count']} | "
-                f"F:{status['front_distance']}m L:{status['left_distance']}m R:{status['right_distance']}m | "
-                f"dir={status['best_direction']}",
-                throttle_duration_sec=1.0,
-            )
-        except Exception as e:
-            self.get_logger().error(f"Lidar callback failed: {e}")
-
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = LidarObstacleAvoidanceNode()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
