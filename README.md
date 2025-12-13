@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 ![Status](https://img.shields.io/badge/Status-Active-green)
 
-> **PROJET-17 — Autonomous Navigation System for the Virtual RobotX (VRX) Competition**  
+> **PROJET-17 — Autonomous Navigation System for the Virtual RobotX (VRX) course**  
 > A comprehensive ROS 2 framework for GPS-based waypoint navigation with 3D LIDAR obstacle avoidance
 
 ---
