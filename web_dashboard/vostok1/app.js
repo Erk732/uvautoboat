@@ -501,6 +501,19 @@ function subscribeToTopics() {
         updatePollutantStatusUI(data.count || 0, data.status || 'unknown', data.sources || []);
     });
 
+    // LiDAR Smoke Detection (v2.2) - Active smoke detection
+    const smokeDetectionTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/perception/smoke_detected',
+        messageType: 'std_msgs/String'
+    });
+
+    smokeDetectionTopic.subscribe((message) => {
+        const data = JSON.parse(message.data);
+        console.log('Smoke detection update:', data);
+        updateSmokeDetection(data);
+    });
+
     console.log('Subscribed to all topics (integrated + modular)');
     addLog('Subscribed to topics (Vostok1 + Modular)', 'info');
     
@@ -826,17 +839,14 @@ function updateAntiStuckStatus(data) {
     }
 
     if (escapePhase) {
-        const phases = ['PROBE', 'REVERSE', 'TURN', 'FORWARD', 'IDLE'];
-        const phaseNames = ['PROBE | Sondage', 'REVERSE | Arrière', 'TURN | Virage', 'FORWARD | Avant', 'IDLE | Attente'];
-        const idx = data.escape_mode ? data.escape_phase : 4;
-        escapePhase.textContent = phaseNames[idx];
+        escapePhase.textContent = data.escape_mode ? 'TURNING LEFT | Virage Gauche' : 'IDLE | Attente';
         escapePhase.className = data.escape_mode ? 'value active' : 'value';
     }
-    
+
     if (noGoZones) {
-        noGoZones.textContent = `${data.no_go_zones}`;
+        noGoZones.textContent = 'N/A (Simple mode)';
     }
-    
+
     if (driftVector) {
         const dx = data.drift_vector[0];
         const dy = data.drift_vector[1];
@@ -868,24 +878,24 @@ function updateAntiStuckStatus(data) {
     }
 
     if (escapeHistory) {
-        escapeHistory.textContent = `${data.escape_history_count} entries | entrées`;
+        escapeHistory.textContent = 'N/A (Simple mode)';
     }
 
-    if (probeResults && data.probe_results) {
-        probeResults.textContent = `L:${data.probe_results.left}m | R:${data.probe_results.right}m`;
+    if (probeResults) {
+        probeResults.textContent = `Front: ${data.front_clear ? data.front_clear.toFixed(1) : 'N/A'}m`;
     }
 
     // Update best direction indicator if exists
     const bestDirection = document.getElementById('best-direction');
-    if (bestDirection && data.best_direction) {
-        bestDirection.textContent = data.best_direction === 'LEFT' ? '← LEFT | Gauche' : '→ RIGHT | Droite';
+    if (bestDirection) {
+        bestDirection.textContent = '← LEFT | Gauche (fixed)';
     }
-    
+
     // Add terminal log for stuck events
     if (data.is_stuck && data.escape_mode) {
         addTerminalLine({
             level: 30,  // WARN
-            msg: `SASS: Phase ${data.escape_phase} | Duration: ${data.adaptive_duration}s | Zones: ${data.no_go_zones}`,
+            msg: `Simple escape: Turning left until clear (front: ${data.front_clear}m)`,
             name: 'anti_stuck'
         });
     }
@@ -1194,6 +1204,10 @@ function sendConfig(pidOnly = false, restart = false) {
             base_speed: parseFloat(document.getElementById('cfg-base-speed').value),
             max_speed: parseFloat(document.getElementById('cfg-max-speed').value),
             min_safe_distance: parseFloat(document.getElementById('cfg-safe-dist').value),
+            // Waypoint approach parameters
+            waypoint_tolerance: parseFloat(document.getElementById('cfg-waypoint-tolerance').value),
+            approach_slow_distance: parseFloat(document.getElementById('cfg-approach-slow-distance').value),
+            approach_slow_factor: parseFloat(document.getElementById('cfg-approach-slow-factor').value),
             // A* detour options based on selected navigation mode
             astar_enabled: (navMode === 'runtime' || navMode === 'hybrid'),
             astar_hybrid_mode: (navMode === 'hybrid'),
@@ -1226,7 +1240,7 @@ function sendConfig(pidOnly = false, restart = false) {
     if (pidOnly) {
         showFeedback(`✅ PID: All 3 parameters applied successfully!`, 'success');
     } else {
-        showFeedback(`✅ Advanced Config: All 6 parameters applied successfully!`, 'success');
+        showFeedback(`✅ Advanced Config: All 9 parameters applied successfully!`, 'success');
     }
 }
 
@@ -1976,6 +1990,57 @@ function updatePollutantStatusUI(count, status, sources) {
     }
 }
 
+// Update LiDAR Smoke Detection UI (v2.2)
+function updateSmokeDetection(data) {
+    const statusEl = document.getElementById('smoke-detection-status');
+    const distanceEl = document.getElementById('smoke-distance');
+    const pointsEl = document.getElementById('smoke-points');
+    const centerXEl = document.getElementById('smoke-center-x');
+    const centerYEl = document.getElementById('smoke-center-y');
+
+    if (!statusEl || !distanceEl || !pointsEl || !centerXEl || !centerYEl) return;
+
+    if (data.detected) {
+        // Smoke detected!
+        statusEl.textContent = '🌫️ SMOKE DETECTED';
+        statusEl.className = 'value badge';
+        statusEl.style.backgroundColor = '#ff6b6b';
+        statusEl.style.color = '#fff';
+        statusEl.style.fontWeight = 'bold';
+
+        distanceEl.textContent = `${data.distance.toFixed(1)}m`;
+        pointsEl.textContent = `${data.point_count} pts`;
+        centerXEl.textContent = `${data.center_x.toFixed(1)}m`;
+        centerYEl.textContent = `${data.center_y.toFixed(1)}m`;
+
+        // Log to terminal
+        addTerminalLine({
+            level: 30,
+            msg: `🌫️ SMOKE DETECTED: ${data.point_count} points at ${data.distance.toFixed(1)}m (${data.center_x.toFixed(1)}, ${data.center_y.toFixed(1)})`,
+            name: 'smoke_detection'
+        });
+
+        // Optional: Add smoke marker to map if boat position is known
+        if (currentState.gps && currentState.gps.latitude && currentState.gps.longitude) {
+            // Calculate smoke position in world coordinates
+            // (This would require transformation from local to GPS)
+            // For now, just log the detection
+        }
+    } else {
+        // No smoke detected
+        statusEl.textContent = '✓ No smoke';
+        statusEl.className = 'value badge';
+        statusEl.style.backgroundColor = '#2ecc71';
+        statusEl.style.color = '#fff';
+        statusEl.style.fontWeight = 'normal';
+
+        distanceEl.textContent = '-';
+        pointsEl.textContent = '0';
+        centerXEl.textContent = '-';
+        centerYEl.textContent = '-';
+    }
+}
+
 // =============================================================================
 // PERCEPTION & CONTROL TUNING SYSTEM
 // =============================================================================
@@ -1997,10 +2062,10 @@ const TUNING_PRESETS = {
             temporal_threshold: 3,
             water_plane_threshold: 0.2,
             hysteresis_distance: 1.3,
-            // Smoke detection (v2.1)
+            // Smoke detection (v2.1) - Tuned for sydney_regatta_smoke.sdf
             smoke_filter_enabled: true,
-            smoke_min_height: 0.5,
-            smoke_max_height: 4.0,
+            smoke_min_height: 0.3,
+            smoke_max_height: 10.0,
             solid_min_height: -2.0,
             solid_max_height: 0.5
         },
@@ -2015,8 +2080,6 @@ const TUNING_PRESETS = {
             max_avoidance_turn_deg: 20.0,
             stuck_timeout: 3.5,
             stuck_threshold: 0.9,
-            no_go_zone_radius: 8.0,
-            detour_distance: 12.0,
             reverse_timeout: 2.5,
             max_reverse_distance: 20.0,
             turn_deadband_deg: 1.5,
@@ -2040,8 +2103,8 @@ const TUNING_PRESETS = {
             hysteresis_distance: 1.0,
             // Smoke detection (v2.1) - Aggressive filtering for clustered buoys
             smoke_filter_enabled: true,
-            smoke_min_height: 0.6,
-            smoke_max_height: 4.0,
+            smoke_min_height: 0.3,
+            smoke_max_height: 10.0,
             solid_min_height: -2.0,
             solid_max_height: 0.6
         },
@@ -2081,8 +2144,8 @@ const TUNING_PRESETS = {
             hysteresis_distance: 1.5,
             // Smoke detection (v2.1) - Detect low piers
             smoke_filter_enabled: true,
-            smoke_min_height: 0.8,
-            smoke_max_height: 4.0,
+            smoke_min_height: 0.3,
+            smoke_max_height: 10.0,
             solid_min_height: -2.0,
             solid_max_height: 0.8
         },
@@ -2122,8 +2185,8 @@ const TUNING_PRESETS = {
             hysteresis_distance: 2.0,
             // Smoke detection (v2.1) - Conservative for open water
             smoke_filter_enabled: false,  // Disabled for open water
-            smoke_min_height: 0.5,
-            smoke_max_height: 4.0,
+            smoke_min_height: 0.3,
+            smoke_max_height: 10.0,
             solid_min_height: -2.0,
             solid_max_height: 0.5
         },
@@ -2260,8 +2323,6 @@ function updateBuranInputs(params) {
     }
     document.getElementById('buran-stuck-timeout').value = params.stuck_timeout;
     document.getElementById('buran-stuck-threshold').value = params.stuck_threshold;
-    document.getElementById('buran-no-go-radius').value = params.no_go_zone_radius;
-    document.getElementById('buran-detour-dist').value = params.detour_distance;
     document.getElementById('buran-reverse-timeout').value = params.reverse_timeout;
     document.getElementById('buran-max-reverse').value = params.max_reverse_distance;
     document.getElementById('buran-turn-deadband').value = params.turn_deadband_deg;
@@ -2294,9 +2355,9 @@ function applyOkoParameters(presetParams = null) {
         smoke_filter_enabled: document.getElementById('oko-smoke-enabled') ?
             (document.getElementById('oko-smoke-enabled').value === 'true') : true,
         smoke_min_height: document.getElementById('oko-smoke-min-height') ?
-            parseFloat(document.getElementById('oko-smoke-min-height').value) : 0.5,
+            parseFloat(document.getElementById('oko-smoke-min-height').value) : 0.3,
         smoke_max_height: document.getElementById('oko-smoke-max-height') ?
-            parseFloat(document.getElementById('oko-smoke-max-height').value) : 4.0,
+            parseFloat(document.getElementById('oko-smoke-max-height').value) : 10.0,
         solid_min_height: document.getElementById('oko-solid-min-height') ?
             parseFloat(document.getElementById('oko-solid-min-height').value) : -2.0,
         solid_max_height: document.getElementById('oko-solid-max-height') ?
@@ -2336,8 +2397,6 @@ function applyBuranParameters(presetParams = null) {
         max_avoidance_turn_deg: parseFloat(document.getElementById('buran-max-turn').value),
         stuck_timeout: parseFloat(document.getElementById('buran-stuck-timeout').value),
         stuck_threshold: parseFloat(document.getElementById('buran-stuck-threshold').value),
-        no_go_zone_radius: parseFloat(document.getElementById('buran-no-go-radius').value),
-        detour_distance: parseFloat(document.getElementById('buran-detour-dist').value),
         reverse_timeout: parseFloat(document.getElementById('buran-reverse-timeout').value),
         max_reverse_distance: parseFloat(document.getElementById('buran-max-reverse').value),
         turn_deadband_deg: parseFloat(document.getElementById('buran-turn-deadband').value),

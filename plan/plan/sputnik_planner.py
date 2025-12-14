@@ -300,6 +300,22 @@ class SputnikPlanner(Node):
             10
         )
 
+        # Replan request from BURAN controller (when path is blocked)
+        self.create_subscription(
+            String,
+            '/control/replan_request',
+            self.replan_request_callback,
+            10
+        )
+
+        # Skip waypoint request from BURAN controller (after multiple stuck attempts)
+        self.create_subscription(
+            String,
+            '/planning/skip_waypoint',
+            self.skip_waypoint_callback,
+            10
+        )
+
         # --- PUBLISHERS ---
         self.pub_waypoints = self.create_publisher(String, '/planning/waypoints', 10)
         self.pub_current_target = self.create_publisher(String, '/planning/current_target', 10)
@@ -474,7 +490,7 @@ class SputnikPlanner(Node):
                     self.current_wp_index = 0
                     
                     # CRITICAL FIX: If already DRIVING, need to force state transition
-                    # to reset BURAN's SASS escape mode. Set to READY first, then DRIVING.
+                    # to reset BURAN's escape state. Set to READY first, then DRIVING.
                     if self.state == "DRIVING":
                         # Temporarily transition through READY to reset BURAN controller
                         self.state = "READY"
@@ -542,7 +558,45 @@ class SputnikPlanner(Node):
                 self.publish_waypoints()
         except Exception as e:
             self.get_logger().warn(f"Detour request error: {e}")
-            
+
+    def replan_request_callback(self, msg):
+        """Handle replan request from BURAN controller when path is blocked"""
+        import json
+        try:
+            data = json.loads(msg.data)
+            reason = data.get('reason', 'unknown')
+
+            if self.state == "DRIVING" and self.astar_enabled:
+                self.get_logger().warn(f"🔄 Replan requested by BURAN: {reason}")
+                # Trigger A* replan on next planning cycle
+                # This will be handled by the A* detour logic in planning_loop
+                self.get_logger().info("A* detour planning will attempt alternative route")
+            else:
+                self.get_logger().warn(f"Replan request ignored - A* disabled or not DRIVING (state={self.state})")
+        except Exception as e:
+            self.get_logger().warn(f"Replan request error: {e}")
+
+    def skip_waypoint_callback(self, msg):
+        """Handle skip waypoint request from BURAN controller after multiple stuck attempts"""
+        import json
+        try:
+            data = json.loads(msg.data)
+            reason = data.get('reason', 'stuck_multiple_times')
+
+            if self.state == "DRIVING" and self.current_wp_index < len(self.waypoints):
+                current_wp = self.waypoints[self.current_wp_index]
+                self.get_logger().warn(
+                    f"⏭️ BURAN requested skip waypoint {self.current_wp_index + 1}/{len(self.waypoints)} "
+                    f"at ({current_wp[0]:.1f}, {current_wp[1]:.1f}) - reason: {reason}"
+                )
+                # Advance to next waypoint
+                self.advance_to_next_waypoint()
+                self.publish_waypoints()
+            else:
+                self.get_logger().warn(f"Skip waypoint ignored - not DRIVING or at end (state={self.state})")
+        except Exception as e:
+            self.get_logger().warn(f"Skip waypoint error: {e}")
+
     def config_callback(self, msg):
         """Handle runtime configuration changes"""
         import json
@@ -559,6 +613,11 @@ class SputnikPlanner(Node):
             if 'scan_width' in config:
                 self.scan_width = float(config['scan_width'])
                 regenerate = True
+
+            # Waypoint approach parameters
+            if 'waypoint_tolerance' in config:
+                self.waypoint_tolerance = float(config['waypoint_tolerance'])
+                self.get_logger().info(f"Waypoint tolerance updated: {self.waypoint_tolerance}m")
 
             # v2.2: A* detour planning runtime config
             if 'astar_enabled' in config:

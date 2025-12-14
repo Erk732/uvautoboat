@@ -27,7 +27,7 @@
 7. [System Architecture](#system-architecture)
 8. [Usage Guide](#usage-guide)
 9. [Web Dashboard](#web-dashboard)
-10. [Smart Anti-Stuck System (SASS)](#smart-anti-stuck-system-sass)
+10. [Simple Anti-Stuck System](#simple-anti-stuck-system)
 11. [Waypoint Skip Strategy](#waypoint-skip-strategy)
 12. [Terminal Mission Control (CLI)](#terminal-mission-control)
 13. [Technical Documentation](#technical-documentation)
@@ -56,7 +56,7 @@ The project implements a hierarchical autonomous navigation framework combining 
 
 - **Vostok1 Navigation System**: Integrated autonomous navigation with 3D LIDAR perception
 - **Modular Architecture**: Distributed nodes (OKO-SPUTNIK-BURAN) for flexible deployment
-- **Smart Anti-Stuck System (SASS)**: Intelligent recovery with Kalman-filtered drift compensation
+- **Simple Anti-Stuck System**: Turn left until clear recovery with Kalman-filtered drift compensation
 - **Web Dashboard**: Real-time monitoring with better visualization
 - **Waypoint Skip Strategy**: Automatic skip for blocked waypoints ensuring mission completion
 - **A-star Planner Algorithm**: Whenever path is blocked by an obstacle thanks to this algorithm it will avoid it
@@ -90,7 +90,7 @@ uvautoboat/
 │   │   ├── pose_filter.py           # Pose filtering utilities
 │   │   └── all_in_one_stack.py      # Legacy integrated solution
 │   ├── config/
-│   │   └── hazard_world_boxes.yaml  # Pre-defined no-go zones
+│   │   └── (legacy hazard zone configs)
 │   └── launch/
 │       ├── all_in_one_bringup.launch.py  # Legacy integrated launch
 │       └── README_QUICKSTART.md     # Quick start guide
@@ -136,7 +136,7 @@ uvautoboat/
 │   ├── Installation-Guide.md        # Setup instructions
 │   ├── Quick-Start.md               # 5-minute quick start
 │   ├── System-Overview.md           # Architecture deep-dive
-│   ├── SASS.md                      # Smart Anti-Stuck System
+│   ├── SASS.md                      # Simple Anti-Stuck System (deprecated: see v2.1 update)
 │   ├── 3D-LIDAR-Processing.md       # OKO perception details
 │   └── Common-Issues.md             # Troubleshooting guide
 ├── one_click_launch_all/       # Automated launcher scripts
@@ -186,7 +186,7 @@ uvautoboat/
 | [Installation Guide](wiki/Installation_Guide.md) | Step-by-step setup instructions |
 | [Quick Start](wiki/Quick_Start.md) | 5-minute quick start guide |
 | [System Overview](wiki/System_Overview.md) | Architecture and design philosophy |
-| [SASS](wiki/SASS.md) | Smart Anti-Stuck System deep-dive |
+| [Simple Anti-Stuck](wiki/SASS.md) | Simple anti-stuck recovery system (deprecated wiki, see README) |
 | [3D LIDAR Processing](wiki/3D_LIDAR_Processing.md) | OKO perception system details |
 | [Common Issues](wiki/Common_Issues.md) | Comprehensive troubleshooting guide |
 
@@ -207,7 +207,7 @@ uvautoboat/
 | **Autonomous Navigation** | GPS-based waypoint following with lawnmower pattern generation |
 | **3D Obstacle Avoidance** | Real-time LIDAR point cloud processing with sector analysis |
 | **Differential Thrust** | Independent left/right thruster control with PID heading |
-| **Smart Anti-Stuck (SASS)** | 4-phase escape with no-go zones and drift compensation |
+| **Simple Anti-Stuck** | Turn left until clear with Kalman drift compensation |
 | **Waypoint Skip** | Automatic skip for blocked waypoints after timeout |
 | **Go Home** | One-click return to spawn point |
 | **Web Dashboard** | Real-time monitoring with interactive map |
@@ -483,7 +483,7 @@ AutoBoat provides multiple navigation systems:
 | **Detection** | Full 3D volume | Full 3D volume | 3D Section Analysis |
 | **Control** | PID heading | PID (configurable) | PID heading |
 | **Monitoring** | Terminal + Web | Terminal (bilingual) | Web Dashboard |
-| **Anti-Stuck** | SASS v2.0 | SASS v2.0 | Adaptive Escape with SASS (Work in progress) |
+| **Anti-Stuck** | Simple (turn left) | Simple (turn left) | Adaptive Escape (Work in progress) |
 | **Best For** | Production use | Custom tuning | Robust Path Validation |
 
 ### Modular Architecture (OKO-SPUTNIK-BURAN)
@@ -494,7 +494,7 @@ The modular system uses the following distributed nodes:
 |:-----|:-----|:---------|
 | **OKO** | `oko_perception` | 3D LIDAR obstacle detection |
 | **SPUTNIK** | `sputnik_planner` | GPS waypoint planning |
-| **BURAN** | `buran_controller` | PID heading control + SASS |
+| **BURAN** | `buran_controller` | PID heading control + Simple anti-stuck |
 
 | Component | Script Name | Function |
 |:-----|:-----|:---------|
@@ -607,7 +607,7 @@ Detailed ROS 2 connections for the Atlantis architecture. Note the direct LIDAR 
               │   • Heading control    │
               │   • Obstacle avoidance │
               │   • Waypoint planning  │
-              │   • SASS recovery      │
+              │   • Anti-stuck recovery│
               └───────────┬────────────┘
                           │
             ┌─────────────┴─────────────┐
@@ -652,7 +652,7 @@ The obstacle avoidance runs **continuously** - not as a one-time decision. The b
 │      │                                             │            │
 │      │  IF critical distance:                      │            │
 │      │     → STOP immediately                      │            │
-│      │     → Initiate SASS (anti-stuck) if stuck   │            │
+│      │     → Initiate anti-stuck if truly stuck      │            │
 │      └─────────────────────────────────────────────┘            │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -692,7 +692,7 @@ The obstacle avoidance runs **continuously** - not as a one-time decision. The b
 | `/vostok1/mission_status` | Mission state (JSON) |
 | `/vostok1/config` | Current parameters |
 | `/planning/mission_status` | Modular mission state |
-| `/control/anti_stuck_status` | SASS status |
+| `/control/anti_stuck_status` | Simple anti-stuck status |
 | `/perception/obstacle_info` | Obstacle detection |
 
 ---
@@ -761,10 +761,9 @@ ros2 launch plan vostok1_modular_navigation.launch.py kp:=500.0 ki:=30.0 kd:=150
 | | `max_speed` | 800.0 | Maximum thrust (N) |
 | | `obstacle_slow_factor` | 0.3 | Speed reduction near obstacles |
 | | `critical_distance` | 5.0 | Stop distance (m) |
-| | `stuck_timeout` | 3.0 | SASS: stuck detection time (s) |
-| | `stuck_threshold` | 0.5 | SASS: min movement to not be stuck (m) |
-| | `no_go_zone_radius` | 8.0 | SASS: no-go zone radius (m) |
-| | `detour_distance` | 12.0 | SASS: detour waypoint distance (m) |
+| | `stuck_timeout` | 12.0 | Simple anti-stuck: stuck detection time (s) |
+| | `stuck_threshold` | 1.0 | Simple anti-stuck: min movement to not be stuck (m) |
+| | `drift_compensation_gain` | 0.3 | Kalman drift correction strength |
 
 ### Keyboard Teleop
 
@@ -830,7 +829,7 @@ sudo apt install ros-jazzy-rosbridge-suite
 | **Mission Status** | State, waypoint progress, distance |
 | **Obstacle Detection** | Front/Left/Right clearance with status badge |
 | **Thruster Output** | Left/Right thrust with visual bars |
-| **Anti-Stuck (SASS)** | Escape phase, no-go zones, drift vector |
+| **Anti-Stuck** | Escape status, drift vector |
 | **Trajectory Map** | Interactive Leaflet map with boat position |
 | **Configuration** | Path, PID, Speed parameter controls |
 | **Terminal Output** | Live ROS log feed |
@@ -854,51 +853,64 @@ Runtime parameter tuning:
 
 ---
 
-## Smart Anti-Stuck System (SASS)
+## Simple Anti-Stuck System
 
-Intelligent recovery system when the boat becomes trapped or immobilized.
-The Vostok1 (Buran) controller implements the full Smart Anti-Stuck System, featuring multi-phase escape maneuvers (Probe -> Reverse -> Turn -> Forward). The Atlantis controller utilizes a reactive obstacle avoidance logic with reverse recovery capabilities.
+Simple recovery system when the boat becomes trapped or immobilized.
+The Vostok1 (BURAN) controller implements a straightforward anti-stuck strategy: **turn left until the path is clear, then resume navigation**.
 
-### SASS Features
+### Features
 
 | Feature | Description |
 |:--------|:------------|
-| **Adaptive Escape** | 10-20s duration based on severity |
-| **Multi-Direction Probe** | Scans L/R/Back before choosing escape |
-| **No-Go Zones** | Remembers stuck locations (max 20, 8m radius) |
-| **Kalman Drift Compensation** | Estimates current/wind with uncertainty |
-| **Detour Insertion** | Auto-adds waypoints around obstacles |
-| **Learning** | Records successful escapes for future |
+| **Simple Escape** | Turn left continuously until front clearance > safe distance |
+| **Stuck Detection** | Monitors position movement over configurable timeout (default 12s) |
+| **Skip During Avoidance** | Won't trigger stuck detection while actively avoiding obstacles |
+| **Kalman Drift Compensation** | Estimates current/wind with uncertainty to improve navigation |
+| **Mission-Aware** | Automatically resets when mission stops |
 
-### Adaptive Duration Calculation
+### How It Works
 
 ```text
-Base Duration: 10s
-+ 4s if obstacle < critical distance (5m)
-+ 2s if obstacle < safe distance (15m)  
-+ 2s per consecutive stuck attempt
-Maximum: 20s
+1. Stuck Detection:
+   - Track boat position every second
+   - If movement < stuck_threshold (1.0m) for stuck_timeout (12s)
+   - AND path is clear (not during obstacle avoidance)
+   - Trigger escape mode
+
+2. Simple Escape:
+   - Apply differential thrust: Left=-450, Right=+450
+   - Turn left continuously
+   - Check front_clear distance every iteration
+   - Exit when front_clear > min_safe_distance
+
+3. Resume Navigation:
+   - Reset PID integral error
+   - Clear stuck state
+   - Continue to current waypoint
 ```
 
-### Escape Sequence
+### Parameters
 
-| Phase | Duration | Action |
-|:------|:---------|:-------|
-| **0: PROBE** | 0-2s | Multi-direction scan (L/R/Back) |
-| **1: REVERSE** | 2s-~6s | Backward thrust |
-| **2: TURN** | 6s-~10s | Rotate toward best direction |
-| **3: FORWARD** | 10s-~12s | Forward test with drift compensation |
+| Parameter | Default | Description |
+|:----------|:--------|:------------|
+| `stuck_timeout` | 12.0s | Time before declaring stuck |
+| `stuck_threshold` | 1.0m | Minimum movement to avoid stuck detection |
+| `drift_compensation_gain` | 0.3 | Kalman drift correction strength |
+| `kalman_process_noise` | 0.01 | Drift estimation process noise |
+| `kalman_measurement_noise` | 0.5 | Drift estimation measurement noise |
 
 ### Kalman Filter for Drift
 
-The system uses a 2D Kalman filter to estimate environmental drift:
+The system uses a 2D Kalman filter to estimate environmental drift (current/wind):
 
 ```python
 x = [drift_x, drift_y]    # State estimate
 P = uncertainty           # Covariance (lower = more confident)
-Q = 0.001                 # Process noise (drift changes slowly)
-R = 0.1                   # Measurement noise (GPS/IMU)
+Q = 0.01                  # Process noise (drift changes slowly)
+R = 0.5                   # Measurement noise (GPS/IMU)
 ```
+
+The estimated drift is applied during navigation to compensate for environmental forces.
 
 **Dashboard Uncertainty Colors:** 🟢 < 0.05 (confident) | 🟡 0.05-0.15 | 🔴 > 0.15
 
@@ -1151,7 +1163,7 @@ ros2 run plan vostok1_cli home
   publishes mission_status + current_target
      |
      v
-[BURAN: follows target + obstacle avoidance/SASS]
+[BURAN: follows target + obstacle avoidance/anti-stuck]
      |
      v
 [FINISHED] --> dashboard shows finished (can Start again)
@@ -1318,7 +1330,7 @@ Lane 3: End <────────────────────┘
 | **A\* Path Planning** | Integrated A* algorithm dynamically plans detours around obstacle clusters and hazard zones |
 | **Hybrid Route Generation** | Pre-calculates A* paths between waypoints to avoid known static hazards |
 | **Pollutant Detection** | Automatically identifies and logs proximity to smoke/pollutant sources defined in the world |
-| **Smart Anti-Stuck (SASS)** | 4-phase escape maneuver (Probe/Reverse/Turn/Forward) for recovery (Vostok1/Buran) |
+| **Simple Anti-Stuck** | Turn left until clear recovery maneuver (Vostok1/Buran) |
 | **XTE Path Correction** | "Lookahead" steering logic that actively pulls the boat back to the ideal path line |
 | **Waypoint Skip** | Automatic skip for blocked waypoints after timeout |
 | **Go Home** | One-click return to spawn point |
@@ -1369,8 +1381,8 @@ ros2 node list | grep vostok
 # List parameters
 ros2 param list /vostok1_node
 
-# Check SASS status
-ros2 topic echo /vostok1/anti_stuck_status
+# Check anti-stuck status
+ros2 topic echo /control/anti_stuck_status
 ```
 
 ---

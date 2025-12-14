@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vostok1 Dashboard</title>
-    <link rel="stylesheet" href="style_merged.css">
+    <link rel="stylesheet" href="style_merged.css?v=2">
     <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -117,20 +117,53 @@
                 </div>
             </div>
 
-            <!-- Smoke Generator Detection Panel -->
-            <div class="panel">
-                <h2>Pollutant Sources Detection | Détection de Sources de Polluants</h2>
+            <!-- Smoke Zone Information Panel (Optional) -->
+            <div class="panel" style="background: #f8f9fa; border-left: 3px solid #6c757d;">
+                <h2 style="font-size: 16px; color: #6c757d;">🌫️ Smoke Zones (Optional Info)</h2>
+                <p style="font-size: 0.85em; color: #666; margin: -5px 0 10px 0; line-height: 1.4;">
+                    Mission planning info: Shows smoke generator locations from world SDF files.<br>
+                    <strong>Note:</strong> Navigation uses LiDAR smoke filtering (OKO params), not this detection.
+                </p>
                 <div class="info-grid">
                     <div class="info-item full-width">
-                        <span class="label">Status | Statut:</span>
-                        <span id="pollutant-status" class="value badge">Scanning...</span>
+                        <span class="label">Detected:</span>
+                        <span id="pollutant-count" class="value">0 zones</span>
+                    </div>
+                    <div class="info-item full-width" style="display: none;">
+                        <span id="pollutant-status" class="value badge">-</span>
                     </div>
                     <div class="info-item full-width">
-                        <span class="label">Detection Count | Détectés:</span>
-                        <span id="pollutant-count" class="value">0 sources</span>
+                        <span id="pollutant-list" class="value" style="font-size: 0.85em; line-height: 1.5; color: #999;"></span>
                     </div>
+                </div>
+            </div>
+
+            <!-- LiDAR Smoke Detection Panel (v2.2) -->
+            <div class="panel" style="border-left: 3px solid #ff6b6b;">
+                <h2 style="font-size: 16px;">🔍 LiDAR Smoke Detection (Live)</h2>
+                <p style="font-size: 0.85em; color: #666; margin: -5px 0 10px 0; line-height: 1.4;">
+                    Real-time smoke detection using LiDAR point cloud analysis
+                </p>
+                <div class="info-grid">
                     <div class="info-item full-width">
-                        <span id="pollutant-list" class="value" style="font-size: 0.9em; line-height: 1.6; color: #aaa;"></span>
+                        <span class="label">Status:</span>
+                        <span id="smoke-detection-status" class="value badge">No smoke</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Distance:</span>
+                        <span id="smoke-distance" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Point Count:</span>
+                        <span id="smoke-points" class="value">0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Center X:</span>
+                        <span id="smoke-center-x" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Center Y:</span>
+                        <span id="smoke-center-y" class="value">-</span>
                     </div>
                 </div>
             </div>
@@ -164,25 +197,25 @@
                 </div>
             </div>
 
-            <!-- Smart Anti-Stuck System Panel -->
+            <!-- Simple Anti-Stuck System Panel -->
             <div class="panel sass-panel">
-                <h2>Smart Anti-Stuck System | Système Anti-Blocage (SASS)</h2>
+                <h2>Simple Anti-Stuck | Système Anti-Blocage Simple</h2>
                 <div class="info-grid">
                     <div class="info-item full-width">
                         <span class="label">Status | Statut:</span>
                         <span id="stuck-status" class="value badge clear">Normal</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">Phase:</span>
+                        <span class="label">Action:</span>
                         <span id="escape-phase" class="value">Idle | En attente</span>
                     </div>
                     <div class="info-item">
                         <span class="label">Direction:</span>
-                        <span id="best-direction" class="value">-</span>
+                        <span id="best-direction" class="value">← LEFT | Gauche (fixed)</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">No-Go Zones:</span>
-                        <span id="no-go-zones" class="value">0</span>
+                        <span class="label">Front Clear | Avant:</span>
+                        <span id="probe-results" class="value">-</span>
                     </div>
                     <div class="info-item">
                         <span class="label">Drift | Dérive:</span>
@@ -192,13 +225,13 @@
                         <span class="label">Kalman σ:</span>
                         <span id="drift-uncertainty" class="value" title="Kalman filter uncertainty">-</span>
                     </div>
-                    <div class="info-item">
-                        <span class="label">History | Historique:</span>
-                        <span id="escape-history" class="value">0 entries | entrées</span>
+                    <div class="info-item" style="display: none;">
+                        <span class="label">History:</span>
+                        <span id="escape-history" class="value">N/A</span>
                     </div>
-                    <div class="info-item">
-                        <span class="label">Probe | Sonde:</span>
-                        <span id="probe-results" class="value">L:- R:-</span>
+                    <div class="info-item" style="display: none;">
+                        <span class="label">No-Go Zones:</span>
+                        <span id="no-go-zones" class="value">N/A</span>
                     </div>
                 </div>
             </div>
@@ -512,6 +545,34 @@
                             <span class="value-display"></span>
                         </div>
                     </div>
+
+                    <div class="config-section">
+                        <h3>Waypoint Approach | Approche des Points</h3>
+                        <div class="config-item">
+                            <label for="cfg-waypoint-tolerance">
+                                Waypoint Tolerance (m):
+                                <span class="info-tooltip" title="Distance threshold for waypoint completion. Higher = easier to reach | Seuil de distance pour compléter un point">ℹ️</span>
+                            </label>
+                            <input type="number" id="cfg-waypoint-tolerance" min="1" max="10" step="0.5" value="3.5" data-default="3.5">
+                            <span class="value-display"></span>
+                        </div>
+                        <div class="config-item">
+                            <label for="cfg-approach-slow-distance">
+                                Approach Slow Dist. (m):
+                                <span class="info-tooltip" title="Start slowing down this far from waypoint for precision | Commencer à ralentir à cette distance du point">ℹ️</span>
+                            </label>
+                            <input type="number" id="cfg-approach-slow-distance" min="5" max="20" step="1" value="10" data-default="10">
+                            <span class="value-display"></span>
+                        </div>
+                        <div class="config-item">
+                            <label for="cfg-approach-slow-factor">
+                                Approach Slow Factor:
+                                <span class="info-tooltip" title="Speed multiplier near waypoint (0.5=50% speed, 0.7=70% speed) | Multiplicateur de vitesse près du point">ℹ️</span>
+                            </label>
+                            <input type="number" id="cfg-approach-slow-factor" min="0.3" max="1.0" step="0.1" value="0.7" data-default="0.7">
+                            <span class="value-display"></span>
+                        </div>
+                    </div>
                 </div>
                 <div class="config-buttons">
                     <button id="btn-reset-config" class="config-btn reset">
@@ -560,6 +621,12 @@
                             <span class="section-node">/oko_perception_node</span>
                         </button>
                         <div id="oko-params" class="tuning-section-content" style="display: none;">
+                            <p style="font-size: 0.9em; color: #666; margin: 0 0 15px 0; padding: 10px; background: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;">
+                                <strong>💡 Tip:</strong> Use presets at top for quick tuning. Advanced params below for fine control.
+                            </p>
+
+                            <!-- Basic Filtering Section -->
+                            <h3 style="font-size: 14px; color: #007bff; margin: 15px 0 10px 0; padding-bottom: 5px; border-bottom: 2px solid #007bff;">📐 Basic Filtering</h3>
                             <div class="param-grid">
                                 <div class="param-group">
                                     <h4>Height Filtering | Filtrage Hauteur</h4>
@@ -602,7 +669,11 @@
                                         <span class="param-hint">Emergency threshold</span>
                                     </div>
                                 </div>
+                            </div>
 
+                            <!-- Advanced Filtering Section -->
+                            <h3 style="font-size: 14px; color: #28a745; margin: 20px 0 10px 0; padding-bottom: 5px; border-bottom: 2px solid #28a745;">🔬 Advanced Filtering</h3>
+                            <div class="param-grid">
                                 <div class="param-group">
                                     <h4>Clustering | Regroupement</h4>
                                     <div class="param-item">
@@ -644,9 +715,13 @@
                                         <span class="param-hint">Prevent oscillation</span>
                                     </div>
                                 </div>
+                            </div>
 
+                            <!-- Smoke & Object Classification Section -->
+                            <h3 style="font-size: 14px; color: #6610f2; margin: 20px 0 10px 0; padding-bottom: 5px; border-bottom: 2px solid #6610f2;">🌫️ Smoke & Object Classification (v2.1)</h3>
+                            <div class="param-grid">
                                 <div class="param-group">
-                                    <h4>Smoke Detection (v2.1) | Détection Fumée</h4>
+                                    <h4>Smoke Detection | Détection Fumée</h4>
                                     <div class="param-item">
                                         <label for="oko-smoke-enabled">Enable Smoke Filter:</label>
                                         <select id="oko-smoke-enabled">
@@ -657,13 +732,13 @@
                                     </div>
                                     <div class="param-item">
                                         <label for="oko-smoke-min-height">Smoke Min Height (m):</label>
-                                        <input type="number" id="oko-smoke-min-height" step="0.1" value="0.5">
-                                        <span class="param-hint">Smoke floats above this</span>
+                                        <input type="number" id="oko-smoke-min-height" step="0.1" value="0.3">
+                                        <span class="param-hint">Smoke floats above this (SDF: 0.5m start)</span>
                                     </div>
                                     <div class="param-item">
                                         <label for="oko-smoke-max-height">Smoke Max Height (m):</label>
-                                        <input type="number" id="oko-smoke-max-height" step="0.1" value="4.0">
-                                        <span class="param-hint">Smoke below this</span>
+                                        <input type="number" id="oko-smoke-max-height" step="0.5" value="10.0">
+                                        <span class="param-hint">Extended for rising smoke (3-8m plumes)</span>
                                     </div>
                                 </div>
 
@@ -693,6 +768,12 @@
                             <span class="section-node">/buran_controller</span>
                         </button>
                         <div id="buran-params" class="tuning-section-content" style="display: none;">
+                            <p style="font-size: 0.9em; color: #666; margin: 0 0 15px 0; padding: 10px; background: #d4edda; border-left: 3px solid #28a745; border-radius: 4px;">
+                                <strong>⚙️ Control:</strong> Simple anti-stuck system (turn left until clear). Adjust PID gains in preset section above.
+                            </p>
+
+                            <!-- Obstacle Response Section -->
+                            <h3 style="font-size: 14px; color: #dc3545; margin: 15px 0 10px 0; padding-bottom: 5px; border-bottom: 2px solid #dc3545;">🚨 Obstacle Response</h3>
                             <div class="param-grid">
                                 <div class="param-group">
                                     <h4>Distance Thresholds | Seuils Distance</h4>
@@ -748,33 +829,27 @@
                                         <span class="param-hint">Avoidance turn limit</span>
                                     </div>
                                 </div>
+                            </div>
 
+                            <!-- Anti-Stuck System Section -->
+                            <h3 style="font-size: 14px; color: #ffc107; margin: 20px 0 10px 0; padding-bottom: 5px; border-bottom: 2px solid #ffc107;">🔄 Simple Anti-Stuck System</h3>
+                            <div class="param-grid">
                                 <div class="param-group">
-                                    <h4>Anti-Stuck | Anti-Blocage</h4>
+                                    <h4>Stuck Detection | Détection Blocage</h4>
                                     <div class="param-item">
                                         <label for="buran-stuck-timeout">Stuck Timeout (s):</label>
                                         <input type="number" id="buran-stuck-timeout" step="0.5" min="1" max="10" value="3.5">
-                                        <span class="param-hint">Stuck detection</span>
+                                        <span class="param-hint">Time before stuck detection</span>
                                     </div>
                                     <div class="param-item">
                                         <label for="buran-stuck-threshold">Stuck Threshold (m):</label>
                                         <input type="number" id="buran-stuck-threshold" step="0.1" value="0.9">
                                         <span class="param-hint">Movement threshold</span>
                                     </div>
-                                    <div class="param-item">
-                                        <label for="buran-no-go-radius">No-Go Zone Radius (m):</label>
-                                        <input type="number" id="buran-no-go-radius" step="1" value="8">
-                                        <span class="param-hint">Exclusion zone size</span>
-                                    </div>
-                                    <div class="param-item">
-                                        <label for="buran-detour-dist">Detour Distance (m):</label>
-                                        <input type="number" id="buran-detour-dist" step="1" value="12">
-                                        <span class="param-hint">Detour waypoint offset</span>
-                                    </div>
                                 </div>
 
                                 <div class="param-group">
-                                    <h4>Escape Maneuvers | Manœuvres Échappement</h4>
+                                    <h4>Critical Obstacle | Obstacle Critique</h4>
                                     <div class="param-item">
                                         <label for="buran-reverse-timeout">Reverse Timeout (s):</label>
                                         <input type="number" id="buran-reverse-timeout" step="0.5" value="2.5">
@@ -871,6 +946,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=9"></script>
+    <script src="app.js?v=14"></script>
 </body>
 </html>

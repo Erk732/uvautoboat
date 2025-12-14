@@ -6,7 +6,7 @@ package_name = 'plan'
 
 setup(
     name=package_name,
-    version='0.1.0',
+    version='2.2.0',  # Updated: v2.2 with A* detour planning & enhanced SASS
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -27,8 +27,11 @@ setup(
     zip_safe=True,
     maintainer='ghostzero',
     maintainer_email='yinpuchen0@gmail.com',
-    description='Planning and perception package for VRX autonomous navigation.',
+    author='ghostzero',
+    author_email='yinpuchen0@gmail.com',
+    description='Planning and perception package for VRX autonomous navigation with A* detour planning, OKO perception v2.1, and SPUTNIK planner v2.2.',
     license='Apache-2.0',
+    keywords=['ROS2', 'VRX', 'autonomous navigation', 'path planning', 'obstacle detection', 'LiDAR', 'A*'],
     tests_require=['pytest'],
     python_requires='>=3.10',
     classifiers=[

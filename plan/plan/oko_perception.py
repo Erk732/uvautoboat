@@ -79,6 +79,11 @@ class OkoPerception(Node):
         self.declare_parameter('solid_min_height', -2.0)       # Solid obstacles min height
         self.declare_parameter('solid_max_height', 0.5)        # Solid obstacles touch water line
 
+        # Smoke detection parameters (v2.2) - Active detection
+        self.declare_parameter('smoke_detection_enabled', True)  # Enable smoke detection (separate from filtering)
+        self.declare_parameter('smoke_min_cluster_size', 50)     # Min points to confirm smoke presence
+        self.declare_parameter('smoke_detection_range', 50.0)    # Max range to detect smoke (m)
+
         # Load initial parameter values
         self._load_parameters()
 
@@ -157,6 +162,9 @@ class OkoPerception(Node):
         self.pub_obstacle_detected = self.create_publisher(
             Bool, '/perception/obstacle_detected', 10
         )
+        self.pub_smoke_detected = self.create_publisher(
+            String, '/perception/smoke_detected', 10
+        )
 
         # Publish at 20Hz
         self.create_timer(0.05, self.publish_status)
@@ -192,12 +200,17 @@ class OkoPerception(Node):
         self.water_plane_threshold = self.get_parameter('water_plane_threshold').value
         self.velocity_history_size = self.get_parameter('velocity_history_size').value
 
-        # Smoke detection parameters
+        # Smoke filtering parameters
         self.smoke_filter_enabled = self.get_parameter('smoke_filter_enabled').value
         self.smoke_min_height = self.get_parameter('smoke_min_height').value
         self.smoke_max_height = self.get_parameter('smoke_max_height').value
         self.solid_min_height = self.get_parameter('solid_min_height').value
         self.solid_max_height = self.get_parameter('solid_max_height').value
+
+        # Smoke detection parameters (v2.2)
+        self.smoke_detection_enabled = self.get_parameter('smoke_detection_enabled').value
+        self.smoke_min_cluster_size = self.get_parameter('smoke_min_cluster_size').value
+        self.smoke_detection_range = self.get_parameter('smoke_detection_range').value
 
     def parameter_callback(self, params):
         """Called when parameters are changed via set_parameters service (DYNAMIC UPDATES)"""
@@ -210,7 +223,8 @@ class OkoPerception(Node):
                              'temporal_history_size', 'temporal_threshold', 'cluster_distance',
                              'min_cluster_size', 'water_plane_threshold', 'velocity_history_size',
                              'smoke_filter_enabled', 'smoke_min_height', 'smoke_max_height',
-                             'solid_min_height', 'solid_max_height']:
+                             'solid_min_height', 'solid_max_height',
+                             'smoke_detection_enabled', 'smoke_min_cluster_size', 'smoke_detection_range']:
 
                 # Reload all parameters
                 self._load_parameters()
@@ -298,7 +312,10 @@ class OkoPerception(Node):
         behind_filtered = 0
         water_filtered = 0
         smoke_filtered = 0  # FIX: Initialize smoke counter
-        
+
+        # Smoke detection storage (v2.2)
+        smoke_points = []  # Store (x, y, z, dist) for smoke candidates
+
         point_step = msg.point_step
         data = msg.data
         current_time = self.get_clock().now()
@@ -331,6 +348,11 @@ class OkoPerception(Node):
 
                     if is_smoke_candidate:
                         smoke_filtered += 1
+                        # v2.2: Smoke detection - collect smoke points for analysis
+                        if self.smoke_detection_enabled:
+                            dist_2d = math.sqrt(x*x + y*y)
+                            if dist_2d <= self.smoke_detection_range:
+                                smoke_points.append((x, y, z, dist_2d))
                         continue
 
                     if not is_solid_obstacle:
@@ -393,7 +415,45 @@ class OkoPerception(Node):
         if len(all_z_values) > 100:
             sorted_z = sorted(all_z_values)
             self.water_plane_z = sorted_z[len(sorted_z) // 20]  # 5th percentile
-        
+
+        # 6. SMOKE DETECTION ANALYSIS (v2.2)
+        smoke_detected = False
+        smoke_center_x, smoke_center_y, smoke_distance = 0.0, 0.0, 0.0
+        smoke_point_count = len(smoke_points)
+
+        if self.smoke_detection_enabled and smoke_point_count >= self.smoke_min_cluster_size:
+            # Calculate smoke cluster center (average position)
+            smoke_array = np.array(smoke_points)
+            smoke_center_x = float(np.mean(smoke_array[:, 0]))
+            smoke_center_y = float(np.mean(smoke_array[:, 1]))
+            smoke_distance = float(math.sqrt(smoke_center_x**2 + smoke_center_y**2))
+            smoke_detected = True
+
+            # Log smoke detection (throttled)
+            self.get_logger().info(
+                f"🌫️ SMOKE DETECTED: {smoke_point_count} points at {smoke_distance:.1f}m "
+                f"({smoke_center_x:.1f}, {smoke_center_y:.1f})",
+                throttle_duration_sec=2.0
+            )
+
+            # Publish smoke detection
+            smoke_msg = String()
+            smoke_msg.data = json.dumps({
+                'detected': True,
+                'point_count': smoke_point_count,
+                'center_x': round(smoke_center_x, 2),
+                'center_y': round(smoke_center_y, 2),
+                'distance': round(smoke_distance, 2),
+                'timestamp': self.get_clock().now().to_msg().sec
+            })
+            self.pub_smoke_detected.publish(smoke_msg)
+        else:
+            # Publish no smoke detected
+            if self.smoke_detection_enabled:
+                smoke_msg = String()
+                smoke_msg.data = json.dumps({'detected': False})
+                self.pub_smoke_detected.publish(smoke_msg)
+
         # Debug logging (throttled)
         self.get_logger().info(
             f"LiDAR: {total_points} pts, valid={valid_points}, "

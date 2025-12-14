@@ -26,7 +26,7 @@
 
 | System | Architecture | Sensors | Features |
 |--------|--------------|---------|----------|
-| **Vostok1 Modular** | Distributed (OKO + SPUTNIK + BURAN) | 3D PointCloud | A* path planning, SASS v2.0, runtime config, web dashboard + camera, waypoint persistence |
+| **Vostok1 Modular** | Distributed (OKO + SPUTNIK + BURAN) | 3D PointCloud | A* path planning, simple anti-stuck, runtime config, web dashboard + camera, waypoint persistence |
 
 > **Note:** The integrated Vostok1 has been deprecated and moved to `legacy/`. Use the modular system.
 
@@ -56,10 +56,10 @@
 - Integrated perception + planning + control
 - Modular variant: OKO + SPUTNIK + BURAN distributed architecture
 - 3D PointCloud processing (height/distance filtering)
-- Smart Anti-Stuck System (SASS) v2.0
+- Simple Anti-Stuck System
+  - Turn left until clear
   - Kalman-filtered drift compensation
-  - No-go zone memory
-  - Multi-direction probing
+  - Skip detection during obstacle avoidance
 - **Waypoint Skip Strategy** (NEW)
   - Stuck-based skip after 4 attempts
   - Obstacle blocking skip after 45s timeout
@@ -154,7 +154,7 @@
 | 26/11/2025 | Basic Navigation | ✅ |
 | 27/11/2025 | End-to-End Pipeline | ✅ |
 | 28/11/2025 | Vostok1 Navigation Complete | ✅ |
-| 01/12/2025 | SASS v2.0 + Mission CLI | ✅ |
+| 01/12/2025 | Simple Anti-Stuck + Mission CLI | ✅ |
 | 03/12/2025 | Waypoint Skip + Runtime Config | ✅ |
 | 03/12/2025 | Go Home Optimization (detour insertion) | ✅ |
 | 03/12/2025 | README Consolidation + Cleanup | ✅ |

@@ -7,9 +7,9 @@ Subscribes to planner targets and perception data, outputs thruster commands.
 
 Features:
 - PID heading control with anti-windup
-- Smart Anti-Stuck System (SASS) with Kalman-filtered drift estimation
-- Multi-phase escape maneuvers
-- No-go zone memory
+- Simple anti-stuck system (turn left until clear)
+- Kalman-filtered drift compensation
+- OKO v2.1 VFH/polar histogram obstacle avoidance integration
 
 Topics:
     Subscribes:
@@ -136,7 +136,7 @@ class KalmanDriftEstimator:
 class BuranController(Node):
     """
     BURAN - Boat controller with PID navigation
-    Enhanced with Smart Anti-Stuck System (SASS)
+    Enhanced with simple anti-stuck system and Kalman drift compensation
     """
     def __init__(self):
         super().__init__('buran_controller_node')
@@ -167,12 +167,10 @@ class BuranController(Node):
         self.declare_parameter('use_vfh_bias', False)    # Enable/disable VFH/polar steering bias
         self.declare_parameter('max_avoidance_turn_deg', 20.0)  # Maximum turn angle during obstacle avoidance (degrees)
 
-        # Smart anti-stuck parameters
+        # Simple anti-stuck parameters
         self.declare_parameter('stuck_timeout', 3.0)
         self.declare_parameter('stuck_threshold', 0.5)
-        self.declare_parameter('no_go_zone_radius', 8.0)
         self.declare_parameter('drift_compensation_gain', 0.3)
-        self.declare_parameter('detour_distance', 12.0)
         # Shoreline/bank protection: slow down when very close to obstacles (e.g., banks)
         self.declare_parameter('bank_slow_distance', 6.0)
         self.declare_parameter('bank_slow_factor', 0.25)
@@ -200,12 +198,10 @@ class BuranController(Node):
         self.max_avoidance_turn_deg = float(self.get_parameter('max_avoidance_turn_deg').value)
         self.use_vfh_bias = bool(self.get_parameter('use_vfh_bias').value)
         
-        # Smart anti-stuck parameters
+        # Simple anti-stuck parameters
         self.stuck_timeout = self.get_parameter('stuck_timeout').value
         self.stuck_threshold = self.get_parameter('stuck_threshold').value
-        self.no_go_zone_radius = self.get_parameter('no_go_zone_radius').value
         self.drift_compensation_gain = self.get_parameter('drift_compensation_gain').value
-        self.detour_distance = self.get_parameter('detour_distance').value
         self.bank_slow_distance = float(self.get_parameter('bank_slow_distance').value)
         self.bank_slow_factor = float(self.get_parameter('bank_slow_factor').value)
 
@@ -255,20 +251,14 @@ class BuranController(Node):
         self.start_gps = None
         self.current_gps = None
         
-        # Smart anti-stuck state
+        # Simple anti-stuck state
         self.last_position = None
         self.stuck_check_time = None
         self.is_stuck = False
         self.escape_mode = False
         self.escape_start_time = None
-        self.escape_phase = 0
         self.consecutive_stuck_count = 0
-        self.adaptive_escape_duration = 12.0
-        self.no_go_check_counter = 0  # Counter to prevent infinite no-go zone loops
 
-        # No-go zones (obstacle memory)
-        self.no_go_zones = []  # List of (x, y, radius)
-        
         # Drift compensation with Kalman filter
         self.position_history = []
         kalman_process = self.get_parameter('kalman_process_noise').value
@@ -278,15 +268,6 @@ class BuranController(Node):
             measurement_noise=kalman_measurement
         )
         self.drift_vector = (0.0, 0.0)  # Updated by Kalman filter
-        
-        # Escape learning
-        self.escape_history = []
-        self.best_escape_direction = None
-        self.probe_results = {'left': 0.0, 'right': 0.0, 'back': 0.0}
-        self.last_escape_position = None
-        
-        # Detour waypoints
-        self.detour_requested = False
 
         # --- SUBSCRIBERS ---
         self.create_subscription(
@@ -361,7 +342,7 @@ class BuranController(Node):
         self.get_logger().info("=" * 50)
         self.get_logger().info("BURAN - Systeme de Controle de Mouvement")
         self.get_logger().info("Buran Controller - PID Heading Control")
-        self.get_logger().info("+ Smart Anti-Stuck System (SASS) v2.0")
+        self.get_logger().info("+ Simple Anti-Stuck (turn left until clear)")
         self.get_logger().info(f"PID Gains: Kp={self.kp}, Ki={self.ki}, Kd={self.kd}")
         self.get_logger().info(f"Speed: {self.base_speed} (max: {self.max_speed})")
         self.get_logger().info(f"Anti-Stuck: timeout={self.stuck_timeout}s, threshold={self.stuck_threshold}m")
@@ -438,6 +419,9 @@ class BuranController(Node):
             # If mission just became active (e.g., go_home, resume), reset escape state for fresh start
             elif not was_active and self.mission_active:
                 self._reset_all_escape_state()
+                # Reset stuck detection timing for fresh start
+                self.last_position = (self.current_x, self.current_y)
+                self.stuck_check_time = self.get_clock().now()
                 self.get_logger().info(f"✅ Mission active (state={state}) - escape state reset for fresh start")
                 
         except (json.JSONDecodeError, KeyError) as e:
@@ -470,9 +454,6 @@ class BuranController(Node):
         self.avoidance_mode = False
         self.reverse_start_time = None
         self.integral_error = 0.0
-        self.escape_phase = 0
-        self.best_escape_direction = None
-        self.probe_results = {'left': 0.0, 'right': 0.0, 'back': 0.0}
         self.consecutive_stuck_count = 0
         # Reset stuck detection timing
         self.last_position = None
@@ -537,19 +518,13 @@ class BuranController(Node):
                 self.max_avoidance_turn_deg = float(config['max_avoidance_turn_deg'])
                 updated.append(f"max_avoid_turn={self.max_avoidance_turn_deg}°")
 
-            # Smart Anti-Stuck System (SASS) parameters
+            # Simple Anti-Stuck System parameters
             if 'stuck_timeout' in config:
                 self.stuck_timeout = float(config['stuck_timeout'])
                 updated.append(f"stuck_timeout={self.stuck_timeout}")
             if 'stuck_threshold' in config:
                 self.stuck_threshold = float(config['stuck_threshold'])
                 updated.append(f"stuck_threshold={self.stuck_threshold}")
-            if 'no_go_zone_radius' in config:
-                self.no_go_zone_radius = float(config['no_go_zone_radius'])
-                updated.append(f"no_go_zone_radius={self.no_go_zone_radius}")
-            if 'detour_distance' in config:
-                self.detour_distance = float(config['detour_distance'])
-                updated.append(f"detour_distance={self.detour_distance}")
 
             # Control smoothness parameters
             if 'turn_deadband_deg' in config:
@@ -559,6 +534,14 @@ class BuranController(Node):
                 self.slew_rate_limit = float(config['slew_rate_limit'])
                 updated.append(f"slew_rate={self.slew_rate_limit}")
 
+            # Waypoint approach parameters
+            if 'approach_slow_distance' in config:
+                self.approach_slow_distance = float(config['approach_slow_distance'])
+                updated.append(f"approach_slow_distance={self.approach_slow_distance}m")
+            if 'approach_slow_factor' in config:
+                self.approach_slow_factor = float(config['approach_slow_factor'])
+                updated.append(f"approach_slow_factor={self.approach_slow_factor}")
+
             if updated:
                 self.get_logger().info(f"⚙️ Config updated: {', '.join(updated)}")
                 
@@ -566,8 +549,8 @@ class BuranController(Node):
             self.get_logger().error(f"Config parse error: {e}")
 
     def control_loop(self):
-        """Main control loop - PID heading control with obstacle avoidance and smart anti-stuck"""
-        # Highest priority STOP latch (works even during SASS/panic)
+        """Main control loop - PID heading control with obstacle avoidance and simple anti-stuck"""
+        # Highest priority STOP latch (works even during escape mode)
         if self.stop_override:
             self.stop()
             self.send_thrust(0.0, 0.0)
@@ -592,14 +575,11 @@ class BuranController(Node):
         # Update position history for drift estimation
         self.update_position_history()
 
-        # Clear old no-go zones that we've successfully passed
-        self.clear_passed_no_go_zones()
-
         # Check for stuck condition (if not already in escape mode)
         if not self.escape_mode:
             self.check_stuck_condition()
-        
-        # --- SMART ESCAPE MODE ---
+
+        # --- SIMPLE ESCAPE MODE ---
         if self.is_stuck and self.escape_mode:
             self.execute_smart_escape()
             return
@@ -745,6 +725,8 @@ class BuranController(Node):
         if math.isfinite(self.distance_to_target) and self.distance_to_target < self.approach_slow_distance:
             frac = max(0.0, min(1.0, self.distance_to_target / self.approach_slow_distance))
             speed *= (self.approach_slow_factor + (1.0 - self.approach_slow_factor) * frac)
+            # Maintain minimum speed for control authority (prevent drifting/circling)
+            speed = max(speed, 250.0)  # Minimum 250N to maintain steering control
 
         # Obstacle-based slowdown using OKO v2.0 urgency for smoother control
         if self.obstacle_detected:
@@ -878,7 +860,7 @@ class BuranController(Node):
         })
         self.pub_status.publish(msg)
 
-    # ==================== SMART ANTI-STUCK SYSTEM (SASS) ====================
+    # ==================== SIMPLE ANTI-STUCK SYSTEM ====================
     
     def update_position_history(self):
         """Update position history for drift estimation"""
@@ -888,8 +870,12 @@ class BuranController(Node):
         self.estimate_drift()
     
     def check_stuck_condition(self):
-        """Detect if boat is stuck - Enhanced with smart detection"""
+        """Detect if boat is truly stuck (not moving with clear path or blocked completely)"""
         if self.escape_mode:
+            return
+
+        # CRITICAL: Don't check stuck condition if mission is not active
+        if not self.mission_active:
             return
 
         # Calculate distance moved
@@ -901,236 +887,82 @@ class BuranController(Node):
         elapsed = (self.get_clock().now() - self.stuck_check_time).nanoseconds / 1e9
 
         if elapsed >= self.stuck_timeout:
-            # More lenient stuck detection during obstacle avoidance
-            # The boat is navigating slowly around obstacles, not necessarily stuck
-            effective_threshold = self.stuck_threshold
-            if self.obstacle_detected and self.min_obstacle_distance < self.min_safe_distance:
-                # Double the threshold during active obstacle avoidance
-                effective_threshold = self.stuck_threshold * 2.0
+            # CRITICAL: Only trigger stuck detection when TRULY stuck
+            # NOT during normal obstacle avoidance or reversing
 
-            if distance_moved < effective_threshold:
+            # 1. Skip during critical obstacle response (reversing) - this is intentional
+            if self.is_critical and self.reverse_start_time is not None:
+                self.last_position = (self.current_x, self.current_y)
+                self.stuck_check_time = self.get_clock().now()
+                return
+
+            # 2. Skip if actively avoiding obstacles - let obstacle avoidance do its job
+            if self.obstacle_detected and self.min_obstacle_distance < self.min_safe_distance:
+                self.last_position = (self.current_x, self.current_y)
+                self.stuck_check_time = self.get_clock().now()
+                return
+
+            # 3. Only trigger if NOT moving with clear path (real stuck situation)
+            if distance_moved < self.stuck_threshold:
                 if not self.is_stuck:
                     self.is_stuck = True
                     self.escape_mode = True
                     self.escape_start_time = self.get_clock().now()
-                    self.escape_phase = 0
-                    self.no_go_check_counter = 0  # Reset counter for new escape
-                    self.integral_error = 0.0
-                    self.last_escape_position = (self.current_x, self.current_y)
-                    self.best_escape_direction = None
-                    self.probe_results = {'left': 0.0, 'right': 0.0, 'back': 0.0}
                     self.consecutive_stuck_count += 1
-                    
-                    # Add no-go zone
-                    self.add_no_go_zone(self.current_x, self.current_y)
-                    
-                    # Calculate adaptive duration
-                    self.calculate_adaptive_escape_duration()
-                    
+
                     self.get_logger().warn(
-                        f"STUCK! Smart escape initiating "
-                        f"(Attempt {self.consecutive_stuck_count}, Duration: {self.adaptive_escape_duration:.1f}s)"
+                        f"🚨 STUCK! Simple escape (Attempt {self.consecutive_stuck_count})"
                     )
-                    
-                    # Request detour on 2nd attempt
-                    if self.consecutive_stuck_count == 2:
-                        self.request_detour_waypoint()
-                    
-                    # Request A* replan on 3rd attempt
-                    if self.consecutive_stuck_count == 3:
-                        self.request_replan(reason="stuck_multiple_times")
-                    
-                    # Skip waypoint after 4 attempts
-                    if self.consecutive_stuck_count >= 4:
+
+                    # Request waypoint skip after 3 failed attempts
+                    if self.consecutive_stuck_count >= 3:
                         self.get_logger().error(f"Stuck {self.consecutive_stuck_count} times - requesting waypoint skip")
                         self.request_waypoint_skip()
                         self.consecutive_stuck_count = 0
                         self.is_stuck = False
                         self.escape_mode = False
             else:
+                # Boat is making progress - reset stuck state
                 if self.is_stuck:
-                    self.record_escape_result(success=True)
-                    self.get_logger().info("✅ Escape successful! Resuming navigation")
+                    self.get_logger().info("✅ Unstuck! Resuming navigation")
                 self.is_stuck = False
                 self.escape_mode = False
-                self.escape_phase = 0
-            
+
+                # Reset consecutive stuck counter if making good progress
+                if distance_moved > self.stuck_threshold * 2.0:
+                    if self.consecutive_stuck_count > 0:
+                        self.get_logger().info(f"Good progress - resetting stuck counter (was {self.consecutive_stuck_count})")
+                    self.consecutive_stuck_count = 0
+
             self.last_position = (self.current_x, self.current_y)
             self.stuck_check_time = self.get_clock().now()
     
     def execute_smart_escape(self):
-        """Execute smart escape maneuver with probing and adaptive duration"""
+        """Simple escape: turn left until path is clear, then resume navigation"""
         # SAFETY: Abort escape immediately if mission is no longer active
         if not self.mission_active:
             self._reset_all_escape_state()
             self.stop()
             return
-        
-        elapsed = (self.get_clock().now() - self.escape_start_time).nanoseconds / 1e9
-        
-        # Phase boundaries
-        probe_end = 1.5
-        reverse_end = probe_end + self.adaptive_escape_duration * 0.30
-        turn_end = reverse_end + self.adaptive_escape_duration * 0.30
-        forward_end = turn_end + self.adaptive_escape_duration * 0.40  # Increased to escape no-go zone
-        
-        # Get drift compensation
-        drift_comp_left, drift_comp_right = self.calculate_drift_compensation()
-        
-        # PHASE 0: Probe
-        if elapsed < probe_end:
-            self.escape_phase = 0
-            probe_time = elapsed
-            
-            if probe_time < 0.6:
-                self.send_thrust(-200.0, 200.0)
-                self.probe_results['left'] = max(self.probe_results['left'], self.left_clear)
-            elif probe_time < 1.2:
-                self.send_thrust(200.0, -200.0)
-                self.probe_results['right'] = max(self.probe_results['right'], self.right_clear)
-            else:
-                self.send_thrust(0.0, 0.0)
-                self.probe_results['back'] = self.min_obstacle_distance
-                
-                if self.best_escape_direction is None:
-                    self.best_escape_direction = self.determine_best_escape_direction()
-                    self.get_logger().info(
-                        f"Probe: L:{self.probe_results['left']:.1f}m R:{self.probe_results['right']:.1f}m → {self.best_escape_direction}"
-                    )
-            
-            self.get_logger().info(f"Phase 0: PROBING ({probe_time:.1f}s)", throttle_duration_sec=0.5)
-            return
-        
-        # PHASE 1: Reverse
-        elif elapsed < reverse_end:
-            self.escape_phase = 1
-            reverse_power = -500.0 - min(200.0, 80.0 / max(0.5, self.min_obstacle_distance))
-            self.send_thrust(reverse_power + drift_comp_left, reverse_power + drift_comp_right)
-            self.get_logger().info(f"Phase 1: REVERSE ({elapsed:.1f}s/{reverse_end:.1f}s)", throttle_duration_sec=1.0)
-            return
-        
-        # PHASE 2: Turn
-        elif elapsed < turn_end:
-            self.escape_phase = 2
-            turn_power = 500.0 + (self.consecutive_stuck_count * 80.0)
-            turn_power = min(650.0, turn_power)
-            
-            if self.best_escape_direction == 'LEFT':
-                self.send_thrust(-turn_power + drift_comp_left, turn_power + drift_comp_right)
-            else:
-                self.send_thrust(turn_power + drift_comp_left, -turn_power + drift_comp_right)
-            
-            self.get_logger().info(
-                f"Phase 2: TURN {self.best_escape_direction} ({elapsed:.1f}s/{turn_end:.1f}s)",
-                throttle_duration_sec=1.0
-            )
-            return
-        
-        # PHASE 3: Forward test
-        elif elapsed < forward_end:
-            self.escape_phase = 3
-            # Check no-go zone but limit attempts to prevent infinite loop
-            if self.is_heading_toward_no_go_zone() and self.no_go_check_counter < 10:
-                self.no_go_check_counter += 1
-                # Only log at key intervals to reduce spam
-                if self.no_go_check_counter in [1, 5, 10]:
-                    self.get_logger().warn(f"Forward leads to no-go zone - extra turn ({self.no_go_check_counter}/10)")
-                self.send_thrust(-300.0, 300.0)
-            else:
-                # Force forward after too many no-go checks or if path is clear
-                # Use stronger thrust to ensure we escape the no-go zone radius
-                forward_thrust = 500.0  # Increased from 300 to escape further
-                if self.no_go_check_counter >= 10:
-                    self.get_logger().warn("⚠️ Too many no-go checks - forcing forward with strong thrust")
-                self.send_thrust(forward_thrust + drift_comp_left, forward_thrust + drift_comp_right)
 
-            self.get_logger().info(f"Phase 3: FORWARD TEST ({elapsed:.1f}s/{forward_end:.1f}s)", throttle_duration_sec=1.0)
-            return
-        
-        # Escape complete
-        else:
-            self.get_logger().info(f"Smart escape complete ({self.adaptive_escape_duration:.1f}s)")
+        # Simple strategy: Turn left until front is clear
+        if self.front_clear > self.min_safe_distance:
+            # Path is clear - exit escape mode
+            self.get_logger().info("✅ Path clear - escape complete")
             self.escape_mode = False
             self.is_stuck = False
-            self.escape_phase = 0
-            self.no_go_check_counter = 0  # Reset counter after successful escape
             self.integral_error = 0.0
             self.previous_error = 0.0
             self.last_position = (self.current_x, self.current_y)
             self.stuck_check_time = self.get_clock().now()
-    
-    def calculate_adaptive_escape_duration(self):
-        """Calculate escape duration based on situation"""
-        base_duration = 8.0
-        
-        if self.min_obstacle_distance < self.critical_distance:
-            base_duration += 4.0
-        elif self.min_obstacle_distance < 15.0:
-            base_duration += 2.0
-        
-        base_duration += self.consecutive_stuck_count * 2.0
-        self.adaptive_escape_duration = min(15.0, base_duration)
-    
-    def add_no_go_zone(self, x, y):
-        """Add no-go zone around stuck location"""
-        for i, zone in enumerate(self.no_go_zones):
-            if math.hypot(x - zone[0], y - zone[1]) < self.no_go_zone_radius:
-                self.no_go_zones[i] = (zone[0], zone[1], zone[2] + 2.0)
-                return
-        
-        self.no_go_zones.append((x, y, self.no_go_zone_radius))
-        self.get_logger().info(f"Added no-go zone #{len(self.no_go_zones)} at ({x:.1f}, {y:.1f})")
-        
-        if len(self.no_go_zones) > 20:
-            self.no_go_zones.pop(0)
-    
-    def is_in_no_go_zone(self, x, y):
-        """Check if position is in any no-go zone"""
-        for zone_x, zone_y, radius in self.no_go_zones:
-            if math.hypot(x - zone_x, y - zone_y) < radius:
-                return True
-        return False
-
-    def clear_passed_no_go_zones(self):
-        """Remove no-go zones that boat has successfully passed by a safe margin"""
-        if not self.no_go_zones:
-            return
-
-        cleared_zones = []
-        safe_distance = self.no_go_zone_radius * 2.0  # Must be 2x radius away to clear
-
-        for i, (zone_x, zone_y, radius) in enumerate(self.no_go_zones):
-            distance = math.hypot(self.current_x - zone_x, self.current_y - zone_y)
-
-            # If we're far enough away, clear this zone
-            if distance > safe_distance:
-                cleared_zones.append(i)
-
-        # Remove cleared zones (reverse order to maintain indices)
-        for i in reversed(cleared_zones):
-            zone = self.no_go_zones.pop(i)
-            self.get_logger().info(f"✅ Cleared no-go zone at ({zone[0]:.1f}, {zone[1]:.1f}) - distance: {math.hypot(self.current_x - zone[0], self.current_y - zone[1]):.1f}m")
-    
-    def is_heading_toward_no_go_zone(self):
-        """Check if current heading leads to no-go zone"""
-        # Reduced look-ahead to match smaller no-go zone radius
-        look_ahead = 8.0  # Was 10.0, now matches zone management
-        future_x = self.current_x + look_ahead * math.cos(self.current_yaw)
-        future_y = self.current_y + look_ahead * math.sin(self.current_yaw)
-        return self.is_in_no_go_zone(future_x, future_y)
-    
-    def determine_best_escape_direction(self):
-        """Determine best escape direction from probe results"""
-        left = self.probe_results['left']
-        right = self.probe_results['right']
-        
-        threshold = 3.0
-        if left > right + threshold:
-            return 'LEFT'
-        elif right > left + threshold:
-            return 'RIGHT'
         else:
-            return self.get_learned_escape_direction()
+            # Keep turning left until clear
+            turn_power = 450.0
+            self.send_thrust(-turn_power, turn_power)
+            self.get_logger().info(
+                f"🔄 Turning left (front: {self.front_clear:.1f}m)",
+                throttle_duration_sec=1.0
+            )
     
     def estimate_drift(self):
         """Estimate drift using Kalman filter for optimal estimation."""
@@ -1176,104 +1008,33 @@ class BuranController(Node):
         else:
             return -compensation, compensation
     
-    def request_detour_waypoint(self):
-        """Request planner to insert detour waypoint"""
-        if self.left_clear > self.right_clear:
-            detour_angle = self.current_yaw + math.pi / 2
-        else:
-            detour_angle = self.current_yaw - math.pi / 2
-        
-        detour_x = self.current_x + self.detour_distance * math.cos(detour_angle)
-        detour_y = self.current_y + self.detour_distance * math.sin(detour_angle)
-        
-        if self.is_in_no_go_zone(detour_x, detour_y):
-            detour_angle += math.pi
-            detour_x = self.current_x + self.detour_distance * math.cos(detour_angle)
-            detour_y = self.current_y + self.detour_distance * math.sin(detour_angle)
-        
-        msg = String()
-        msg.data = json.dumps({
-            'type': 'detour',
-            'x': round(detour_x, 2),
-            'y': round(detour_y, 2)
-        })
-        self.pub_detour_request.publish(msg)
-        
-        self.get_logger().warn(f"Detour waypoint requested at ({detour_x:.1f}, {detour_y:.1f})")
-    
-    def request_replan(self, reason="obstacle"):
-        """Request A* replan from the planner"""
-        msg = String()
-        msg.data = json.dumps({
-            'type': 'replan',
-            'reason': reason,
-            'current_position': [round(self.current_x, 2), round(self.current_y, 2)],
-            'obstacle_distance': round(self.min_obstacle_distance, 2),
-            'no_go_zones': [(round(z[0], 1), round(z[1], 1), round(z[2], 1)) for z in self.no_go_zones[-5:]]  # Send last 5 zones
-        })
-        self.pub_replan_request.publish(msg)
-        self.get_logger().info(f"🔄 Replan requested: {reason}")
-    
     def request_waypoint_skip(self):
         """Request planner to skip current waypoint after too many stuck attempts"""
         msg = String()
         msg.data = json.dumps({
             'type': 'skip',
             'current_position': [round(self.current_x, 2), round(self.current_y, 2)],
-            'reason': f'stuck_{self.consecutive_stuck_count}_times',
-            'no_go_zones': [(round(z[0], 1), round(z[1], 1), round(z[2], 1)) for z in self.no_go_zones]
+            'reason': f'stuck_{self.consecutive_stuck_count}_times'
         })
         self.pub_skip_request.publish(msg)
         self.get_logger().warn(f"⏭️ Waypoint skip requested after {self.consecutive_stuck_count} stuck attempts")
-    
-    def record_escape_result(self, success):
-        """Record escape result for learning"""
-        if self.last_escape_position is None:
-            return
-        
-        self.escape_history.append({
-            'direction': self.best_escape_direction,
-            'success': success
-        })
-        
-        if len(self.escape_history) > 50:
-            self.escape_history.pop(0)
-    
-    def get_learned_escape_direction(self):
-        """Get best escape direction from history"""
-        if not self.escape_history:
-            return 'LEFT'
-        
-        left_success = sum(1 for r in self.escape_history if r['direction'] == 'LEFT' and r['success'])
-        right_success = sum(1 for r in self.escape_history if r['direction'] == 'RIGHT' and r['success'])
-        
-        return 'LEFT' if left_success >= right_success else 'RIGHT'
-    
+
     def publish_anti_stuck_status(self):
         """Publish anti-stuck system status for dashboard"""
         drift_uncertainty = self.drift_kalman.get_uncertainty()
-        
+
         msg = String()
         msg.data = json.dumps({
             'is_stuck': self.is_stuck,
             'escape_mode': self.escape_mode,
-            'escape_phase': self.escape_phase,
             'consecutive_attempts': self.consecutive_stuck_count,
-            'adaptive_duration': round(self.adaptive_escape_duration, 1),
-            'no_go_zones': len(self.no_go_zones),
+            'front_clear': round(self.front_clear, 1),
             'drift_vector': [round(self.drift_vector[0], 3), round(self.drift_vector[1], 3)],
             'drift_uncertainty': [round(drift_uncertainty[0], 3), round(drift_uncertainty[1], 3)],
             'drift_kalman_gain': [
                 round(float(self.drift_kalman.last_kalman_gain[0, 0]), 3),
                 round(float(self.drift_kalman.last_kalman_gain[1, 1]), 3)
-            ],
-            'escape_history_count': len(self.escape_history),
-            'best_direction': self.best_escape_direction,
-            'probe_results': {
-                'left': round(self.probe_results['left'], 1),
-                'right': round(self.probe_results['right'], 1),
-                'back': round(self.probe_results['back'], 1)
-            }
+            ]
         })
         self.pub_anti_stuck.publish(msg)
 

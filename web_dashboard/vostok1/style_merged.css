@@ -1290,31 +1290,31 @@ h2 {
 .param-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 20px;
-    margin-bottom: 20px;
+    gap: 12px;
+    margin-bottom: 15px;
 }
 
 .param-group {
     background: #f8f9fa;
-    padding: 15px;
+    padding: 12px;
     border-radius: 6px;
     border: 1px solid #e9ecef;
 }
 
 .param-group h4 {
-    margin: 0 0 12px 0;
-    font-size: 14px;
+    margin: 0 0 10px 0;
+    font-size: 13px;
     color: #495057;
     font-weight: 600;
     border-bottom: 1px solid #dee2e6;
-    padding-bottom: 8px;
+    padding-bottom: 6px;
 }
 
 .param-item {
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
 }
 
 .param-item:last-child {

@@ -2,8 +2,8 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>control</name>
-  <version>0.1.0</version>
-  <description>Control package for VRX WAM-V thruster-based path following.</description>
+  <version>2.1.0</version>
+  <description>Control package for VRX WAM-V with BURAN controller v2.1 featuring simple anti-stuck system, Kalman drift compensation, and adaptive waypoint approach.</description>
   <maintainer email="yinpuchen0@gmail.com">ghostzero</maintainer>
   <license>Apache-2.0</license>
   <url type="repository">https://github.com/Erk732/uvautoboat</url>

@@ -90,6 +90,24 @@ launch:
       value: 0.32       # Balance water rejection vs dropouts
     - name: velocity_history_size
       value: 5          # Frames for velocity estimation (v2.0: detect moving obstacles)
+    # Smoke filtering (v2.1) - Tuned for sydney_regatta_smoke.sdf particle properties
+    - name: smoke_filter_enabled
+      value: true       # Enable smoke filtering (prevents smoke from being counted as obstacles)
+    - name: smoke_min_height
+      value: 0.3        # Catch smoke near water surface (SDF: emitters at 0.5m)
+    - name: smoke_max_height
+      value: 10.0       # Extended: smoke rises 3-8m with 0.15-0.35m/s velocity
+    - name: solid_min_height
+      value: -2.0       # Solid obstacles below water line
+    - name: solid_max_height
+      value: 0.5        # Solid obstacles at/near water surface
+    # Smoke detection (v2.2) - Active LiDAR-based smoke detection
+    - name: smoke_detection_enabled
+      value: true       # Enable smoke detection (reports smoke location/density)
+    - name: smoke_min_cluster_size
+      value: 50         # Min LiDAR points to confirm smoke presence
+    - name: smoke_detection_range
+      value: 50.0       # Max range to detect smoke (m)
 
 # ============================================================================
 # SPUTNIK - Planner Node (GPS Waypoint Navigation)
@@ -107,7 +125,7 @@ launch:
     - name: lanes
       value: 10
     - name: waypoint_tolerance
-      value: 1.0        # Stricter tolerance for waypoint completion
+      value: 3.5        # Increased from 1.0 for easier waypoint capture (avoid circling)
     - name: waypoint_skip_timeout
       value: 45.0       # Allow more time to clear obstacles before skipping
     # Hazard Zone Avoidance (v2.1)
@@ -132,8 +150,12 @@ launch:
       value: 12.0       # Safety margin around obstacles (m)
     - name: astar_max_expansions
       value: 20000      # Max node expansions for A* search
-    - name: hazard_world_boxes
-      value: "795.0,-325.0,925.0,-315.0;935.0,-325.0,1205.0,-315.0;655.0,-315.0,675.0,-305.0;765.0,-315.0,1205.0,-305.0;-15.0,-305.0,5.0,-295.0;535.0,-305.0,555.0,-295.0;645.0,-305.0,675.0,-295.0;735.0,-305.0,1215.0,-295.0;-25.0,-295.0,65.0,-285.0;285.0,-295.0,315.0,-285.0;525.0,-295.0,565.0,-285.0;625.0,-295.0,685.0,-285.0;725.0,-295.0,1215.0,-285.0;-25.0,-285.0,145.0,-275.0;275.0,-285.0,345.0,-275.0;415.0,-285.0,445.0,-275.0;515.0,-285.0,575.0,-275.0;615.0,-285.0,685.0,-275.0;705.0,-285.0,1225.0,-275.0;835.0,-345.0,865.0,-335.0;1005.0,-345.0,1065.0,-335.0;1145.0,-345.0,1165.0,-335.0;805.0,-335.0,895.0,-325.0;995.0,-335.0,1185.0,-325.0;-35.0,-275.0,155.0,-265.0;265.0,-275.0,585.0,-265.0;605.0,-275.0,1245.0,-265.0;-75.0,-265.0,175.0,-255.0;255.0,-265.0,1265.0,-255.0;-215.0,-255.0,185.0,-245.0;215.0,-255.0,1265.0,-245.0;-365.0,-245.0,-335.0,-235.0;-225.0,-245.0,1275.0,-235.0;-455.0,-235.0,-295.0,-225.0;-245.0,-235.0,1275.0,-225.0;-475.0,-225.0,1285.0,-215.0;-655.0,-215.0,-605.0,-205.0;-495.0,-215.0,1285.0,-205.0;-705.0,-205.0,1295.0,-195.0;-1015.0,-195.0,-995.0,-185.0;-885.0,-195.0,-855.0,-185.0;-755.0,-195.0,1295.0,-185.0;-1015.0,-185.0,-985.0,-175.0"
+    # Pollutant Source Detection (Smoke Generators in SDF)
+    - name: pollutant_scan_enabled
+      value: true       # Enable smoke generator scanning
+    - name: pollutant_sdf_glob
+      value: "/home/ghostzero/seal_ws/src/uvautoboat/test_environment/*smoke*.sdf"  # Absolute path to smoke SDF files
+    # Note: hazard_world_boxes removed - not used when hazard_enabled=false (see line 125)
 
 # ============================================================================
 # BURAN - Controller Node (PID Control with Obstacle Avoidance)
@@ -165,18 +187,14 @@ launch:
       value: 4.0
     # Approach slowdown (precision near waypoints)
     - name: approach_slow_distance
-      value: 8.0        # Begin slowing within 8m of waypoint
+      value: 10.0       # Begin slowing within 10m of waypoint (was 8.0)
     - name: approach_slow_factor
-      value: 0.6        # Scale speed when inside slow distance
-    # Smart Anti-Stuck System (SASS)
+      value: 0.7        # Scale speed when inside slow distance (was 0.6, keep more momentum)
+    # Simple Anti-Stuck System
     - name: stuck_timeout
-      value: 8.0          # More patient before declaring stuck (increased from 6.0)
+      value: 12.0         # Time before declaring stuck (seconds)
     - name: stuck_threshold
-      value: 0.8          # More tolerant threshold (was 1.0)
-    - name: no_go_zone_radius
-      value: 6.0          # Smaller keep-out radius (was 10.0)
-    - name: detour_distance
-      value: 10.0         # Longer detours for better clearance
+      value: 1.0          # Distance threshold in meters
     - name: drift_compensation_gain
       value: 0.3          # Compensation gain for estimated drift/current
     - name: kalman_process_noise
