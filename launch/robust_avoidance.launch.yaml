@@ -1,0 +1,155 @@
+# ============================================================================
+# Robust Avoidance Stack Launch File
+# ============================================================================
+#
+# Launches the all-in-one robust avoidance navigation system:
+#   - gps_imu_pose (plan) - GPS/IMU to local ENU pose conversion
+#   - pose_filter (plan) - Noise filtering
+#   - robust_avoidance (control) - All-in-one navigation stack
+#
+# Pose output is in a local ENU frame with the first GPS fix as origin.
+#
+# Quick test for beginners: launch this file, then publish a goal (frame=world) to start moving:
+# ros2 topic pub /planning/goal geometry_msgs/PoseStamped "{header: {frame_id: 'world'}, pose: {position: {x: 100.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}" --once
+#
+# ============================================================================
+
+launch:
+
+# ============================================================================
+# GPS/IMU to Pose Converter (Local ENU Frame)
+# ============================================================================
+- node:
+    pkg: plan
+    exec: gps_imu_pose
+    name: gps_imu_pose
+    output: screen
+    param:
+    - name: use_sim_time
+      value: true
+    - name: gps_topic
+      value: /wamv/sensors/gps/gps/fix
+    - name: imu_topic
+      value: /wamv/sensors/imu/imu/data
+    - name: pose_topic
+      value: /wamv/pose_raw
+    - name: frame_id
+      value: world
+    - name: base_link_frame
+      value: wamv/wamv/base_link
+    - name: use_tf_pose
+      value: false
+    - name: tf_target_frame
+      value: world
+    - name: tf_source_frame
+      value: wamv/wamv/base_link
+
+# ============================================================================
+# Pose Filter (Noise Reduction)
+# ============================================================================
+- node:
+    pkg: plan
+    exec: pose_filter
+    name: pose_filter
+    output: screen
+    param:
+    - name: use_sim_time
+      value: true
+    - name: input_topic
+      value: /wamv/pose_raw
+    - name: output_topic
+      value: /wamv/pose_filtered
+
+# ============================================================================
+# Robust Avoidance Stack (All-in-One Controller)
+# ============================================================================
+- node:
+    pkg: control
+    exec: robust_avoidance
+    name: robust_avoidance
+    output: screen
+    param:
+    - name: use_sim_time
+      value: true
+    - name: pose_topic
+      value: /wamv/pose_filtered
+    - name: forward_thrust
+      value: 320.0
+    - name: kp_yaw
+      value: 600.0
+    - name: control_rate
+      value: 30.0
+    - name: waypoint_tolerance
+      value: 3.0
+    - name: goal_tolerance
+      value: 1.0
+    - name: approach_slow_dist
+      value: 10.0
+    - name: heading_align_thresh_deg
+      value: 25.0
+    - name: overshoot_margin
+      value: 1.0
+    - name: obstacle_slow_dist
+      value: 10.0
+    - name: obstacle_stop_dist
+      value: 7.0
+    - name: avoid_turn_thrust
+      value: 150.0
+    - name: avoid_diff_gain
+      value: 10.0
+    - name: avoid_clear_margin
+      value: 4.0
+    - name: avoid_max_turn_time
+      value: 5.0
+    - name: full_clear_distance
+      value: 20.0
+    - name: front_angle_deg
+      value: 30.0
+    - name: side_angle_deg
+      value: 60.0
+    - name: hazard_world_auto_origin
+      value: true
+    - name: auto_goal_enable
+      value: true
+    - name: auto_next_goals
+      value: "130,0;130,50;80,60"
+    - name: stuck_timeout
+      value: 8.0
+    - name: stuck_progress_epsilon
+      value: 0.1
+    - name: recover_reverse_time
+      value: 3.0
+    - name: recover_turn_time
+      value: 3.0
+    - name: recover_reverse_thrust
+      value: -200.0
+    - name: recover_reverse_time_long
+      value: 6.0
+    - name: min_range_filter
+      value: 3.0
+    - name: cloud_z_min
+      value: -10.0
+    - name: cloud_z_max
+      value: 3.0
+    - name: vfh_enabled
+      value: true
+    - name: vfh_bin_deg
+      value: 5.0
+    - name: vfh_block_dist
+      value: 10.0
+    - name: polar_use_scan
+      value: true
+    - name: polar_min_range
+      value: 0.5
+    - name: plan_avoid_margin
+      value: 5.0
+    - name: hull_radius
+      value: 1.5
+    - name: path_step
+      value: 5.0
+    - name: pose_timeout
+      value: 1.0
+    - name: scan_timeout
+      value: 1.0
+    - name: lidar_log_interval
+      value: 2.0

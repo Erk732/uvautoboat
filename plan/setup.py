@@ -62,6 +62,8 @@ setup(
             'simple_perception = plan.simple_perception:main',
             'pollutant_planner = plan.pollutant_planner:main',
             'lidar_obstacle_avoidance = plan.lidar_obstacle_avoidance:main',
+            'gps_imu_pose = plan.gps_imu_pose:main',
+            'pose_filter = plan.pose_filter:main',
 
             # Testing / Fixed versions
             'atlantis_planner_fixed = plan.atlantis_planner_fixed:main',

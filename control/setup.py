@@ -54,10 +54,7 @@ setup(
 
             # Other Controllers & Utilities
             'keyboard_teleop = control.keyboard_teleop:main',
-            'all_in_one_stack = control.all_in_one_stack:main',
-            'gps_imu_pose = control.gps_imu_pose:main',
-            'pose_filter = control.pose_filter:main',
-            'goal_sequencer = control.goal_sequencer:main',
+            'robust_avoidance = control.robust_avoidance:main',
         ],
     },
 )
