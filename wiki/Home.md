@@ -44,7 +44,7 @@ Welcome to the **AutoBoat Wiki**! This documentation provides comprehensive guid
 
 ### 🛠️ Advanced Features
 
-- **[Smart Anti-Stuck System (SASS)](SASS)** — Intelligent recovery maneuvers
+- **[Simple Anti-Stuck System](SASS)** — Simple recovery maneuvers (deprecated wiki, see README)
 - **[A* Path Planning](Astar-Path-Planning)** — Grid-based obstacle avoidance
 - **[Waypoint Skip Strategy](Waypoint-Skip-Strategy)** — Handling blocked waypoints
 - **[Obstacle Avoidance Loop](Obstacle-Avoidance-Loop)** — Continuous perception-control cycle

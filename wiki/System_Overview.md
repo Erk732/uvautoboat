@@ -16,7 +16,7 @@ Built on **ROS 2 Jazzy** and **Gazebo Harmonic**, the framework provides a robus
 
 - **Vostok1 Navigation System**: Integrated autonomous navigation with 3D LIDAR perception
 - **Modular Architecture**: Distributed nodes (OKO-SPUTNIK-BURAN) for flexible deployment
-- **Smart Anti-Stuck System (SASS)**: Intelligent recovery with Kalman-filtered drift compensation
+- **Simple Anti-Stuck System**: Turn left until clear recovery with Kalman-filtered drift compensation
 - **Web Dashboard**: Real-time monitoring with visualization
 - **Waypoint Skip Strategy**: Automatic skip for blocked waypoints ensuring mission completion
 - **A* Path Planning**: Grid-based pathfinding for obstacle avoidance
@@ -34,7 +34,7 @@ AutoBoat provides three navigation architectures to suit different needs:
 | **Detection** | Full 3D volume | Full 3D volume | 3D Section Analysis |
 | **Control** | PID heading | PID (configurable) | PID heading |
 | **Monitoring** | Terminal + Web | Terminal (bilingual) | Web Dashboard |
-| **Anti-Stuck** | SASS v2.0 | SASS v2.0 | Adaptive Escape with SASS |
+| **Anti-Stuck** | Simple (turn left) | Simple (turn left) | Adaptive Escape (Work in progress) |
 | **Best For** | Production use | Custom tuning | Robust Path Validation |
 
 ### Vostok1 (Recommended)
@@ -49,7 +49,7 @@ AutoBoat provides three navigation architectures to suit different needs:
 - **Distributed architecture** with three nodes:
   - **OKO**: Perception (3D LIDAR)
   - **SPUTNIK**: Planning (waypoints)
-  - **BURAN**: Control (PID + SASS)
+  - **BURAN**: Control (PID + Simple anti-stuck)
 - Highly **configurable via YAML**
 - Ideal for **research and tuning**
 
@@ -81,7 +81,7 @@ AutoBoat provides three navigation architectures to suit different needs:
               │   • Heading control    │
               │   • Obstacle avoidance │
               │   • Waypoint planning  │
-              │   • SASS recovery      │
+              │   • Anti-stuck recovery│
               └───────────┬────────────┘
                           │
             ┌─────────────┴─────────────┐
@@ -117,7 +117,7 @@ AutoBoat provides three navigation architectures to suit different needs:
 - **PID Heading Control** (BURAN)
 - Differential thrust control
 - Obstacle reaction
-- Smart Anti-Stuck System (SASS)
+- Simple Anti-Stuck System
 - Drift compensation with Kalman filter
 - Speed adaptation near obstacles
 
@@ -147,9 +147,9 @@ AutoBoat provides three navigation architectures to suit different needs:
 - Continuous obstacle monitoring (~10 Hz)
 - Distance-weighted urgency scoring
 
-### Smart Anti-Stuck System (SASS)
+### Simple Anti-Stuck System
 
-- 4-phase escape sequence (Probe → Reverse → Turn → Forward)
+- Turn left until clear recovery strategy
 - Multi-direction scanning before escape
 - No-go zone memory (up to 20 zones)
 - Kalman filter for drift estimation
@@ -210,7 +210,7 @@ AutoBoat provides three navigation architectures to suit different needs:
 ### Robustness
 
 - Temporal filtering reduces false detections
-- SASS ensures recovery from stuck states
+- Simple anti-stuck system ensures recovery from stuck states
 - Waypoint skip prevents mission failures
 - Kalman filtering for state estimation
 
@@ -253,5 +253,5 @@ Learn more about specific components:
 - **[Modular Architecture](Modular-Architecture)** — OKO-SPUTNIK-BURAN design
 - **[ROS 2 Topic Flow](ROS2-Topic-Flow)** — Communication patterns
 - **[3D LIDAR Processing](3D_LIDAR_Processing)** — OKO perception deep-dive
-- **[SASS](SASS)** — Smart Anti-Stuck System explained
+- **[Simple Anti-Stuck](SASS)** — Simple anti-stuck recovery system (deprecated wiki, see README)
 - **[A* Path Planning](Astar-Path-Planning)** — Grid-based pathfinding

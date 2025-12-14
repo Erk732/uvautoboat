@@ -9,7 +9,7 @@ A real-time web-based monitoring dashboard for the Vostok1 autonomous boat syste
 - **Enhanced OKO v2.0 perception data** with urgency scores, clusters, and gaps
 - **Thruster output visualization** with live thrust bars
 - **Mission status display** including state, waypoint, and distance
-- **SASS v2.0 Anti-Stuck Status** with visual escalation indicators
+- **Simple Anti-Stuck Status** with visual indicators
 - **System logs** with color-coded severity levels
 - **Dual-mode support**: Works with both integrated Vostok1 and modular navigation
 - **Configuration panel**: Adjust mission parameters in real-time
@@ -253,7 +253,7 @@ The dashboard will automatically connect to rosbridge on port 9090 and display r
 |-------|-------------|------|
 | `/vostok1/mission_status` | `std_msgs/String` | Mission state, waypoint, distance, mission_armed, joystick_override |
 | `/vostok1/obstacle_status` | `std_msgs/String` | Obstacle distances and clearance |
-| `/vostok1/anti_stuck_status` | `std_msgs/String` | SASS v2.0 escalation status |
+| `/vostok1/anti_stuck_status` | `std_msgs/String` | Simple anti-stuck status |
 | `/vostok1/config` | `std_msgs/String` | Current configuration values |
 | `/vostok1/set_config` | `std_msgs/String` | Configuration updates (publish) |
 
@@ -509,7 +509,7 @@ Click **Send Config** to apply changes.
 
 If the boat gets stuck:
 
-1. BURAN automatically enters **escape mode** (SASS v2.0)
+1. BURAN automatically enters **escape mode** (turn left until clear)
 2. The anti-stuck panel shows escalation level
 3. After 4 failed attempts, waypoint is automatically skipped
 4. You can manually click **⏸ Stop** then **🏠 Go Home** to return

@@ -40,7 +40,7 @@ Repeat for each wiki page:
 | `Installation_Guide.md` | Installation Guide |
 | `Quick_Start.md` | Quick Start |
 | `System_Overview.md` | System Overview |
-| `SASS.md` | SASS |
+| `SASS.md` | Simple Anti-Stuck (deprecated) |
 | `3D_LIDAR_Processing.md` | 3D LIDAR Processing |
 | `Common_Issues.md` | Common Issues |
 
@@ -141,7 +141,7 @@ wiki/
 ├── Installation_Guide.md      # Setup instructions
 ├── Quick_Start.md             # 5-minute quick start
 ├── System_Overview.md         # Architecture overview
-├── SASS.md                    # Smart Anti-Stuck System
+├── SASS.md                    # Simple Anti-Stuck (deprecated)
 ├── 3D_LIDAR_Processing.md     # OKO perception
 ├── Common_Issues.md           # Troubleshooting
 └── [Additional pages...]      # Future additions

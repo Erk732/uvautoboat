@@ -331,7 +331,7 @@ function subscribeToTopics() {
         updateObstacleStatus(data);
     });
     
-    // Smart Anti-Stuck Status (SASS)
+    // Simple Anti-Stuck Status
     const antiStuckTopic = new ROSLIB.Topic({
         ros: ros,
         name: '/vostok1/anti_stuck_status',
@@ -818,7 +818,7 @@ function updateObstacleStatus(data) {
     }
 }
 
-// Update Smart Anti-Stuck Status (SASS)
+// Update Simple Anti-Stuck Status
 function updateAntiStuckStatus(data) {
     // Update anti-stuck panel elements if they exist
     const stuckStatus = document.getElementById('stuck-status');
@@ -1378,7 +1378,7 @@ function initMissionControl() {
     
     document.getElementById('btn-stop-mission').addEventListener('click', () => {
         sendMissionCommand('stop_mission');
-        // Send a second stop shortly after to ensure controllers see it (helps during SASS)
+        // Send a second stop shortly after to ensure controllers see it (helps during anti-stuck)
         setTimeout(() => sendMissionCommand('stop_mission'), 200);
     });
     

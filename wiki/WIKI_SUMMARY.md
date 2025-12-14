@@ -14,7 +14,7 @@ A comprehensive GitHub Wiki structure for the AutoBoat project with **9 document
 | 2 | **Installation_Guide.md** | 3.8 KB | Complete setup instructions for ROS 2, Gazebo, VRX |
 | 3 | **Quick_Start.md** | 4.2 KB | 5-minute quick start guide with multiple launch options |
 | 4 | **System_Overview.md** | 8.8 KB | Architecture comparison, data flow, design philosophy |
-| 5 | **SASS.md** | 9.3 KB | Smart Anti-Stuck System deep-dive with Kalman filtering |
+| 5 | **SASS.md** | 9.3 KB | Simple anti-stuck recovery system (deprecated) |
 | 6 | **3D_LIDAR_Processing.md** | 13 KB | OKO perception system - most detailed page |
 | 7 | **Common_Issues.md** | 12 KB | Comprehensive troubleshooting guide |
 | 8 | **UPLOAD_INSTRUCTIONS.md** | 6.7 KB | Step-by-step wiki upload guide (3 methods) |
@@ -37,7 +37,7 @@ A comprehensive GitHub Wiki structure for the AutoBoat project with **9 document
 - **Getting Started**: Installation → Quick Start → Tutorial
 - **Architecture**: 3 system comparisons + technical details
 - **User Guides**: CLI, Dashboard, Configuration
-- **Advanced Features**: SASS, A*, Obstacle Avoidance
+- **Advanced Features**: Simple Anti-Stuck, A*, Obstacle Avoidance
 - **Troubleshooting**: Common Issues + Debug Commands
 - **Development**: Contributing, Testing, API
 
@@ -79,7 +79,7 @@ A comprehensive GitHub Wiki structure for the AutoBoat project with **9 document
 ✅ **Technical Deep-Dives**
 
 - 3D LIDAR processing pipeline (8 steps)
-- SASS implementation details
+- Simple anti-stuck implementation details
 - Kalman filtering theory
 - Architecture comparisons
 
@@ -123,7 +123,7 @@ wiki/
 ├── Installation_Guide.md       # Setup instructions
 ├── Quick_Start.md              # 5-min quick start
 ├── System_Overview.md          # Architecture overview
-├── SASS.md                     # Smart Anti-Stuck System
+├── SASS.md                     # Simple Anti-Stuck (deprecated)
 ├── 3D_LIDAR_Processing.md      # OKO perception details
 ├── Common_Issues.md            # Troubleshooting
 ├── UPLOAD_INSTRUCTIONS.md      # How to upload to GitHub
@@ -207,7 +207,7 @@ Priority 1 pages to create:
 - **Installation**: ✅ Complete with troubleshooting
 - **Quick Start**: ✅ Multiple methods (2-terminal, 5-terminal, one-click)
 - **Architecture**: ⚠️ Overview done, details needed
-- **Features**: ⚠️ SASS done, others pending
+- **Features**: ⚠️ Simple anti-stuck done, others pending
 - **Troubleshooting**: ✅ Comprehensive common issues
 
 ### Technical Accuracy

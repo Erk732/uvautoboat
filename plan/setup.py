@@ -6,7 +6,7 @@ package_name = 'plan'
 
 setup(
     name=package_name,
-    version='2.2.0',  # Updated: v2.2 with A* detour planning & enhanced SASS
+    version='2.2.0',  # Updated: v2.2 with A* detour planning & simple anti-stuck
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',

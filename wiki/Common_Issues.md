@@ -70,12 +70,12 @@ ros2 param set /vostok1_node kd 150.0
 
 **Causes**:
 
-1. **Simulated current/wind**: Normal behavior, SASS will compensate
+1. **Simulated current/wind**: Normal behavior, simple anti-stuck will compensate
 2. **Integral windup**: Ki too high
 
 **Solutions**:
 
-1. Enable SASS (should be active by default)
+1. Enable simple anti-stuck (should be active by default)
 2. Reduce integral gain if overshooting:
 
    ```bash
@@ -108,9 +108,9 @@ gz service -s /world/sydney_regatta/set_pose \
 
 ---
 
-### SASS Activates Too Frequently
+### Simple Anti-Stuck Activates Too Frequently
 
-**Symptoms**: Smart Anti-Stuck System triggers during normal navigation
+**Symptoms**: Simple anti-stuck system triggers during normal navigation
 
 **Cause**: Stuck detection too sensitive
 
