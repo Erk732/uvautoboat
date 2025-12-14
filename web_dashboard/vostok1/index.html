@@ -117,32 +117,11 @@
                 </div>
             </div>
 
-            <!-- Smoke Zone Information Panel (Optional) -->
-            <div class="panel" style="background: #f8f9fa; border-left: 3px solid #6c757d;">
-                <h2 style="font-size: 16px; color: #6c757d;">🌫️ Smoke Zones (Optional Info)</h2>
-                <p style="font-size: 0.85em; color: #666; margin: -5px 0 10px 0; line-height: 1.4;">
-                    Mission planning info: Shows smoke generator locations from world SDF files.<br>
-                    <strong>Note:</strong> Navigation uses LiDAR smoke filtering (OKO params), not this detection.
-                </p>
-                <div class="info-grid">
-                    <div class="info-item full-width">
-                        <span class="label">Detected:</span>
-                        <span id="pollutant-count" class="value">0 zones</span>
-                    </div>
-                    <div class="info-item full-width" style="display: none;">
-                        <span id="pollutant-status" class="value badge">-</span>
-                    </div>
-                    <div class="info-item full-width">
-                        <span id="pollutant-list" class="value" style="font-size: 0.85em; line-height: 1.5; color: #999;"></span>
-                    </div>
-                </div>
-            </div>
-
             <!-- LiDAR Smoke Detection Panel (v2.2) -->
             <div class="panel" style="border-left: 3px solid #ff6b6b;">
                 <h2 style="font-size: 16px;">🔍 LiDAR Smoke Detection (Live)</h2>
                 <p style="font-size: 0.85em; color: #666; margin: -5px 0 10px 0; line-height: 1.4;">
-                    Real-time smoke detection using LiDAR point cloud analysis
+                    Real-time smoke detection with spatial density filtering (filters out compact solid objects)
                 </p>
                 <div class="info-grid">
                     <div class="info-item full-width">
@@ -158,12 +137,15 @@
                         <span id="smoke-points" class="value">0</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">Center X:</span>
-                        <span id="smoke-center-x" class="value">-</span>
+                        <span class="label">Spread (H/V):</span>
+                        <span id="smoke-spread" class="value">-</span>
                     </div>
                     <div class="info-item">
-                        <span class="label">Center Y:</span>
-                        <span id="smoke-center-y" class="value">-</span>
+                        <span class="label">Location:</span>
+                        <span id="smoke-location" class="value">-</span>
+                    </div>
+                    <div class="info-item full-width" style="font-size: 0.75em; color: #666; margin-top: 5px;">
+                        <span>Filters: Diffuse (>2.5m) + Horizontal-dominant (wider than tall)</span>
                     </div>
                 </div>
             </div>

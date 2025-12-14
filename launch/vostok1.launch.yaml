@@ -94,20 +94,20 @@ launch:
     - name: smoke_filter_enabled
       value: true       # Enable smoke filtering (prevents smoke from being counted as obstacles)
     - name: smoke_min_height
-      value: 0.3        # Catch smoke near water surface (SDF: emitters at 0.5m)
+      value: 2.5        # Smoke floats well above water (avoid low markers/buoys)
     - name: smoke_max_height
-      value: 10.0       # Extended: smoke rises 3-8m with 0.15-0.35m/s velocity
+      value: 10.0       # Smoke rises but typically below 10m for VRX smoke generators
     - name: solid_min_height
       value: -2.0       # Solid obstacles below water line
     - name: solid_max_height
       value: 0.5        # Solid obstacles at/near water surface
-    # Smoke detection (v2.2) - Active LiDAR-based smoke detection
+    # Smoke detection (v2.2) - Active LiDAR-based smoke detection with spatial density filtering
     - name: smoke_detection_enabled
-      value: true       # Enable smoke detection (reports smoke location/density)
+      value: true       # Enabled with spatial density check (filters out compact solid objects)
     - name: smoke_min_cluster_size
-      value: 50         # Min LiDAR points to confirm smoke presence
+      value: 200        # Moderate threshold: actual smoke clouds are typically large (500+ points)
     - name: smoke_detection_range
-      value: 50.0       # Max range to detect smoke (m)
+      value: 30.0       # Detect smoke within 30m range
 
 # ============================================================================
 # SPUTNIK - Planner Node (GPS Waypoint Navigation)
@@ -150,9 +150,10 @@ launch:
       value: 12.0       # Safety margin around obstacles (m)
     - name: astar_max_expansions
       value: 20000      # Max node expansions for A* search
-    # Pollutant Source Detection (Smoke Generators in SDF)
+    # Pollutant Source Detection (Smoke Generators in SDF) - DEPRECATED
+    # Note: Replaced by LiDAR-based smoke detection in OKO perception
     - name: pollutant_scan_enabled
-      value: true       # Enable smoke generator scanning
+      value: false      # Disabled: using LiDAR smoke detection instead
     - name: pollutant_sdf_glob
       value: "/home/ghostzero/seal_ws/src/uvautoboat/test_environment/*smoke*.sdf"  # Absolute path to smoke SDF files
     # Note: hazard_world_boxes removed - not used when hazard_enabled=false (see line 125)

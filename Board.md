@@ -26,7 +26,7 @@
 
 | System | Architecture | Sensors | Features |
 |--------|--------------|---------|----------|
-| **Vostok1 Modular** | Distributed (OKO + SPUTNIK + BURAN) | 3D PointCloud | A* path planning, simple anti-stuck, runtime config, web dashboard + camera, waypoint persistence |
+| **Vostok1 Modular** | Distributed (OKO + SPUTNIK + BURAN) | 3D PointCloud | A* path planning, LiDAR smoke detection, simple anti-stuck, runtime config, web dashboard + camera, waypoint persistence |
 
 > **Note:** The integrated Vostok1 has been deprecated and moved to `legacy/`. Use the modular system.
 
@@ -100,6 +100,7 @@
 | Min-range spawn fix (5m) | ✅ |
 | A* path planning (hybrid + runtime) | ✅ |
 | One-click launcher script | ✅ |
+| LiDAR smoke detection (spatial density filtering) | ✅ |
 
 ### Pending ⬜
 
@@ -161,6 +162,7 @@
 | 08/12/2025 | A* Path Planning (Hybrid + Runtime modes) | ✅ |
 | 09/12/2025 | One-Click Launcher Script | ✅ |
 | 11/12/2025 | Wiki Documentation + README Update | ✅ |
+| 14/12/2025 | LiDAR Smoke Detection (Spatial Density Filtering) | ✅ |
 | TBD | Coverage Planning | ⏸️ |
 
 ---
@@ -228,7 +230,7 @@ Current position ──>└─────────────────�
 
 ## 📜 Acknowledgments
 
-**Document Version**: 7.0 | **Last Updated**: 11/12/2025
+**Document Version**: 8.0 | **Last Updated**: 14/12/2025
 
 **Maintained By**: AutoBoat Development Team
 

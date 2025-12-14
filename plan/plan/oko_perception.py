@@ -427,26 +427,59 @@ class OkoPerception(Node):
             smoke_center_x = float(np.mean(smoke_array[:, 0]))
             smoke_center_y = float(np.mean(smoke_array[:, 1]))
             smoke_distance = float(math.sqrt(smoke_center_x**2 + smoke_center_y**2))
-            smoke_detected = True
 
-            # Log smoke detection (throttled)
-            self.get_logger().info(
-                f"🌫️ SMOKE DETECTED: {smoke_point_count} points at {smoke_distance:.1f}m "
-                f"({smoke_center_x:.1f}, {smoke_center_y:.1f})",
-                throttle_duration_sec=2.0
-            )
+            # SPATIAL DENSITY CHECK: Smoke is diffuse, terrain/vegetation is structured
+            # Calculate standard deviation of point positions (spread metric)
+            std_x = float(np.std(smoke_array[:, 0]))
+            std_y = float(np.std(smoke_array[:, 1]))
+            std_z = float(np.std(smoke_array[:, 2]))
+            spatial_spread = math.sqrt(std_x**2 + std_y**2 + std_z**2)
 
-            # Publish smoke detection
-            smoke_msg = String()
-            smoke_msg.data = json.dumps({
-                'detected': True,
-                'point_count': smoke_point_count,
-                'center_x': round(smoke_center_x, 2),
-                'center_y': round(smoke_center_y, 2),
-                'distance': round(smoke_distance, 2),
-                'timestamp': self.get_clock().now().to_msg().sec
-            })
-            self.pub_smoke_detected.publish(smoke_msg)
+            # Additional check: Horizontal vs vertical spread ratio
+            # Smoke: spreads more horizontally (wide plume, moderate vertical)
+            # Trees/terrain: tall vertical structures, less horizontal spread
+            horizontal_spread = math.sqrt(std_x**2 + std_y**2)
+            vertical_spread = std_z
+
+            # Smoke should have:
+            # 1. High overall spatial spread (>2.5m for diffuse cloud)
+            # 2. Horizontal spread > vertical spread (smoke spreads wider than tall)
+            is_diffuse = spatial_spread > 2.5
+            is_horizontal_dominant = horizontal_spread > vertical_spread * 0.8  # Smoke is wider than tall
+
+            if is_diffuse and is_horizontal_dominant:
+                smoke_detected = True
+
+                # Log smoke detection (throttled)
+                self.get_logger().info(
+                    f"🌫️ SMOKE DETECTED: {smoke_point_count} points at {smoke_distance:.1f}m "
+                    f"({smoke_center_x:.1f}, {smoke_center_y:.1f}), spread={spatial_spread:.1f}m "
+                    f"(H={horizontal_spread:.1f}m, V={vertical_spread:.1f}m)",
+                    throttle_duration_sec=2.0
+                )
+
+                # Publish smoke detection
+                smoke_msg = String()
+                smoke_msg.data = json.dumps({
+                    'detected': True,
+                    'point_count': smoke_point_count,
+                    'center_x': round(smoke_center_x, 2),
+                    'center_y': round(smoke_center_y, 2),
+                    'distance': round(smoke_distance, 2),
+                    'spatial_spread': round(spatial_spread, 2),
+                    'horizontal_spread': round(horizontal_spread, 2),
+                    'vertical_spread': round(vertical_spread, 2),
+                    'timestamp': self.get_clock().now().to_msg().sec
+                })
+                self.pub_smoke_detected.publish(smoke_msg)
+            else:
+                # Rejected: compact object or vertical structure (not smoke)
+                reject_reason = "too compact" if not is_diffuse else "too vertical (terrain/trees)"
+                self.get_logger().debug(
+                    f"Rejected smoke candidate: {smoke_point_count} points, spread={spatial_spread:.1f}m "
+                    f"(H={horizontal_spread:.1f}m, V={vertical_spread:.1f}m) - {reject_reason}",
+                    throttle_duration_sec=5.0
+                )
         else:
             # Publish no smoke detected
             if self.smoke_detection_enabled:

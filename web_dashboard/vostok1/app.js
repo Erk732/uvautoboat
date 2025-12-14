@@ -484,7 +484,9 @@ function subscribeToTopics() {
         }
     });
 
-    // Pollutant sources (smoke generators) for minimap markers and UI status
+    // DEPRECATED: Pollutant sources (smoke generators) from SDF files
+    // Replaced by LiDAR-based smoke detection (/perception/smoke_detected)
+    // Kept for backward compatibility if pollutant_scan_enabled is re-enabled
     const pollutantTopic = new ROSLIB.Topic({
         ros: ros,
         name: '/perception/pollutant_sources',
@@ -493,12 +495,11 @@ function subscribeToTopics() {
 
     pollutantTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
-        console.log('Pollutant sources update:', data);
+        console.log('Pollutant sources update (deprecated):', data);
         if (data.sources) {
-            updatePollutantSources(data.sources);
+            updatePollutantSources(data.sources);  // Still updates minimap markers if enabled
         }
-        // Update UI status panel with count and status
-        updatePollutantStatusUI(data.count || 0, data.status || 'unknown', data.sources || []);
+        // Note: UI panel removed - using LiDAR smoke detection panel instead
     });
 
     // LiDAR Smoke Detection (v2.2) - Active smoke detection
@@ -1995,10 +1996,10 @@ function updateSmokeDetection(data) {
     const statusEl = document.getElementById('smoke-detection-status');
     const distanceEl = document.getElementById('smoke-distance');
     const pointsEl = document.getElementById('smoke-points');
-    const centerXEl = document.getElementById('smoke-center-x');
-    const centerYEl = document.getElementById('smoke-center-y');
+    const spreadEl = document.getElementById('smoke-spread');
+    const locationEl = document.getElementById('smoke-location');
 
-    if (!statusEl || !distanceEl || !pointsEl || !centerXEl || !centerYEl) return;
+    if (!statusEl || !distanceEl || !pointsEl || !spreadEl || !locationEl) return;
 
     if (data.detected) {
         // Smoke detected!
@@ -2010,13 +2011,19 @@ function updateSmokeDetection(data) {
 
         distanceEl.textContent = `${data.distance.toFixed(1)}m`;
         pointsEl.textContent = `${data.point_count} pts`;
-        centerXEl.textContent = `${data.center_x.toFixed(1)}m`;
-        centerYEl.textContent = `${data.center_y.toFixed(1)}m`;
+
+        // Show horizontal/vertical spread ratio
+        const hSpread = data.horizontal_spread || 0;
+        const vSpread = data.vertical_spread || 0;
+        spreadEl.textContent = `${hSpread.toFixed(1)}m / ${vSpread.toFixed(1)}m`;
+        spreadEl.style.color = (hSpread > vSpread * 0.8) ? '#2ecc71' : '#e74c3c';
+
+        locationEl.textContent = `(${data.center_x.toFixed(1)}, ${data.center_y.toFixed(1)})`;
 
         // Log to terminal
         addTerminalLine({
             level: 30,
-            msg: `🌫️ SMOKE DETECTED: ${data.point_count} points at ${data.distance.toFixed(1)}m (${data.center_x.toFixed(1)}, ${data.center_y.toFixed(1)})`,
+            msg: `🌫️ SMOKE DETECTED: ${data.point_count} pts at ${data.distance.toFixed(1)}m (H=${hSpread.toFixed(1)}m, V=${vSpread.toFixed(1)}m)`,
             name: 'smoke_detection'
         });
 
@@ -2036,8 +2043,9 @@ function updateSmokeDetection(data) {
 
         distanceEl.textContent = '-';
         pointsEl.textContent = '0';
-        centerXEl.textContent = '-';
-        centerYEl.textContent = '-';
+        spreadEl.textContent = '-';
+        spreadEl.style.color = '';
+        locationEl.textContent = '-';
     }
 }
 
