@@ -1,28 +1,29 @@
 #!/bin/bash
 
 # ============================================================================
-# PROJET-17 — Vostok1 Complete One-Click Launch Script
+# PROJET-17 — Robust Avoidance Complete One-Click Launch Script
 # ============================================================================
 #
-# This script launches the complete Vostok1 autonomous navigation system:
+# This script launches the complete Robust Avoidance autonomous navigation system:
 #   - VRX Gazebo Simulation (Sydney Regatta World)
 #   - ROS Bridge (WebSocket bridge for web dashboard)
-#   - OKO Perception (3D LIDAR obstacle detection)
-#   - SPUTNIK Planner (GPS waypoint planning)
-#   - BURAN Controller (PID control with obstacle avoidance)
+#   - GPS/IMU Pose Converter (local ENU frame)
+#   - Pose Filter (noise reduction)
+#   - Robust Avoidance Stack (all-in-one navigation controller)
 #   - Web Video Server (camera stream for dashboard)
 #   - Web Dashboard (real-time monitoring interface)
+#
 # Default options
 # ----------------------------------------------------------------------------
 # Author: IMT Nord Europe UVAutoBoat Team
 #
 # Usage:
-#   chmod +x launch_vostok1_complete.sh
-#   ./launch_vostok1_complete.sh [OPTIONS]
+#   chmod +x launch_robust_avoidance_complete.sh
+#   ./launch_robust_avoidance_complete.sh [OPTIONS]
 #
 # Options:
-#   --world <world_name>       Gazebo world (default: sydney_regatta_smoke)
-#   For example: ./launch_vostok1_complete.sh --world sydney_regatta_DEFAULT
+#   --world <world_name>       Gazebo world (default: sydney_regatta)
+#   For example: ./launch_robust_avoidance_complete.sh --world sydney_regatta_smoke
 #
 #   --skip-rviz                Skip RViz launch (default: launch RViz)
 #   --skip-dashboard           Skip web dashboard (default: launch dashboard)
@@ -33,25 +34,14 @@
 # Prerequisites:
 #   - ROS 2 Jazzy installed and sourced
 #   - VRX package installed
-#   - AutoBoat workspace built: cd ~/seal_ws && colcon build --merge-install # (seal_ws is example workspace)
-#   - rosbridge-suite: sudo apt install ros-jazzy-rosbridge-suite (Install if not already)
-#   - web_video_server: sudo apt install ros-jazzy-web-video-server (Install if not already)
+#   - AutoBoat workspace built: cd ~/seal_ws && colcon build --merge-install
+#   - rosbridge-suite: sudo apt install ros-jazzy-rosbridge-suite
+#   - web_video_server: sudo apt install ros-jazzy-web-video-server
 #   - GNOME Terminal installed (required for multi-tab launch)
-#
-# 3d lidar macro used in the Vostok1 URDF model:
-# ----------------------------------------------------------------------------
-# <xacro:macro name="wamv_3d_lidar" params="name
-#                                            x:=0.7 y:=0 z:=1.8
-#                                            R:=0 P:=0 Y:=0
-#                                            post_Y:=0 post_z_from:=1.2965
-#                                            update_rate:=10 vertical_lasers:=16 samples:=1875 resolution:=1
-#                                            min_angle:=-2.6 max_angle:=2.6
-#                                            min_vertical_angle:=${-pi/12} max_vertical_angle:=${pi/12}
-#                                            max_range:=130 noise_stddev:=0.01">
-#
 # ============================================================================
 
-set -e  # Exit on error
+# set -e disabled to allow better error visibility
+# set -e  # Exit on error
 
 # Colors for output
 RED='\033[0;31m'
@@ -65,26 +55,28 @@ die() { echo -e "${RED}$*${NC}"; exit 1; }
 
 # Cleanup on exit (kills all spawned components)
 cleanup() {
-    echo -e "${YELLOW}Stopping all Vostok1 components...${NC}"
-    pkill -9 -f "gz sim" || true
-    pkill -9 -f "gzserver" || true
-    pkill -9 -f "gzclient" || true
-    pkill -9 -f "rosbridge_websocket" || true
-    pkill -9 -f "web_video_server" || true
-    pkill -9 -f "vostok1.launch.yaml" || true
-    pkill -9 -f "plan/vostok1" || true
-    pkill -9 -f "sputnik_planner" || true
-    pkill -9 -f "buran_controller" || true
-    pkill -9 -f "oko_perception" || true
-    pkill -9 -f "http.server 8000" || true
-    pkill -9 -f "rviz" || true
-    pkill -9 -f "web_dashboard/vostok1" || true
-    # Close gnome-terminal tabs we opened (if still running)
-    for pid in $GAZEBO_PID $ROSBRIDGE_PID $NAV_PID $CAMERA_PID $RVIZ_PID $DASHBOARD_PID; do
-        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            kill "$pid" 2>/dev/null || true
-        fi
-    done
+    echo -e "${YELLOW}Stopping all Robust Avoidance components...${NC}"
+    # Redirect stderr to suppress "Killed" messages from bash job control
+    {
+        pkill -9 -f "gz sim" || true
+        pkill -9 -f "gzserver" || true
+        pkill -9 -f "gzclient" || true
+        pkill -9 -f "rosbridge_websocket" || true
+        pkill -9 -f "web_video_server" || true
+        pkill -9 -f "robust_avoidance.launch.yaml" || true
+        pkill -9 -f "exec: robust_avoidance" || true
+        pkill -9 -f "exec: gps_imu_pose" || true
+        pkill -9 -f "exec: pose_filter" || true
+        pkill -9 -f "http.server 8000" || true
+        pkill -9 -f "rviz" || true
+        pkill -9 -f "web_dashboard/robust_avoidance" || true
+        # Close gnome-terminal tabs we opened (if still running)
+        for pid in $GAZEBO_PID $ROSBRIDGE_PID $NAV_PID $CAMERA_PID $RVIZ_PID $DASHBOARD_PID; do
+            if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                kill "$pid" 2>/dev/null || true
+            fi
+        done
+    } 2>/dev/null
 }
 
 # Only clean up on user/system signals, not on normal exit
@@ -122,12 +114,12 @@ while [[ $# -gt 0 ]]; do
             ;;
         --help)
             cat << 'EOF'
-PROJET-17 Vostok1 Complete Launch Script
+PROJET-17 Robust Avoidance Complete Launch Script
 
-Usage: ./launch_vostok1_complete.sh [OPTIONS]
+Usage: ./launch_robust_avoidance_complete.sh [OPTIONS]
 
 Options:
-  --world <world_name>       Gazebo world (default: sydney_regatta_smoke)
+  --world <world_name>       Gazebo world (default: sydney_regatta)
   --skip-rviz                Skip RViz launch
   --skip-dashboard           Skip web dashboard launch
   --skip-camera              Skip web video server launch
@@ -135,14 +127,14 @@ Options:
   --help                     Show this help message
 
 Example:
-  ./launch_vostok1_complete.sh --world sydney_regatta_DEFAULT --skip-rviz
+  ./launch_robust_avoidance_complete.sh --world sydney_regatta_smoke --skip-rviz
 
 Worlds available:
-  - sydney_regatta_smoke_wildlife (recommended, with obstacles + wildlife)
-  - sydney_regatta_smoke (smoke task only)
-  - sydney_regatta_DEFAULT (clean environment for testing)
+  - sydney_regatta (default, clean environment)
+  - sydney_regatta_smoke (with smoke obstacles)
+  - sydney_regatta_smoke_wildlife (with obstacles + wildlife)
 EOF
-            exit 0
+            exit 0# Worlds Available:
             ;;
         *)
             echo "Unknown option: $1"
@@ -179,7 +171,7 @@ recheck() {
     if kill -0 "$pid" 2>/dev/null; then
         print_status "$label is running (PID: $pid)"
     else
-        print_warning "$label appears to have exited. Check the tab for errors; consider stopping this script."
+        print_warning "$label appears to have exited. Check the tab for errors."
     fi
 }
 
@@ -222,15 +214,17 @@ if ! ros2 pkg prefix vrx_gz &> /dev/null 2>&1; then
     print_warning "VRX package not found in ROS 2 path. Gazebo launch may fail."
 fi
 
-print_header "Launching Vostok1 Complete System"
+print_header "Launching Robust Avoidance Complete System"
 echo "World: $WORLD"
 echo "RViz: $([ "$LAUNCH_RVIZ" = true ] && echo 'Yes' || echo 'No')"
 echo "Dashboard: $([ "$LAUNCH_DASHBOARD" = true ] && echo 'Yes' || echo 'No')"
 echo "Camera Stream: $([ "$LAUNCH_CAMERA" = true ] && echo 'Yes' || echo 'No')"
 echo "Auto-open Browser: $([ "$OPEN_BROWSER" = true ] && echo 'Yes' || echo 'No')"
 echo ""
-echo "Tip: If tabs close immediately, check their terminal output for missing packages or model downloads."
-echo "Shortcuts: skip RViz with --skip-rviz, skip dashboard with --skip-dashboard, skip camera with --skip-camera, change world with --world <name>."
+echo "Architecture: All-in-One Navigation Stack"
+echo "  - GPS/IMU Pose (local ENU frame)"
+echo "  - Pose Filter (noise reduction)"
+echo "  - Robust Avoidance (LiDAR obstacle avoidance + VFH + A* planning)"
 echo ""
 
 # Kill any old processes
@@ -240,10 +234,10 @@ pkill -9 -f "gzserver" &> /dev/null || true
 pkill -9 -f "gzclient" &> /dev/null || true
 pkill -9 -f "rosbridge" &> /dev/null || true
 pkill -9 -f "web_video_server" &> /dev/null || true
-pkill -9 -f "vostok1.launch.yaml" &> /dev/null || true
-pkill -9 -f "sputnik_planner" &> /dev/null || true
-pkill -9 -f "buran_controller" &> /dev/null || true
-pkill -9 -f "oko_perception" &> /dev/null || true
+pkill -9 -f "robust_avoidance.launch.yaml" &> /dev/null || true
+pkill -9 -f "exec: robust_avoidance" &> /dev/null || true
+pkill -9 -f "exec: gps_imu_pose" &> /dev/null || true
+pkill -9 -f "exec: pose_filter" &> /dev/null || true
 pkill -9 -f "http.server 8000" &> /dev/null || true
 sleep 4
 
@@ -256,48 +250,56 @@ echo 'Note: GPS may take 10-30 seconds to initialize'
 ros2 launch vrx_gz competition.launch.py world:=$WORLD
 " &
 GAZEBO_PID=$!
+disown  # Prevent bash from printing "Killed" messages
 sleep 28  # Wait for Gazebo to start and physics to initialize
 print_status "Gazebo launched (PID: $GAZEBO_PID)"
 recheck "$GAZEBO_PID" "Gazebo"
 
 # T2: Launch ROS Bridge (WebSocket for dashboard)
 print_status "Launching ROS Bridge (WebSocket on ws://localhost:9090)..."
-gnome-terminal --wait --tab --title="rosbridge" -- bash -i -c "
+gnome-terminal --wait --tab --title="ROS Bridge" -- bash -i -c "
 source \"$INSTALL_DIR/setup.bash\"
 echo 'Starting ROS Bridge WebSocket server...'
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml delay_between_messages:=0.0
 " &
 ROSBRIDGE_PID=$!
+disown  # Prevent bash from printing "Killed" messages
 sleep 8  # Wait for rosbridge to initialize
 print_status "ROS Bridge launched (PID: $ROSBRIDGE_PID)"
 recheck "$ROSBRIDGE_PID" "ROS Bridge"
 
-# T3: Launch Navigation Stack (OKO-SPUTNIK-BURAN)
-print_status "Launching Navigation Stack (OKO-SPUTNIK-BURAN)..."
-gnome-terminal --wait --tab --title="navigation" -- bash -i -c "
+# T3: Launch Robust Avoidance Navigation Stack
+print_status "Launching Robust Avoidance Stack (GPS+Pose Filter+Controller)..."
+gnome-terminal --wait --tab --title="Robust Avoidance" -- bash -i -c "
 source \"$INSTALL_DIR/setup.bash\"
-echo 'Starting Vostok1 Modular Navigation System...'
-echo 'Components: OKO (perception) | SPUTNIK (planner) | BURAN (control)'
-ros2 launch \"$WS_ROOT/src/uvautoboat/launch/vostok1.launch.yaml\" \
-    world:=${WORLD} \
-    sputnik_planner_node.world_name:=${WORLD} \
-    sputnik_planner_node.pollutant_sdf_glob:=$WS_ROOT/src/uvautoboat/test_environment/${WORLD}.sdf
+echo 'Starting Robust Avoidance All-in-One Navigation Stack...'
+echo 'Components: gps_imu_pose | pose_filter | robust_avoidance'
+echo ''
+echo 'Features:'
+echo '  - VFH obstacle avoidance'
+echo '  - A* detour planning'
+echo '  - Stuck recovery system'
+echo '  - Auto goal sequencing'
+echo ''
+ros2 launch \"$WS_ROOT/src/uvautoboat/launch/robust_avoidance.launch.yaml\"
 " &
 NAV_PID=$!
+disown  # Prevent bash from printing "Killed" messages
 sleep 8  # Wait for navigation stack to initialize
-print_status "Navigation stack launched (PID: $NAV_PID)"
-recheck "$NAV_PID" "Navigation stack"
+print_status "Robust Avoidance stack launched (PID: $NAV_PID)"
+recheck "$NAV_PID" "Robust Avoidance stack"
 
 # T4: Launch Web Video Server (camera stream)
 if [ "$LAUNCH_CAMERA" = true ]; then
     print_status "Launching Web Video Server (http://localhost:8080)..."
-gnome-terminal --wait --tab --title="camera" -- bash -i -c "
+gnome-terminal --wait --tab --title="Camera Stream" -- bash -i -c "
 source \"$INSTALL_DIR/setup.bash\"
 echo 'Starting Web Video Server for camera feed...'
 echo 'Stream available at: http://localhost:8080'
 ros2 run web_video_server web_video_server
 " &
     CAMERA_PID=$!
+    disown  # Prevent bash from printing "Killed" messages
     sleep 8
     print_status "Web Video Server launched (PID: $CAMERA_PID)"
     recheck "$CAMERA_PID" "Web Video Server"
@@ -306,7 +308,7 @@ fi
 # T5: Launch RViz (optional visualization)
 if [ "$LAUNCH_RVIZ" = true ]; then
     print_status "Launching RViz visualization..."
-gnome-terminal --wait --tab --title="rviz" -- bash -i -c "
+gnome-terminal --wait --tab --title="RViz" -- bash -i -c "
 source \"$INSTALL_DIR/setup.bash\"
 echo 'Starting RViz...'
 sleep 3
@@ -314,6 +316,7 @@ cd \"$WS_ROOT\"
 ros2 launch vrx_gazebo rviz.launch.py
 " &
     RVIZ_PID=$!
+    disown  # Prevent bash from printing "Killed" messages
     sleep 8
     print_status "RViz launched (PID: $RVIZ_PID)"
     recheck "$RVIZ_PID" "RViz"
@@ -322,14 +325,15 @@ fi
 # T6: Launch Web Dashboard
 if [ "$LAUNCH_DASHBOARD" = true ]; then
     print_status "Launching Web Dashboard (http://localhost:8000)..."
-gnome-terminal --wait --tab --title="dashboard" -- bash -i -c "
-cd \"$WS_ROOT/src/uvautoboat/web_dashboard/vostok1\"
-echo 'Starting Web Dashboard HTTP server...'
+gnome-terminal --wait --tab --title="Dashboard" -- bash -i -c "
+cd \"$WS_ROOT/src/uvautoboat/web_dashboard/robust_avoidance\"
+echo 'Starting Robust Avoidance Web Dashboard...'
 echo 'Dashboard available at: http://localhost:8000'
 echo 'Note: Wait for GPS to initialize (~10-30s) before opening dashboard'
 python3 -m http.server 8000
 " &
     DASHBOARD_PID=$!
+    disown  # Prevent bash from printing "Killed" messages
     sleep 8
     print_status "Web Dashboard launched (PID: $DASHBOARD_PID)"
 fi
@@ -349,7 +353,7 @@ if [ "$OPEN_BROWSER" = true ] && [ "$LAUNCH_DASHBOARD" = true ]; then
     fi
 fi
 
-print_header "Vostok1 System Launched Successfully!"
+print_header "Robust Avoidance System Launched Successfully!"
 echo ""
 echo -e "${GREEN}System Status:${NC}"
 echo "  Gazebo:          http://localhost:11345 (Gazebo GUI)"
@@ -364,19 +368,28 @@ echo ""
 echo -e "${YELLOW}Quick Tips:${NC}"
 echo "  - GPS takes 10-30s to initialize (be patient!)"
 echo "  - Check terminal tabs for error messages"
-echo "  - Use web dashboard to control and monitor the boat"
-echo "  - Run 'ros2 run plan vostok1_cli generate' to create waypoints (if the web dashboard is not used)"
-echo "  - Run 'ros2 run plan vostok1_cli start' to begin mission (if the web dashboard is not used)"
+echo "  - Use web dashboard to send goals and monitor the boat"
+echo "  - Auto goal sequence is enabled by default (see launch file)"
+echo ""
+echo -e "${BLUE}Send a Test Goal (from another terminal):${NC}"
+echo "  ros2 topic pub /planning/goal geometry_msgs/PoseStamped \\"
+echo "    \"{header: {frame_id: 'world'}, pose: {position: {x: 100.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}\" --once"
 echo ""
 echo -e "${BLUE}Useful Commands:${NC}"
 echo "  Monitor GPS:        ros2 topic echo /wamv/sensors/gps/gps/fix"
-echo "  Check LIDAR:        ros2 topic hz /wamv/sensors/lidars/lidar_wamv/points"
-echo "  View obstacles:     ros2 topic echo /perception/obstacle_info"
+echo "  Check pose:         ros2 topic echo /wamv/pose_filtered"
+echo "  Check thrusters:    ros2 topic echo /wamv/thrusters/left/thrust"
 echo "  List all nodes:     ros2 node list"
 echo "  Kill everything:    pkill -9 gz && pkill -9 ros2 && pkill -9 rosbridge"
 echo ""
+echo -e "${BLUE}Diagnostic Scripts (from another terminal):${NC}"
+echo "  cd $WS_ROOT/src/uvautoboat/robust_avoidance"
+echo "  ./diagnose_boat.sh     # System diagnostics"
+echo "  ./monitor.sh           # Real-time monitoring"
+echo "  ./quick.sh             # Quick validation"
+echo ""
 echo -e "${BLUE}Press Ctrl+C in any terminal tab to stop that component${NC}"
-echo -e "${BLUE}Press Ctrl+C here in this terminal to stop EVERYTHING (cleanup will kill all components)${NC}"
+echo -e "${BLUE}Press Ctrl+C here to stop EVERYTHING (cleanup will kill all components)${NC}"
 echo ""
 
 # Keep script running until user interrupts (Ctrl+C triggers cleanup trap)

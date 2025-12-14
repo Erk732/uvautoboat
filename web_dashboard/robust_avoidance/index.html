@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robust Avoidance Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>Robust Avoidance — All-in-One Navigation Stack</h1>
+            </div>
+            <div class="header-right">
+                <div id="connection-status" class="status disconnected">Disconnected</div>
+            </div>
+        </header>
+
+        <div class="dashboard">
+            <!-- Mission Status Panel -->
+            <div class="panel">
+                <h2>Mission Status</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="label">State:</span>
+                        <span id="state" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Goal Distance:</span>
+                        <span id="distance" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Mode:</span>
+                        <span id="mode" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Status:</span>
+                        <span id="status-badge" class="value badge">Idle</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GPS Position Panel -->
+            <div class="panel">
+                <h2>GPS Position</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="label">Local X:</span>
+                        <span id="local-x" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Local Y:</span>
+                        <span id="local-y" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Heading:</span>
+                        <span id="heading" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">GPS Status:</span>
+                        <span id="gps-status" class="value badge">Waiting</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Obstacle Detection Panel -->
+            <div class="panel">
+                <h2>LiDAR Obstacle Detection</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="label">Min Distance:</span>
+                        <span id="min-obstacle" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Front Sector:</span>
+                        <span id="front-clear" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Left Sector:</span>
+                        <span id="left-clear" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Right Sector:</span>
+                        <span id="right-clear" class="value">-</span>
+                    </div>
+                    <div class="info-item full-width">
+                        <span class="label">Avoidance Status:</span>
+                        <span id="obstacle-status" class="value badge clear">Clear</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Thruster Control Panel -->
+            <div class="panel">
+                <h2>Thrusters</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="label">Left:</span>
+                        <span id="left-thrust" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Right:</span>
+                        <span id="right-thrust" class="value">-</span>
+                    </div>
+                </div>
+                <div class="thrust-bars">
+                    <div class="thrust-bar-container">
+                        <label>Left</label>
+                        <div class="thrust-bar">
+                            <div id="left-thrust-bar" class="thrust-fill"></div>
+                        </div>
+                    </div>
+                    <div class="thrust-bar-container">
+                        <label>Right</label>
+                        <div class="thrust-bar">
+                            <div id="right-thrust-bar" class="thrust-fill"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stuck Recovery Panel -->
+            <div class="panel">
+                <h2>Stuck Recovery System</h2>
+                <div class="info-grid">
+                    <div class="info-item full-width">
+                        <span class="label">Status:</span>
+                        <span id="stuck-status" class="value badge clear">Normal</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Phase:</span>
+                        <span id="recovery-phase" class="value">Idle</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Progress:</span>
+                        <span id="recovery-progress" class="value">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Goal Control Panel -->
+            <div class="panel control-panel">
+                <h2>Goal Control</h2>
+                <div class="goal-input-section">
+                    <h3>Send Single Goal</h3>
+                    <div class="input-grid">
+                        <div class="input-item">
+                            <label for="goal-x">X (m):</label>
+                            <input type="number" id="goal-x" value="100" step="10">
+                        </div>
+                        <div class="input-item">
+                            <label for="goal-y">Y (m):</label>
+                            <input type="number" id="goal-y" value="0" step="10">
+                        </div>
+                    </div>
+                    <button id="btn-send-goal" class="control-btn primary">Send Goal</button>
+                </div>
+
+                <div class="goal-sequence-section">
+                    <h3>Auto Goal Sequence</h3>
+                    <div class="input-item full-width">
+                        <label for="goal-sequence">Goal Sequence (x1,y1;x2,y2;...):</label>
+                        <input type="text" id="goal-sequence" value="130,0;130,50;80,60" style="width: 100%;">
+                    </div>
+                    <div class="control-buttons">
+                        <button id="btn-enable-auto-goals" class="control-btn">Enable Auto</button>
+                        <button id="btn-disable-auto-goals" class="control-btn">Disable Auto</button>
+                    </div>
+                </div>
+
+                <div class="emergency-section">
+                    <button id="btn-stop-all" class="control-btn danger">EMERGENCY STOP</button>
+                </div>
+            </div>
+
+            <!-- Map Panel -->
+            <div class="panel map-panel">
+                <h2>Map & Trajectory</h2>
+                <div class="map-legend">
+                    <span class="legend-item"><span class="legend-color boat"></span> Boat</span>
+                    <span class="legend-item"><span class="legend-color trajectory"></span> Trajectory</span>
+                    <span class="legend-item"><span class="legend-color goal"></span> Goal</span>
+                </div>
+                <div id="map"></div>
+            </div>
+
+            <!-- Camera Feed Panel -->
+            <div class="panel camera-panel">
+                <h2>Front Camera Feed</h2>
+                <div class="camera-container">
+                    <img id="camera-image" src="" alt="Camera feed loading..." style="width: 100%; height: auto; border-radius: 4px; background: #1a1a1a;">
+                    <div id="camera-status" class="camera-status">Waiting for camera feed...</div>
+                </div>
+                <div class="camera-controls">
+                    <label for="camera-topic">Camera Topic:</label>
+                    <input type="text" id="camera-topic" value="/wamv/sensors/cameras/front_left_camera_sensor/image_raw">
+                    <button id="btn-refresh-camera" class="control-btn">Refresh</button>
+                </div>
+            </div>
+
+            <!-- Node Logs Panel -->
+            <div class="panel logs-panel">
+                <div class="panel-header">
+                    <h2>Robust Avoidance Node Logs</h2>
+                    <div class="log-controls">
+                        <button id="btn-clear-node-logs" class="log-btn">Clear</button>
+                        <label>
+                            <input type="checkbox" id="node-logs-auto-scroll" checked>
+                            Auto-scroll
+                        </label>
+                    </div>
+                </div>
+                <div id="node-logs" class="logs-container"></div>
+            </div>
+
+            <!-- System Logs Panel -->
+            <div class="panel logs-panel">
+                <div class="panel-header">
+                    <h2>System Logs</h2>
+                    <div class="log-controls">
+                        <button id="btn-clear-logs" class="log-btn">Clear</button>
+                        <label>
+                            <input type="checkbox" id="logs-auto-scroll" checked>
+                            Auto-scroll
+                        </label>
+                    </div>
+                </div>
+                <div id="logs" class="logs-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
