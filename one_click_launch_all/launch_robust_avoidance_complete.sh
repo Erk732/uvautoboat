@@ -38,6 +38,21 @@
 #   - rosbridge-suite: sudo apt install ros-jazzy-rosbridge-suite
 #   - web_video_server: sudo apt install ros-jazzy-web-video-server
 #   - GNOME Terminal installed (required for multi-tab launch)
+#<xacro:macro name="wamv_3d_lidar" params="name
+#                                            x:=0.7 y:=0 z:=1.8
+#                                            R:=0 P:=0 Y:=0
+#                                            post_Y:=0 post_z_from:=1.2965
+#                                            update_rate:=15 vertical_lasers:=16 samples:=4096 resolution:=1
+#                                            min_angle:=${-pi/4} max_angle:=${pi/4}
+#                                            min_vertical_angle:=${-pi/4} max_vertical_angle:=${pi/4}
+#                                            max_range:=60 noise_stddev:=0.01">
+#    <!-- Define length variables for link positioning -->
+#    <xacro:property name="platform_z" value="${post_z_from}"/>
+#    <xacro:property name="post_to_post_arm_x" value="0.03"/>
+#    <xacro:property name="post_arm_to_lidar_x" value="0.04"/>
+#    <xacro:property name="post_arm_to_lidar_z" value="0.05"/>
+
+
 # ============================================================================
 
 # set -e disabled to allow better error visibility
