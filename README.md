@@ -1781,6 +1781,7 @@ Open an issue on [GitHub](https://github.com/Erk732/uvautoboat/issues) with:
 - Control Team: BURAN (PID Control & Obstacle Avoidance)
 
 Project finished by IMT NORD EUROPE DNM DMI-2026
+
 Last updated at 14.12.2025
 
 ---
