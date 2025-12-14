@@ -1777,8 +1777,7 @@ Open an issue on [GitHub](https://github.com/Erk732/uvautoboat/issues) with:
 
 **Development Teams**:
 
-- Perception Team: OKO (3D LiDAR Processing & Smoke Detection)
-- Planning Team: SPUTNIK (GPS Waypoint Navigation & A* Path Planning)
+- Perception & Planning Team: OKO (3D LiDAR Processing & Smoke Detection), SPUTNIK (GPS Waypoint Navigation & A* Path Planning)
 - Control Team: BURAN (PID Control & Obstacle Avoidance)
 by IMT NORD EUROPE DNM DMI-2026
 Last updated at 14.12.2025
