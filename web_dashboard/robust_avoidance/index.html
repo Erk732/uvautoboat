@@ -94,6 +94,29 @@
                 </div>
             </div>
 
+            <!-- Smoke Detection Panel -->
+            <div class="panel">
+                <h2>🌫️ Smoke Detection</h2>
+                <div class="info-grid">
+                    <div class="info-item full-width">
+                        <span class="label">Status:</span>
+                        <span id="smoke-status" class="value badge clear">No Smoke</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Distance:</span>
+                        <span id="smoke-distance" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Points:</span>
+                        <span id="smoke-points" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Position:</span>
+                        <span id="smoke-position" class="value">-</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Thruster Control Panel -->
             <div class="panel">
                 <h2>Thrusters</h2>
@@ -157,23 +180,44 @@
                             <input type="number" id="goal-y" value="0" step="10">
                         </div>
                     </div>
-                    <button id="btn-send-goal" class="control-btn primary">Send Goal</button>
+                    <div class="goal-buttons">
+                        <button id="btn-preview-goal" class="control-btn secondary">👁️ Preview on Map</button>
+                        <button id="btn-send-goal" class="control-btn primary">✓ Confirm & Send Goal</button>
+                        <button id="btn-cancel-goal" class="control-btn cancel">✗ Cancel Active Goal</button>
+                        <button id="btn-clear-preview" class="control-btn cancel" style="display: none;">✗ Clear Preview</button>
+                    </div>
                 </div>
 
-                <div class="goal-sequence-section">
-                    <h3>Auto Goal Sequence</h3>
-                    <div class="input-item full-width">
-                        <label for="goal-sequence">Goal Sequence (x1,y1;x2,y2;...):</label>
-                        <input type="text" id="goal-sequence" value="130,0;130,50;80,60" style="width: 100%;">
+                <div class="auto-goal-section">
+                    <h3>Auto-Goal Waypoint Sequence</h3>
+                    <div class="auto-goal-controls">
+                        <div class="input-item full-width">
+                            <label for="auto-goal-sequence">Waypoints (format: x1,y1;x2,y2;x3,y3):</label>
+                            <input type="text" id="auto-goal-sequence" placeholder="130,0;130,50;80,60" value="130,0;130,50;80,60">
+                        </div>
+                        <div class="auto-goal-buttons">
+                            <button id="btn-enable-auto-goal" class="control-btn auto-goal">▶ Enable Auto-Goal</button>
+                            <button id="btn-disable-auto-goal" class="control-btn secondary">⏹ Disable Auto-Goal</button>
+                        </div>
+                        <div class="auto-goal-status">
+                            <span class="label">Auto-Goal Status:</span>
+                            <span id="auto-goal-status-badge" class="value badge">Disabled</span>
+                        </div>
                     </div>
-                    <div class="control-buttons">
-                        <button id="btn-enable-auto-goals" class="control-btn">Enable Auto</button>
-                        <button id="btn-disable-auto-goals" class="control-btn">Disable Auto</button>
+                </div>
+
+                <div class="mission-control-section">
+                    <h3>Mission Control</h3>
+                    <div class="mission-buttons">
+                        <button id="btn-stop-mission" class="mission-btn stop">⏸ Stop</button>
+                        <button id="btn-resume-mission" class="mission-btn resume">▶ Resume</button>
+                        <button id="btn-reset-mission" class="mission-btn reset">🔄 Reset</button>
+                        <button id="btn-go-home" class="mission-btn home">🏠 Go Home</button>
                     </div>
                 </div>
 
                 <div class="emergency-section">
-                    <button id="btn-stop-all" class="control-btn danger">EMERGENCY STOP</button>
+                    <button id="btn-emergency-stop" class="control-btn danger">🚨 EMERGENCY STOP</button>
                 </div>
             </div>
 
@@ -181,9 +225,11 @@
             <div class="panel map-panel">
                 <h2>Map & Trajectory</h2>
                 <div class="map-legend">
-                    <span class="legend-item"><span class="legend-color boat"></span> Boat</span>
+                    <span class="legend-item">🚤 Boat</span>
                     <span class="legend-item"><span class="legend-color trajectory"></span> Trajectory</span>
-                    <span class="legend-item"><span class="legend-color goal"></span> Goal</span>
+                    <span class="legend-item">🎯 Goal</span>
+                    <span class="legend-item"><span style="display: inline-block; background: #3498db; color: white; border-radius: 50%; width: 16px; height: 16px; text-align: center; font-size: 10px; font-weight: bold; line-height: 16px; border: 1px solid white;">1</span> Waypoints</span>
+                    <span class="legend-item">☁️ Smoke Hazard</span>
                 </div>
                 <div id="map"></div>
             </div>

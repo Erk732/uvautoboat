@@ -344,6 +344,8 @@ if [ "$OPEN_BROWSER" = true ] && [ "$LAUNCH_DASHBOARD" = true ]; then
         open http://localhost:8000 >/dev/null 2>&1 &
     elif command -v google-chrome &> /dev/null; then
         google-chrome http://localhost:8000 >/dev/null 2>&1 &
+    elif command -v firefox &> /dev/null; then
+        firefox http://localhost:8000 >/dev/null 2>&1 &
     else
         print_warning "Could not auto-open browser. Manually visit http://localhost:8000"
     fi

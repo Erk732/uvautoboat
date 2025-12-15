@@ -38,7 +38,10 @@
 #   - rosbridge-suite: sudo apt install ros-jazzy-rosbridge-suite
 #   - web_video_server: sudo apt install ros-jazzy-web-video-server
 #   - GNOME Terminal installed (required for multi-tab launch)
-#<xacro:macro name="wamv_3d_lidar" params="name
+#
+# Notes on the 3d LiDAR configuration used in the Robust Avoidance stack:
+# ----------------------------------------------------------------------------
+# <xacro:macro name="wamv_3d_lidar" params="name
 #                                            x:=0.7 y:=0 z:=1.8
 #                                            R:=0 P:=0 Y:=0
 #                                            post_Y:=0 post_z_from:=1.2965
@@ -51,12 +54,11 @@
 #    <xacro:property name="post_to_post_arm_x" value="0.03"/>
 #    <xacro:property name="post_arm_to_lidar_x" value="0.04"/>
 #    <xacro:property name="post_arm_to_lidar_z" value="0.05"/>
-
-
+#
+#
 # ============================================================================
 
-# set -e disabled to allow better error visibility
-# set -e  # Exit on error
+set -e  # Exit on error
 
 # Colors for output
 RED='\033[0;31m'
@@ -149,7 +151,7 @@ Worlds available:
   - sydney_regatta_smoke (with smoke obstacles)
   - sydney_regatta_smoke_wildlife (with obstacles + wildlife)
 EOF
-            exit 0# Worlds Available:
+            exit 0
             ;;
         *)
             echo "Unknown option: $1"
@@ -307,7 +309,7 @@ recheck "$NAV_PID" "Robust Avoidance stack"
 # T4: Launch Web Video Server (camera stream)
 if [ "$LAUNCH_CAMERA" = true ]; then
     print_status "Launching Web Video Server (http://localhost:8080)..."
-gnome-terminal --wait --tab --title="Camera Stream" -- bash -i -c "
+    gnome-terminal --wait --tab --title="Camera Stream" -- bash -i -c "
 source \"$INSTALL_DIR/setup.bash\"
 echo 'Starting Web Video Server for camera feed...'
 echo 'Stream available at: http://localhost:8080'
@@ -363,6 +365,8 @@ if [ "$OPEN_BROWSER" = true ] && [ "$LAUNCH_DASHBOARD" = true ]; then
         open http://localhost:8000 >/dev/null 2>&1 &
     elif command -v google-chrome &> /dev/null; then
         google-chrome http://localhost:8000 >/dev/null 2>&1 &
+    elif command -v firefox &> /dev/null; then
+        firefox http://localhost:8000 >/dev/null 2>&1 &
     else
         print_warning "Could not auto-open browser. Manually visit http://localhost:8000"
     fi

@@ -193,6 +193,8 @@ header h1 {
 
 .goal-input-section,
 .goal-sequence-section,
+.auto-goal-section,
+.mission-control-section,
 .emergency-section {
     margin-bottom: 20px;
     padding: 15px;
@@ -288,6 +290,137 @@ header h1 {
     background: #2c3e50;
 }
 
+/* Auto-Goal Controls */
+.auto-goal-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.auto-goal-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.control-btn.auto-goal {
+    background: #16a085;
+    color: #fff;
+}
+
+.control-btn.auto-goal:hover {
+    background: #138d75;
+    transform: translateY(-2px);
+}
+
+.control-btn.secondary {
+    background: #95a5a6;
+    color: #fff;
+}
+
+.control-btn.secondary:hover {
+    background: #7f8c8d;
+    transform: translateY(-2px);
+}
+
+.control-btn.cancel {
+    background: #e74c3c;
+    color: #fff;
+}
+
+.control-btn.cancel:hover {
+    background: #c0392b;
+    transform: translateY(-2px);
+}
+
+.goal-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.goal-buttons .control-btn {
+    flex: 1 1 45%;
+}
+
+.auto-goal-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 5px;
+}
+
+/* Mission Control Buttons */
+.mission-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.mission-btn {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.mission-btn.stop {
+    background: #f39c12;
+    color: #fff;
+}
+
+.mission-btn.stop:hover {
+    background: #e67e22;
+    transform: translateY(-2px);
+}
+
+.mission-btn.resume {
+    background: #2ecc71;
+    color: #fff;
+}
+
+.mission-btn.resume:hover {
+    background: #27ae60;
+    transform: translateY(-2px);
+}
+
+.mission-btn.reset {
+    background: #3498db;
+    color: #fff;
+}
+
+.mission-btn.reset:hover {
+    background: #2980b9;
+    transform: translateY(-2px);
+}
+
+.mission-btn.home {
+    background: #9b59b6;
+    color: #fff;
+}
+
+.mission-btn.home:hover {
+    background: #8e44ad;
+    transform: translateY(-2px);
+}
+
+.mission-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
 /* Map Panel */
 .map-panel {
     grid-column: 1 / -1;
@@ -336,6 +469,16 @@ header h1 {
 }
 
 .boat-marker {
+    font-size: 24px;
+    text-align: center;
+}
+
+.goal-marker {
+    font-size: 24px;
+    text-align: center;
+}
+
+.smoke-marker {
     font-size: 24px;
     text-align: center;
 }

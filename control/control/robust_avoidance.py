@@ -9,7 +9,7 @@ from rclpy.time import Time
 
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
-from std_msgs.msg import Float64
+from std_msgs.msg import Float64, Bool, String
 from sensor_msgs.msg import LaserScan, PointCloud2
 from sensor_msgs_py import point_cloud2
 
@@ -58,7 +58,7 @@ class AllInOneStack(Node):
     """
 
     def __init__(self):
-        super().__init__('all_in_one_stack')
+        super().__init__('robust_avoidance')
 
         # ---------------- Parameters ----------------
         # Base forward thrust
@@ -149,6 +149,12 @@ class AllInOneStack(Node):
         # Auto goal sequencing
         self.declare_parameter('auto_goal_enable', False)
         self.declare_parameter('auto_next_goals', '')
+        # Smoke detection parameters (lidar point cloud threshold)
+        self.declare_parameter('smoke_detection_enabled', True)
+        self.declare_parameter('smoke_min_cluster_size', 100)  # Increased to reduce false positives
+        self.declare_parameter('smoke_min_height', 0.8)        # Slightly higher to avoid water surface
+        self.declare_parameter('smoke_max_height', 3.5)        # Slightly lower to avoid trees
+        self.declare_parameter('smoke_detection_range', 50.0)
         # Planning avoidance params
         self.declare_parameter('plan_avoid_margin', 5.0)
 
@@ -210,6 +216,12 @@ class AllInOneStack(Node):
         self.auto_goal_enable = bool(self.get_parameter('auto_goal_enable').value)
         raw_goals = str(self.get_parameter('auto_next_goals').value)
         self.auto_goals: list[tuple[float, float]] = []
+        # Smoke detection parameters
+        self.smoke_detection_enabled = bool(self.get_parameter('smoke_detection_enabled').value)
+        self.smoke_min_cluster_size = int(self.get_parameter('smoke_min_cluster_size').value)
+        self.smoke_min_height = float(self.get_parameter('smoke_min_height').value)
+        self.smoke_max_height = float(self.get_parameter('smoke_max_height').value)
+        self.smoke_detection_range = float(self.get_parameter('smoke_detection_range').value)
         for p in raw_goals.split(';'):
             p = p.strip()
             if not p:
@@ -259,6 +271,7 @@ class AllInOneStack(Node):
         self.hazard_converted: bool = False
         self.auto_goal_idx: int = 0
         self.auto_publishing: bool = False
+        self.enabled: bool = True  # Control enable/disable from dashboard
 
         # ---------------- Publishers ----------------
         self.left_thruster_pub = self.create_publisher(
@@ -274,6 +287,11 @@ class AllInOneStack(Node):
         self.path_pub = self.create_publisher(
             Path,
             '/planning/path',
+            10
+        )
+        self.smoke_detected_pub = self.create_publisher(
+            String,
+            '/perception/smoke_detected',
             10
         )
         self.next_goal_pub = self.create_publisher(
@@ -320,6 +338,29 @@ class AllInOneStack(Node):
         else:
             self.cloud_sub = None
 
+        # Enable/disable subscriber for dashboard control
+        self.enable_sub = self.create_subscription(
+            Bool,
+            '/robust_avoidance/enable',
+            self.enable_callback,
+            10
+        )
+        # Cancel goal subscriber for dashboard control
+        self.cancel_goal_sub = self.create_subscription(
+            Bool,
+            '/robust_avoidance/cancel_goal',
+            self.cancel_goal_callback,
+            10
+        )
+
+        # Auto-goal configuration subscriber for dashboard control
+        self.auto_goal_config_sub = self.create_subscription(
+            String,
+            '/robust_avoidance/auto_goal_config',
+            self.auto_goal_config_callback,
+            10
+        )
+
         # ---------------- Timer control loop ----------------
         dt = 1.0 / self.control_rate
         self.timer = self.create_timer(dt, self.control_loop)
@@ -333,6 +374,76 @@ class AllInOneStack(Node):
     # =====================================================
     # Callbacks: pose, goal, lidar
     # =====================================================
+
+    def enable_callback(self, msg: Bool):
+        """Handle enable/disable commands from dashboard"""
+        self.enabled = msg.data
+        if self.enabled:
+            self.get_logger().info('Controller ENABLED')
+        else:
+            self.get_logger().info('Controller DISABLED - stopping thrusters')
+            self.publish_thrust(0.0, 0.0)
+
+    def cancel_goal_callback(self, msg: Bool):
+        """Handle goal cancel commands from dashboard"""
+        if not msg.data:
+            return
+
+        self.active = False
+        self.path = None
+        self.current_waypoint_idx = 0
+        self.recovering = False
+        self.recover_phase = ''
+        self.force_avoid_active = False
+        self.auto_publishing = False
+        self.avoid_mode = ''
+        self.last_goal_dist = float('inf')
+        self.min_goal_dist = float('inf')
+        self.last_progress_time = self.get_clock().now().nanoseconds / 1e9
+        self.last_progress_pos = None
+        self.publish_thrust(0.0, 0.0)
+
+        self.get_logger().info('Goal cancelled via dashboard; stopping and clearing active path.')
+
+    def auto_goal_config_callback(self, msg: String):
+        """Handle auto-goal configuration from dashboard (enable + goal sequence)"""
+        try:
+            import json
+            config = json.loads(msg.data)
+
+            # Update auto-goal enable flag
+            if 'enable' in config:
+                self.auto_goal_enable = bool(config['enable'])
+                self.get_logger().info(f'Auto-goal mode: {"ENABLED" if self.auto_goal_enable else "DISABLED"}')
+
+            # Update goal sequence
+            if 'goals' in config and config['goals']:
+                goals_str = config['goals']
+                self.auto_goals = []
+                for goal_pair in goals_str.split(';'):
+                    parts = goal_pair.strip().split(',')
+                    if len(parts) == 2:
+                        try:
+                            x = float(parts[0].strip())
+                            y = float(parts[1].strip())
+                            self.auto_goals.append((x, y))
+                        except ValueError:
+                            self.get_logger().warning(f'Invalid goal format: {goal_pair}')
+
+                self.get_logger().info(f'Auto-goal sequence updated: {len(self.auto_goals)} waypoints')
+                if self.auto_goals:
+                    self.get_logger().info(f'Goals: {self.auto_goals}')
+
+                # Reset to first goal if auto-goal is enabled
+                if self.auto_goal_enable and self.auto_goals:
+                    self.auto_goal_idx = 0
+                    self.current_goal = None  # Clear current goal to trigger new goal
+                    self.get_logger().info('Auto-goal sequence reset to first waypoint')
+
+        except json.JSONDecodeError as e:
+            self.get_logger().error(f'Failed to parse auto-goal config JSON: {e}')
+        except Exception as e:
+            self.get_logger().error(f'Auto-goal config error: {e}')
 
     def pose_callback(self, msg: PoseStamped):
         self.current_pose = msg
@@ -573,6 +684,9 @@ class AllInOneStack(Node):
 
     def cloud_callback(self, msg: PointCloud2):
         self.latest_cloud = msg
+        # Perform smoke detection if enabled
+        if self.smoke_detection_enabled:
+            self._detect_smoke(msg)
 
     # =====================================================
     # Lidar analysis
@@ -795,6 +909,11 @@ class AllInOneStack(Node):
     # =====================================================
 
     def control_loop(self):
+        # Check if controller is enabled from dashboard
+        if not self.enabled:
+            self.publish_thrust(0.0, 0.0)
+            return
+
         if not self.active:
             # No path to track
             self.publish_thrust(0.0, 0.0)
@@ -1099,9 +1218,9 @@ class AllInOneStack(Node):
                         polar_bias = self._polar_bias_from_scan()
                         diff_bias += polar_bias * self.avoid_diff_gain
 
-                    # If forced避障且左右都看不出差别，主动选一侧转
+                    # If forced avoidance and left/right show no difference, actively choose a side to turn
                     if self.force_avoid_active and abs(diff_bias) < 1e-6:
-                        turn_dir_force = 1.0  # 默认为向右转
+                        turn_dir_force = 1.0  # Default to turning right
                         if left_min_eff is not None and right_min_eff is not None:
                             turn_dir_force = 1.0 if right_min_eff >= left_min_eff else -1.0
                         elif left_min_eff is not None:
@@ -1145,6 +1264,81 @@ class AllInOneStack(Node):
         msg_right.data = float(right)
         self.left_thruster_pub.publish(msg_left)
         self.right_thruster_pub.publish(msg_right)
+    # =====================================================
+    # Smoke Detection (Point Cloud Analysis)
+    # =====================================================
+    def _detect_smoke(self, cloud_msg: PointCloud2):
+        """
+        Detect smoke using lidar point cloud threshold method.
+        Similar to oko_perception smoke detection.
+        """
+        import json
+
+        smoke_points = []
+
+        # Parse point cloud
+        for point in point_cloud2.read_points(cloud_msg, field_names=("x", "y", "z"), skip_nans=True):
+            x, y, z = point
+
+            # Check if point is in smoke height range
+            if self.smoke_min_height < z < self.smoke_max_height:
+                # Calculate distance from robot
+                dist_2d = math.sqrt(x*x + y*y)
+
+                # Check if within detection range
+                if dist_2d <= self.smoke_detection_range:
+                    smoke_points.append((x, y, z, dist_2d))
+
+        smoke_point_count = len(smoke_points)
+        smoke_detected = False
+        smoke_center_x, smoke_center_y, smoke_distance = 0.0, 0.0, 0.0
+
+        if smoke_point_count >= self.smoke_min_cluster_size:
+            # Calculate smoke cluster center (average position)
+            import numpy as np
+            smoke_array = np.array(smoke_points)
+            smoke_center_x = float(np.mean(smoke_array[:, 0]))
+            smoke_center_y = float(np.mean(smoke_array[:, 1]))
+            smoke_distance = float(math.sqrt(smoke_center_x**2 + smoke_center_y**2))
+
+            # Calculate spatial spread
+            horizontal_spread = float(np.std(smoke_array[:, :2]))  # X, Y spread
+            vertical_spread = float(np.std(smoke_array[:, 2]))      # Z spread
+            spatial_spread = float(np.std(smoke_array[:, :3]))      # Overall 3D spread
+
+            # Smoke characteristics: diffuse and horizontal-dominant (stricter criteria)
+            is_diffuse = spatial_spread > 2.0  # Smoke must be well spread out
+            is_horizontal_dominant = horizontal_spread > vertical_spread * 2.0  # Must be much more horizontal
+            min_points_check = smoke_point_count >= self.smoke_min_cluster_size * 1.2  # Extra safety margin
+
+            if is_diffuse and is_horizontal_dominant and min_points_check:
+                smoke_detected = True
+
+                # Log smoke detection (throttled)
+                self.get_logger().info(
+                    f"🌫️ SMOKE DETECTED: {smoke_point_count} points at {smoke_distance:.1f}m "
+                    f"({smoke_center_x:.1f}, {smoke_center_y:.1f}), spread={spatial_spread:.1f}m",
+                    throttle_duration_sec=2.0
+                )
+
+                # Publish smoke detection
+                smoke_msg = String()
+                smoke_msg.data = json.dumps({
+                    'detected': True,
+                    'point_count': smoke_point_count,
+                    'center_x': round(smoke_center_x, 2),
+                    'center_y': round(smoke_center_y, 2),
+                    'distance': round(smoke_distance, 2),
+                    'spatial_spread': round(spatial_spread, 2),
+                    'horizontal_spread': round(horizontal_spread, 2),
+                    'vertical_spread': round(vertical_spread, 2)
+                })
+                self.smoke_detected_pub.publish(smoke_msg)
+        else:
+            # No smoke detected
+            smoke_msg = String()
+            smoke_msg.data = json.dumps({'detected': False})
+            self.smoke_detected_pub.publish(smoke_msg)
 
 
 def main(args=None):
