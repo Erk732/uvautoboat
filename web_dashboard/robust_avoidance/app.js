@@ -36,6 +36,11 @@ let smokeMarkers = [];
 let waypointMarkers = []; // For auto-goal waypoint sequence visualization
 let latestLocalPose = null; // Latest local ENU pose (meters)
 
+// Map grid overlay (local ENU meters)
+let gridLayerGroup;
+let gridEnabled = true;
+let lastGridMinorSpacingM = null;
+
 // Map origin (local ENU (0,0) -> GPS lat/lon)
 // Default values correspond to the common VRX spawn pose [-532, 162] in sydney_regatta_smoke(.sdf)
 // but we will auto-calibrate from the first GPS fix to avoid map drift between runs.
@@ -56,6 +61,123 @@ function localToLatLon(localX, localY) {
         mapOriginLat + localY * DEG_PER_M_LAT,
         mapOriginLon + localX * DEG_PER_M_LON
     ];
+}
+
+function latLonToLocal(lat, lon) {
+    return {
+        x: (lon - mapOriginLon) / DEG_PER_M_LON,
+        y: (lat - mapOriginLat) / DEG_PER_M_LAT
+    };
+}
+
+function niceStepMeters(targetMeters) {
+    if (!Number.isFinite(targetMeters) || targetMeters <= 0) return 50;
+    const pow10 = Math.pow(10, Math.floor(Math.log10(targetMeters)));
+    const mantissa = targetMeters / pow10;
+
+    let niceMantissa = 1;
+    if (mantissa <= 1) niceMantissa = 1;
+    else if (mantissa <= 2) niceMantissa = 2;
+    else if (mantissa <= 5) niceMantissa = 5;
+    else niceMantissa = 10;
+
+    return niceMantissa * pow10;
+}
+
+function computeGridMinorSpacingMeters() {
+    if (!map) return 50;
+    const size = map.getSize();
+    const bounds = map.getBounds();
+    if (!size || size.x <= 0) return 50;
+
+    const centerLat = (bounds.getNorth() + bounds.getSouth()) / 2;
+    const widthMeters = map.distance(
+        L.latLng(centerLat, bounds.getWest()),
+        L.latLng(centerLat, bounds.getEast())
+    );
+
+    const metersPerPixel = widthMeters / size.x;
+    const targetPixels = 85;
+    const targetMeters = metersPerPixel * targetPixels;
+    return Math.max(1, niceStepMeters(targetMeters));
+}
+
+function updateGridLegend() {
+    const legend = document.getElementById('grid-spacing-legend');
+    const value = document.getElementById('grid-spacing-value');
+    if (!legend || !value) return;
+
+    if (!gridEnabled || !Number.isFinite(lastGridMinorSpacingM)) {
+        legend.style.display = 'none';
+        return;
+    }
+
+    legend.style.display = '';
+    value.textContent = String(Math.round(lastGridMinorSpacingM));
+}
+
+function updateMapGrid() {
+    if (!map) return;
+
+    if (!gridEnabled) {
+        if (gridLayerGroup) gridLayerGroup.clearLayers();
+        lastGridMinorSpacingM = null;
+        updateGridLegend();
+        return;
+    }
+
+    if (!gridLayerGroup) {
+        gridLayerGroup = L.layerGroup().addTo(map);
+    }
+
+    const bounds = map.getBounds();
+    const { x: minX, y: minY } = latLonToLocal(bounds.getSouth(), bounds.getWest());
+    const { x: maxX, y: maxY } = latLonToLocal(bounds.getNorth(), bounds.getEast());
+
+    let minorSpacingM = computeGridMinorSpacingMeters();
+    const majorEvery = 5;
+
+    // Avoid rendering an excessive number of lines on wide zoom levels
+    while (
+        (Math.ceil(Math.abs(maxX - minX) / minorSpacingM) + 1) > 160 ||
+        (Math.ceil(Math.abs(maxY - minY) / minorSpacingM) + 1) > 160
+    ) {
+        minorSpacingM *= 2;
+    }
+
+    gridLayerGroup.clearLayers();
+
+    const startXi = Math.floor(Math.min(minX, maxX) / minorSpacingM);
+    const endXi = Math.ceil(Math.max(minX, maxX) / minorSpacingM);
+    const startYi = Math.floor(Math.min(minY, maxY) / minorSpacingM);
+    const endYi = Math.ceil(Math.max(minY, maxY) / minorSpacingM);
+
+    for (let xi = startXi; xi <= endXi; xi++) {
+        const localX = xi * minorSpacingM;
+        const isMajor = (((xi % majorEvery) + majorEvery) % majorEvery) === 0;
+        const style = isMajor
+            ? { color: '#ffffff', weight: 1.5, opacity: 0.25 }
+            : { color: '#ffffff', weight: 1, opacity: 0.12, dashArray: '2,6' };
+
+        const [lat1, lon1] = localToLatLon(localX, Math.min(minY, maxY));
+        const [lat2, lon2] = localToLatLon(localX, Math.max(minY, maxY));
+        L.polyline([[lat1, lon1], [lat2, lon2]], { ...style, pane: 'gridPane', interactive: false }).addTo(gridLayerGroup);
+    }
+
+    for (let yi = startYi; yi <= endYi; yi++) {
+        const localY = yi * minorSpacingM;
+        const isMajor = (((yi % majorEvery) + majorEvery) % majorEvery) === 0;
+        const style = isMajor
+            ? { color: '#ffffff', weight: 1.5, opacity: 0.25 }
+            : { color: '#ffffff', weight: 1, opacity: 0.12, dashArray: '2,6' };
+
+        const [lat1, lon1] = localToLatLon(Math.min(minX, maxX), localY);
+        const [lat2, lon2] = localToLatLon(Math.max(minX, maxX), localY);
+        L.polyline([[lat1, lon1], [lat2, lon2]], { ...style, pane: 'gridPane', interactive: false }).addTo(gridLayerGroup);
+    }
+
+    lastGridMinorSpacingM = minorSpacingM;
+    updateGridLegend();
 }
 
 function maybeCalibrateMapOriginFromGps(latitude, longitude) {
@@ -80,6 +202,7 @@ function maybeCalibrateMapOriginFromGps(latitude, longitude) {
     if (lastGoal) {
         updateGoalMarker(lastGoal.x, lastGoal.y);
     }
+    updateMapGrid();
 
     log(`Map origin calibrated from GPS: (${mapOriginLat.toFixed(6)}, ${mapOriginLon.toFixed(6)})`, 'info');
 }
@@ -98,6 +221,7 @@ function maybeRefineMapOriginUsingPose() {
     if (lastGoal) {
         updateGoalMarker(lastGoal.x, lastGoal.y);
     }
+    updateMapGrid();
 
     log(`Map origin refined using pose+GPS: (${mapOriginLat.toFixed(6)}, ${mapOriginLon.toFixed(6)})`, 'info');
 }
@@ -117,6 +241,13 @@ function initMap() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(map);
+
+    // Grid overlay for distance estimation (in local ENU meters)
+    if (!map.getPane('gridPane')) {
+        map.createPane('gridPane');
+        map.getPane('gridPane').style.zIndex = 350;
+        map.getPane('gridPane').style.pointerEvents = 'none';
+    }
 
     // Custom boat icon
     const boatIcon = L.divIcon({
@@ -199,8 +330,37 @@ function initMap() {
 
     map.addControl(new ShowAllControl());
 
+    // Add grid toggle button
+    const GridToggleControl = L.Control.extend({
+        options: { position: 'topright' },
+        onAdd: function(map) {
+            const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control grid-control');
+            const button = L.DomUtil.create('a', 'grid-toggle-btn', container);
+            button.href = '#';
+            button.title = 'Toggle grid';
+            button.innerHTML = '▦';
+            button.id = 'grid-toggle';
+
+            L.DomEvent.on(button, 'click', function(e) {
+                L.DomEvent.preventDefault(e);
+                L.DomEvent.stopPropagation(e);
+                gridEnabled = !gridEnabled;
+                button.className = gridEnabled ? 'grid-toggle-btn active' : 'grid-toggle-btn';
+                updateMapGrid();
+            });
+
+            button.className = gridEnabled ? 'grid-toggle-btn active' : 'grid-toggle-btn';
+            return container;
+        }
+    });
+
+    map.addControl(new GridToggleControl());
+
     // Add smoke obstacle markers (sydney_regatta_smoke world)
     addSmokeMarkers();
+
+    updateMapGrid();
+    map.on('moveend zoomend', updateMapGrid);
 
     log('Map initialized', 'info');
 }

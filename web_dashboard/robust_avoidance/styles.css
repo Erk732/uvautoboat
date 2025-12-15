@@ -511,6 +511,34 @@ header h1 {
     color: white;
 }
 
+.grid-control {
+    margin-top: 10px;
+}
+
+.grid-toggle-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 34px !important;
+    height: 34px !important;
+    font-size: 18px;
+    background: white;
+    color: #333;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border-radius: 4px;
+}
+
+.grid-toggle-btn:hover {
+    background: #3498db;
+    color: white;
+}
+
+.grid-toggle-btn.active {
+    background: #3498db;
+    color: white;
+}
+
 /* Camera Panel */
 .camera-panel {
     grid-column: 1 / -1;
