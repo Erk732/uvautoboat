@@ -155,6 +155,11 @@ class AllInOneStack(Node):
         self.declare_parameter('smoke_min_height', 0.8)        # Slightly higher to avoid water surface
         self.declare_parameter('smoke_max_height', 3.5)        # Slightly lower to avoid trees
         self.declare_parameter('smoke_detection_range', 50.0)
+        # Smoke source gating: only report smoke when near known emitters.
+        # Format: "x1,y1;x2,y2;..." in the same frame as /wamv/pose and /planning/goal (usually local ENU "world").
+        self.declare_parameter('smoke_source_gate_enabled', False)
+        self.declare_parameter('smoke_source_positions', '')
+        self.declare_parameter('smoke_source_gate_distance', 30.0)
         # Planning avoidance params
         self.declare_parameter('plan_avoid_margin', 5.0)
 
@@ -222,6 +227,21 @@ class AllInOneStack(Node):
         self.smoke_min_height = float(self.get_parameter('smoke_min_height').value)
         self.smoke_max_height = float(self.get_parameter('smoke_max_height').value)
         self.smoke_detection_range = float(self.get_parameter('smoke_detection_range').value)
+        self.smoke_source_gate_enabled = bool(self.get_parameter('smoke_source_gate_enabled').value)
+        self.smoke_source_gate_distance = float(self.get_parameter('smoke_source_gate_distance').value)
+        self.smoke_source_positions: list[tuple[float, float]] = self._parse_xy_pairs(
+            str(self.get_parameter('smoke_source_positions').value)
+        )
+        if self.smoke_source_gate_enabled and not self.smoke_source_positions:
+            self.get_logger().warn(
+                'smoke_source_gate_enabled=true but smoke_source_positions is empty; disabling smoke source gating.'
+            )
+            self.smoke_source_gate_enabled = False
+        if self.smoke_source_gate_enabled:
+            self.get_logger().info(
+                f'Smoke source gating enabled: {len(self.smoke_source_positions)} sources, '
+                f'gate_distance={self.smoke_source_gate_distance:.1f} m.'
+            )
         for p in raw_goals.split(';'):
             p = p.strip()
             if not p:
@@ -811,6 +831,25 @@ class AllInOneStack(Node):
                 continue
         return boxes
 
+    def _parse_xy_pairs(self, spec: str) -> list[tuple[float, float]]:
+        points: list[tuple[float, float]] = []
+        if not spec:
+            return points
+        parts = spec.split(';')
+        for p in parts:
+            p = p.strip()
+            if not p:
+                continue
+            vals = p.split(',')
+            if len(vals) != 2:
+                continue
+            try:
+                x, y = map(float, vals)
+                points.append((x, y))
+            except ValueError:
+                continue
+        return points
+
     def _world_boxes_to_local(self, boxes, origin_x: float, origin_y: float):
         """
         Convert world-frame hazard boxes to local ENU by subtracting origin.
@@ -1274,6 +1313,32 @@ class AllInOneStack(Node):
         """
         import json
 
+        nearest_source_distance: float | None = None
+        if self.smoke_source_gate_enabled and self.smoke_source_positions:
+            if self.current_pose is None:
+                smoke_msg = String()
+                smoke_msg.data = json.dumps({
+                    'detected': False,
+                    'reason': 'no_pose_for_source_gating'
+                })
+                self.smoke_detected_pub.publish(smoke_msg)
+                return
+
+            rx = float(self.current_pose.pose.position.x)
+            ry = float(self.current_pose.pose.position.y)
+            nearest_source_distance = min(
+                math.hypot(rx - sx, ry - sy) for sx, sy in self.smoke_source_positions
+            )
+            if nearest_source_distance > self.smoke_source_gate_distance:
+                smoke_msg = String()
+                smoke_msg.data = json.dumps({
+                    'detected': False,
+                    'reason': 'far_from_smoke_source',
+                    'nearest_source_distance': round(nearest_source_distance, 2),
+                })
+                self.smoke_detected_pub.publish(smoke_msg)
+                return
+
         smoke_points = []
 
         # Parse point cloud
@@ -1292,6 +1357,7 @@ class AllInOneStack(Node):
         smoke_point_count = len(smoke_points)
         smoke_detected = False
         smoke_center_x, smoke_center_y, smoke_distance = 0.0, 0.0, 0.0
+        spatial_spread, horizontal_spread, vertical_spread = 0.0, 0.0, 0.0
 
         if smoke_point_count >= self.smoke_min_cluster_size:
             # Calculate smoke cluster center (average position)
@@ -1321,24 +1387,23 @@ class AllInOneStack(Node):
                     throttle_duration_sec=2.0
                 )
 
-                # Publish smoke detection
-                smoke_msg = String()
-                smoke_msg.data = json.dumps({
-                    'detected': True,
-                    'point_count': smoke_point_count,
-                    'center_x': round(smoke_center_x, 2),
-                    'center_y': round(smoke_center_y, 2),
-                    'distance': round(smoke_distance, 2),
-                    'spatial_spread': round(spatial_spread, 2),
-                    'horizontal_spread': round(horizontal_spread, 2),
-                    'vertical_spread': round(vertical_spread, 2)
-                })
-                self.smoke_detected_pub.publish(smoke_msg)
-        else:
-            # No smoke detected
-            smoke_msg = String()
-            smoke_msg.data = json.dumps({'detected': False})
-            self.smoke_detected_pub.publish(smoke_msg)
+        payload: dict = {'detected': smoke_detected}
+        if nearest_source_distance is not None:
+            payload['nearest_source_distance'] = round(nearest_source_distance, 2)
+        if smoke_detected:
+            payload.update({
+                'point_count': smoke_point_count,
+                'center_x': round(smoke_center_x, 2),
+                'center_y': round(smoke_center_y, 2),
+                'distance': round(smoke_distance, 2),
+                'spatial_spread': round(spatial_spread, 2),
+                'horizontal_spread': round(horizontal_spread, 2),
+                'vertical_spread': round(vertical_spread, 2)
+            })
+
+        smoke_msg = String()
+        smoke_msg.data = json.dumps(payload)
+        self.smoke_detected_pub.publish(smoke_msg)
 
 
 def main(args=None):

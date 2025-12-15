@@ -153,3 +153,18 @@ launch:
       value: 1.0
     - name: lidar_log_interval
       value: 2.0
+    # Smoke detection tuning: only report when close to a smoke source (reduces false positives).
+    - name: smoke_detection_enabled
+      value: true
+    - name: smoke_detection_range
+      value: 30.0
+    - name: smoke_min_cluster_size
+      value: 300
+    - name: smoke_source_gate_enabled
+      value: true
+    - name: smoke_source_gate_distance
+      value: 30.0
+    # Known smoke generator locations (local ENU, relative to VRX spawn [-532, 162]).
+    # Includes both sydney_regatta_smoke and sydney_regatta_smoke_wildlife emitters.
+    - name: smoke_source_positions
+      value: "-3,98;32,148;-48,178;-3,118;7,113;-13,123;132,118;112,128;92,138"

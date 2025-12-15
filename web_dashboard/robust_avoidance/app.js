@@ -34,6 +34,73 @@ let trajectoryPoints = [];
 let mapFollowBoat = true;
 let smokeMarkers = [];
 let waypointMarkers = []; // For auto-goal waypoint sequence visualization
+let latestLocalPose = null; // Latest local ENU pose (meters)
+
+// Map origin (local ENU (0,0) -> GPS lat/lon)
+// Default values correspond to the common VRX spawn pose [-532, 162] in sydney_regatta_smoke(.sdf)
+// but we will auto-calibrate from the first GPS fix to avoid map drift between runs.
+const DEFAULT_MAP_ORIGIN_LAT = -33.722776;
+const DEFAULT_MAP_ORIGIN_LON = 150.673987;
+let mapOriginLat = DEFAULT_MAP_ORIGIN_LAT;
+let mapOriginLon = DEFAULT_MAP_ORIGIN_LON;
+let mapOriginCalibrated = false;
+let mapOriginCalibratedUsingPose = false;
+let latestGpsFix = null;
+
+// Approx conversions at ~-33.72° latitude (good enough for short distances)
+const DEG_PER_M_LAT = 0.000009009;   // meters North -> degrees latitude
+const DEG_PER_M_LON = 0.000010832;   // meters East  -> degrees longitude
+
+function localToLatLon(localX, localY) {
+    return [
+        mapOriginLat + localY * DEG_PER_M_LAT,
+        mapOriginLon + localX * DEG_PER_M_LON
+    ];
+}
+
+function maybeCalibrateMapOriginFromGps(latitude, longitude) {
+    if (mapOriginCalibrated) return;
+
+    // If we already have a local pose, align ENU pose (x,y) with GPS (lat,lon)
+    if (latestLocalPose && Number.isFinite(latestLocalPose.x) && Number.isFinite(latestLocalPose.y)) {
+        mapOriginLat = latitude - latestLocalPose.y * DEG_PER_M_LAT;
+        mapOriginLon = longitude - latestLocalPose.x * DEG_PER_M_LON;
+        mapOriginCalibratedUsingPose = true;
+    } else {
+        // Fallback: treat the first GPS fix as the local origin
+        mapOriginLat = latitude;
+        mapOriginLon = longitude;
+        mapOriginCalibratedUsingPose = false;
+    }
+
+    mapOriginCalibrated = true;
+
+    // Refresh markers that depend on origin (smoke markers are the main reason)
+    addSmokeMarkers();
+    if (lastGoal) {
+        updateGoalMarker(lastGoal.x, lastGoal.y);
+    }
+
+    log(`Map origin calibrated from GPS: (${mapOriginLat.toFixed(6)}, ${mapOriginLon.toFixed(6)})`, 'info');
+}
+
+function maybeRefineMapOriginUsingPose() {
+    if (!mapOriginCalibrated) return;
+    if (mapOriginCalibratedUsingPose) return;
+    if (!latestGpsFix) return;
+    if (!latestLocalPose || !Number.isFinite(latestLocalPose.x) || !Number.isFinite(latestLocalPose.y)) return;
+
+    mapOriginLat = latestGpsFix.lat - latestLocalPose.y * DEG_PER_M_LAT;
+    mapOriginLon = latestGpsFix.lon - latestLocalPose.x * DEG_PER_M_LON;
+    mapOriginCalibratedUsingPose = true;
+
+    addSmokeMarkers();
+    if (lastGoal) {
+        updateGoalMarker(lastGoal.x, lastGoal.y);
+    }
+
+    log(`Map origin refined using pose+GPS: (${mapOriginLat.toFixed(6)}, ${mapOriginLon.toFixed(6)})`, 'info');
+}
 
 // Node logs subscriber
 let nodeLogsSubscriber;
@@ -45,7 +112,7 @@ function initMap() {
     // Initialize map at real boat start point (actual coordinates from GPS)
     // Latitude: -33.722776, Longitude: 150.673987
     // Start with wider view (zoom 14) to see both boat spawn and smoke obstacles
-    map = L.map('map').setView([-33.722776, 150.673987], 14);
+    map = L.map('map').setView([mapOriginLat, mapOriginLon], 14);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
@@ -59,7 +126,7 @@ function initMap() {
         iconAnchor: [15, 15]
     });
 
-    boatMarker = L.marker([-33.722776, 150.673987], { icon: boatIcon }).addTo(map);
+    boatMarker = L.marker([mapOriginLat, mapOriginLon], { icon: boatIcon }).addTo(map);
     trajectoryLine = L.polyline([], { color: '#667eea', weight: 3 }).addTo(map);
 
     // Add follow boat toggle button
@@ -142,26 +209,22 @@ function initMap() {
 function addSmokeMarkers() {
     if (!map) return;
 
-    // Smoke generator coordinates from sydney_regatta_smoke.sdf
-    // These are adjusted to be north of the boat start point
+    // Smoke generator coordinates from uvautoboat/test_environment/sydney_regatta_smoke.sdf
+    // Converted to local ENU (meters) by subtracting the VRX default spawn pose [-532, 162].
     // Format: [localX, localY, name]
     const smokeLocations = [
-        [0, 260, 'Smoke Generator (Main)'],      // North of boat
-        [50, 310, 'Smoke Generator (East)'],     // North-East of boat
-        [-50, 340, 'Smoke Generator (North)']    // North-West of boat
+        [-3, 98, 'Smoke Generator (Main)'],
+        [32, 148, 'Smoke Generator (East)'],
+        [-48, 178, 'Smoke Generator (North)']
     ];
 
-    // Real boat start point (actual GPS coordinates)
-    const originLat = -33.722776;
-    const originLon = 150.673987;
+    // Clear existing smoke markers to avoid duplicates when re-calibrating origin
+    smokeMarkers.forEach(marker => map.removeLayer(marker));
+    smokeMarkers = [];
 
     smokeLocations.forEach(([localX, localY, name]) => {
         // Convert local ENU coordinates to GPS lat/lon
-        // At latitude -33.72°: 1m North ≈ 0.000009009° lat, 1m East ≈ 0.000010832° lon
-        const latOffset = localY * 0.000009009; // Y is North
-        const lonOffset = localX * 0.000010832; // X is East
-        const smokeLat = originLat + latOffset;
-        const smokeLon = originLon + lonOffset;
+        const [smokeLat, smokeLon] = localToLatLon(localX, localY);
 
         console.log(`Adding smoke marker: ${name} at local (${localX}, ${localY}) -> GPS (${smokeLat}, ${smokeLon})`);
 
@@ -359,6 +422,8 @@ function initPublishers() {
 function updatePoseDisplay(message) {
     const x = message.pose.position.x;
     const y = message.pose.position.y;
+    latestLocalPose = { x, y };
+    maybeRefineMapOriginUsingPose();
 
     // Calculate heading from quaternion
     const qz = message.pose.orientation.z;
@@ -506,6 +571,10 @@ function updateConnectionStatus(isConnected) {
 function updateMapPosition(latitude, longitude) {
     if (!map || !boatMarker) return;
 
+    // Calibrate map origin once we receive GPS (reduces drift vs hardcoded origin)
+    latestGpsFix = { lat: latitude, lon: longitude };
+    maybeCalibrateMapOriginFromGps(latitude, longitude);
+
     const latLng = [latitude, longitude];
     boatMarker.setLatLng(latLng);
 
@@ -629,12 +698,7 @@ function previewGoal() {
     }
 
     // Convert to GPS coordinates
-    const originLat = -33.722776;
-    const originLon = 150.673987;
-    const latOffset = y * 0.000009009;
-    const lonOffset = x * 0.000010832;
-    const previewLat = originLat + latOffset;
-    const previewLon = originLon + lonOffset;
+    const [previewLat, previewLon] = localToLatLon(x, y);
 
     // Create preview marker (different style from actual goal)
     const previewIcon = L.divIcon({
@@ -1001,18 +1065,7 @@ function disableAutoGoal() {
 function updateGoalMarker(localX, localY) {
     if (!map) return;
 
-    // Approximate conversion: 1 meter ≈ 0.000009 degrees latitude
-    // Real boat start point: -33.722776, 150.673987
-    const originLat = -33.722776;
-    const originLon = 150.673987;
-
-    // Convert local ENU coordinates to GPS lat/lon
-    // At latitude -33.72°: 1m North ≈ 0.000009009° lat, 1m East ≈ 0.000010832° lon
-    const latOffset = localY * 0.000009009; // Y is North
-    const lonOffset = localX * 0.000010832; // X is East
-
-    const goalLat = originLat + latOffset;
-    const goalLon = originLon + lonOffset;
+    const [goalLat, goalLon] = localToLatLon(localX, localY);
 
     // Remove existing goal marker if present
     if (goalMarker) {
@@ -1040,10 +1093,6 @@ function showWaypointSequence(goalsString) {
     // Clear existing waypoint markers
     clearWaypointMarkers();
 
-    // Real boat start point
-    const originLat = -33.722776;
-    const originLon = 150.673987;
-
     const goalPairs = goalsString.split(';');
     goalPairs.forEach((pair, index) => {
         const parts = pair.trim().split(',');
@@ -1051,12 +1100,7 @@ function showWaypointSequence(goalsString) {
             const localX = parseFloat(parts[0]);
             const localY = parseFloat(parts[1]);
 
-            // Convert to GPS coordinates
-            // At latitude -33.72°: 1m North ≈ 0.000009009° lat, 1m East ≈ 0.000010832° lon
-            const latOffset = localY * 0.000009009;
-            const lonOffset = localX * 0.000010832;
-            const waypointLat = originLat + latOffset;
-            const waypointLon = originLon + lonOffset;
+            const [waypointLat, waypointLon] = localToLatLon(localX, localY);
 
             // Create numbered waypoint marker
             const waypointIcon = L.divIcon({
