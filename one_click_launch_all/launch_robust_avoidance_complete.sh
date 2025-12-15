@@ -4,6 +4,11 @@
 # PROJET-17 — Robust Avoidance Complete One-Click Launch Script
 # ============================================================================
 #
+# ⚠️  IMPORTANT: This dashboard runs on PORT 8001
+#     - Robust Avoidance dashboard: http://localhost:8001
+#     - Vostok1 dashboard:        http://localhost:8002
+#     This prevents port conflicts when switching between systems.
+#
 # This script launches the complete Robust Avoidance autonomous navigation system:
 #   - VRX Gazebo Simulation (Sydney Regatta World)
 #   - ROS Bridge (WebSocket bridge for web dashboard)
@@ -84,7 +89,7 @@ cleanup() {
         pkill -9 -f "exec: robust_avoidance" || true
         pkill -9 -f "exec: gps_imu_pose" || true
         pkill -9 -f "exec: pose_filter" || true
-        pkill -9 -f "http.server 8000" || true
+        pkill -9 -f "http.server 8001" || true
         pkill -9 -f "rviz" || true
         pkill -9 -f "web_dashboard/robust_avoidance" || true
         # Close gnome-terminal tabs we opened (if still running)
@@ -255,7 +260,7 @@ pkill -9 -f "robust_avoidance.launch.yaml" &> /dev/null || true
 pkill -9 -f "exec: robust_avoidance" &> /dev/null || true
 pkill -9 -f "exec: gps_imu_pose" &> /dev/null || true
 pkill -9 -f "exec: pose_filter" &> /dev/null || true
-pkill -9 -f "http.server 8000" &> /dev/null || true
+pkill -9 -f "http.server 8001" &> /dev/null || true
 sleep 4
 
 # T1: Launch Gazebo (VRX Simulation)
@@ -341,13 +346,13 @@ fi
 
 # T6: Launch Web Dashboard
 if [ "$LAUNCH_DASHBOARD" = true ]; then
-    print_status "Launching Web Dashboard (http://localhost:8000)..."
+    print_status "Launching Web Dashboard (http://localhost:8001)..."
 gnome-terminal --wait --tab --title="Dashboard" -- bash -i -c "
 cd \"$WS_ROOT/src/uvautoboat/web_dashboard/robust_avoidance\"
 echo 'Starting Robust Avoidance Web Dashboard...'
-echo 'Dashboard available at: http://localhost:8000'
+echo 'Dashboard available at: http://localhost:8001'
 echo 'Note: Wait for GPS to initialize (~10-30s) before opening dashboard'
-python3 -m http.server 8000
+python3 -m http.server 8001
 " &
     DASHBOARD_PID=$!
     disown  # Prevent bash from printing "Killed" messages
@@ -360,15 +365,15 @@ if [ "$OPEN_BROWSER" = true ] && [ "$LAUNCH_DASHBOARD" = true ]; then
     print_status "Waiting for systems to stabilize before opening browser..."
     sleep 8
     if command -v xdg-open &> /dev/null; then
-        xdg-open http://localhost:8000 >/dev/null 2>&1 &
+        xdg-open http://localhost:8001 >/dev/null 2>&1 &
     elif command -v open &> /dev/null; then
-        open http://localhost:8000 >/dev/null 2>&1 &
+        open http://localhost:8001 >/dev/null 2>&1 &
     elif command -v google-chrome &> /dev/null; then
-        google-chrome http://localhost:8000 >/dev/null 2>&1 &
+        google-chrome http://localhost:8001 >/dev/null 2>&1 &
     elif command -v firefox &> /dev/null; then
-        firefox http://localhost:8000 >/dev/null 2>&1 &
+        firefox http://localhost:8001 >/dev/null 2>&1 &
     else
-        print_warning "Could not auto-open browser. Manually visit http://localhost:8000"
+        print_warning "Could not auto-open browser. Manually visit http://localhost:8001"
     fi
 fi
 
@@ -381,7 +386,7 @@ if [ "$LAUNCH_CAMERA" = true ]; then
     echo "  Camera Stream:   http://localhost:8080"
 fi
 if [ "$LAUNCH_DASHBOARD" = true ]; then
-    echo "  Web Dashboard:   http://localhost:8000"
+    echo "  Web Dashboard:   http://localhost:8001"
 fi
 echo ""
 echo -e "${YELLOW}Quick Tips:${NC}"

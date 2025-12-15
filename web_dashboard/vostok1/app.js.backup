@@ -80,7 +80,7 @@ let currentState = {
 
 // Initialize everything when page loads
 window.addEventListener('load', () => {
-    if (DEBUG_MODE) console.log('Dashboard loading...');
+    console.log('Dashboard loading...');
     initMap();
     restorePersistedWaypoints();  // Recover waypoints after hard refresh
     connectToROS();
@@ -257,13 +257,13 @@ function addGridOverlay() {
 
 // Connect to ROS via rosbridge
 function connectToROS() {
-    if (DEBUG_MODE) console.log('Attempting to connect to ws://localhost:9090...');
+    console.log('Attempting to connect to ws://localhost:9090...');
     ros = new ROSLIB.Ros({
         url: 'ws://localhost:9090'
     });
 
     ros.on('connection', () => {
-        if (DEBUG_MODE) console.log('Connected to rosbridge!');
+        console.log('Connected to rosbridge!');
         connected = true;
         updateConnectionStatus(true);
         addLog('Connected to rosbridge', 'info');
@@ -278,7 +278,7 @@ function connectToROS() {
     });
 
     ros.on('close', () => {
-        if (DEBUG_MODE) console.log('Connection closed');
+        console.log('Connection closed');
         connected = false;
         updateConnectionStatus(false);
         addLog('Connection closed. Retrying in 5s...', 'warning');
@@ -347,7 +347,7 @@ function updateConnectionStatus(isConnected) {
 
 // Subscribe to ROS topics
 function subscribeToTopics() {
-    if (DEBUG_MODE) console.log('Subscribing to topics...');
+    console.log('Subscribing to topics...');
     
     // GPS Fix
     const gpsTopic = new ROSLIB.Topic({
@@ -357,7 +357,7 @@ function subscribeToTopics() {
     });
 
     gpsTopic.subscribe((message) => {
-        if (DEBUG_MODE) console.log('GPS data received:', message.latitude, message.longitude);
+        console.log('GPS data received:', message.latitude, message.longitude);
         updateGPS(message);
     });
 
@@ -369,7 +369,7 @@ function subscribeToTopics() {
     });
 
     leftThrustTopic.subscribe((message) => {
-        if (DEBUG_MODE) console.log('Left thrust:', message.data);
+        console.log('Left thrust:', message.data);
         updateThruster('left', message.data);
     });
 
@@ -381,7 +381,7 @@ function subscribeToTopics() {
     });
 
     rightThrustTopic.subscribe((message) => {
-        if (DEBUG_MODE) console.log('Right thrust:', message.data);
+        console.log('Right thrust:', message.data);
         updateThruster('right', message.data);
     });
     
@@ -394,7 +394,7 @@ function subscribeToTopics() {
     
     missionStatusTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
-        if (DEBUG_MODE) console.log('Mission status:', data);
+        console.log('Mission status:', data);
         updateMissionStatus(data);
         updateDetourBadge(data.detour_active || false);
     });
@@ -408,7 +408,7 @@ function subscribeToTopics() {
     
     obstacleStatusTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
-        if (DEBUG_MODE) console.log('Obstacle status:', data);
+        console.log('Obstacle status:', data);
         updateObstacleStatus(data);
     });
     
@@ -421,7 +421,7 @@ function subscribeToTopics() {
     
     antiStuckTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
-        if (DEBUG_MODE) console.log('Anti-stuck status:', data);
+        console.log('Anti-stuck status:', data);
         updateAntiStuckStatus(data);
     });
     
@@ -434,7 +434,7 @@ function subscribeToTopics() {
     
     buranAntiStuckTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
-        if (DEBUG_MODE) console.log('Buran anti-stuck status:', data);
+        console.log('Buran anti-stuck status:', data);
         updateAntiStuckStatus(data);
     });
 
@@ -450,7 +450,7 @@ function subscribeToTopics() {
     
     modularMissionTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
-        if (DEBUG_MODE) console.log('Modular mission status:', data);
+        console.log('Modular mission status:', data);
         // Convert modular format to vostok1 format
         // Sputnik uses: current_waypoint, total_waypoints, progress_percent, elapsed_time, position
         updateMissionStatus({
@@ -473,7 +473,7 @@ function subscribeToTopics() {
     
     modularTargetTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
-        if (DEBUG_MODE) console.log('Modular current target:', data);
+        console.log('Modular current target:', data);
         // Update distance to waypoint display
         if (data.distance_to_target !== undefined) {
             document.getElementById('distance').textContent = data.distance_to_target.toFixed(1) + 'm';
@@ -489,7 +489,7 @@ function subscribeToTopics() {
     
     modularWaypointsTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
-        if (DEBUG_MODE) console.log('Modular waypoints received:', data);
+        console.log('Modular waypoints received:', data);
         if (data.waypoints && data.waypoints.length > 0) {
             // Check if waypoints actually changed
             const newWpString = JSON.stringify(data.waypoints);
@@ -514,7 +514,7 @@ function subscribeToTopics() {
     
     modularObstacleTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
-        if (DEBUG_MODE) console.log('Modular obstacle status:', data);
+        console.log('Modular obstacle status:', data);
         // Convert modular format to vostok1 format with OKO v2.0/v2.1 enhancements
         // OKO v2.0: front_clear, left_clear, right_clear ARE the distances in meters
         const CLEAR_THRESHOLD = 10.0;  // Distance threshold for "clear" status
@@ -554,7 +554,7 @@ function subscribeToTopics() {
     
     modularControlTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
-        if (DEBUG_MODE) console.log('Modular control status:', data);
+        console.log('Modular control status:', data);
         if (data.stop_override !== undefined) {
             missionState.stopOverride = !!data.stop_override;
             const el = document.getElementById('stop-override');
@@ -576,7 +576,7 @@ function subscribeToTopics() {
 
     pollutantTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
-        if (DEBUG_MODE) console.log('Pollutant sources update (deprecated):', data);
+        console.log('Pollutant sources update (deprecated):', data);
         if (data.sources) {
             updatePollutantSources(data.sources);  // Still updates minimap markers if enabled
         }
@@ -592,11 +592,11 @@ function subscribeToTopics() {
 
     smokeDetectionTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
-        if (DEBUG_MODE) console.log('Smoke detection update:', data);
+        console.log('Smoke detection update:', data);
         updateSmokeDetection(data);
     });
 
-    if (DEBUG_MODE) console.log('Subscribed to all topics (integrated + modular)');
+    console.log('Subscribed to all topics (integrated + modular)');
     addLog('Subscribed to topics (Vostok1 + Modular)', 'info');
     
     // Enable mission control UI when connected (before config received)
@@ -621,7 +621,7 @@ function subscribeToTopics() {
     
     modularConfigTopic.subscribe((message) => {
         const data = JSON.parse(message.data);
-        if (DEBUG_MODE) console.log('Config received (sputnik):', data);
+        console.log('Config received (sputnik):', data);
         updateConfigFromROS(data);
         updateWorldFromConfig(data);
     });
@@ -665,7 +665,7 @@ let cameraStatus = document.getElementById('camera-status');
 
 function initializeCamera() {
     if (!connected) {
-        if (DEBUG_MODE) console.log('ROS not connected, skipping camera initialization');
+        console.log('ROS not connected, skipping camera initialization');
         return;
     }
     
@@ -717,7 +717,7 @@ function subscribeToCamera(topicName) {
             }
         });
         
-        if (DEBUG_MODE) console.log(`✓ Camera subscribed to: ${topicName}`);
+        console.log(`✓ Camera subscribed to: ${topicName}`);
         cameraStatus.textContent = `Camera: ${topicName}`;
         cameraStatus.style.display = 'block';
         addLog(`✓ Camera feed initialized | Flux caméra initialisé: ${topicName}`, 'info');
@@ -730,47 +730,32 @@ function subscribeToCamera(topicName) {
     }
 }
 
-// Update GPS data (OPTIMIZED - throttled trajectory updates)
+// Update GPS data
 function updateGPS(message) {
     currentState.gps.lat = message.latitude;
     currentState.gps.lon = message.longitude;
-
+    
     // Update display
     document.getElementById('latitude').textContent = message.latitude.toFixed(6) + '°';
     document.getElementById('longitude').textContent = message.longitude.toFixed(6) + '°';
-
+    
     // Update map
     const latLng = [message.latitude, message.longitude];
     boatMarker.setLatLng(latLng);
-
-    // Throttle trajectory updates to reduce CPU usage
-    const now = Date.now();
-    if (now - lastTrajectoryUpdate > 100) {  // Update at most 10Hz instead of GPS rate
-        lastTrajectoryUpdate = now;
-
-        // Add to trajectory
-        trajectoryPoints.push(latLng);
-        if (trajectoryPoints.length > 300) {
-            trajectoryPoints.shift(); // Keep last 300 points (extended trail)
-        }
-
-        // Use requestAnimationFrame for smooth rendering
-        if (!pendingTrajectoryUpdate) {
-            pendingTrajectoryUpdate = true;
-            requestAnimationFrame(() => {
-                trajectoryLine.setLatLngs(trajectoryPoints);
-                pendingTrajectoryUpdate = false;
-            });
-        }
+    
+    // Add to trajectory
+    trajectoryPoints.push(latLng);
+    if (trajectoryPoints.length > 300) {
+        trajectoryPoints.shift(); // Keep last 300 points (extended trail)
     }
-
-    // Throttle map pan operations (max once per 500ms)
-    if (mapFollowBoat && now - lastMapPan > 500) {
+    trajectoryLine.setLatLngs(trajectoryPoints);
+    
+    // Center map on boat only if follow mode is enabled
+    if (mapFollowBoat) {
         const center = map.getCenter();
         const distance = map.distance(center, latLng);
         if (distance > 50) { // More than 50m from center
-            lastMapPan = now;
-            map.setView(latLng, map.getZoom(), {animate: false});  // No animation for better performance
+            map.panTo(latLng);
         }
     }
 }
@@ -825,7 +810,7 @@ function updateMissionStatus(data) {
     
     // If waypoint changed, redraw waypoints on map to update colors (green for passed, orange for current)
     if (previousWaypoint !== missionState.currentWaypoint && missionState.waypoints.length > 0) {
-        if (DEBUG_MODE) console.log(`Waypoint updated: ${previousWaypoint} → ${missionState.currentWaypoint}, redrawing map`);
+        console.log(`Waypoint updated: ${previousWaypoint} → ${missionState.currentWaypoint}, redrawing map`);
         displayWaypointsOnMap(missionState.waypoints, false);  // Don't fit to bounds, just update colors
     }
     
@@ -1040,7 +1025,7 @@ setInterval(() => {
 
 // Initialize configuration panel
 function initConfigPanel() {
-    if (DEBUG_MODE) console.log('Initializing config panel...');
+    console.log('Initializing config panel...');
 
     // All config input IDs
     const allConfigInputs = [
@@ -1104,7 +1089,7 @@ function initConfigPanel() {
     // Initialize value displays and change indicators
     initConfigValueTracking();
 
-    if (DEBUG_MODE) console.log('Config panel initialized');
+    console.log('Config panel initialized');
 }
 
 // Reset configuration to default values
@@ -1333,7 +1318,7 @@ function sendConfig(pidOnly = false, restart = false) {
         modularConfigPublisher.publish(message);
     }
     addLog('Config sent! | Configuration envoyée!', 'info');
-    if (DEBUG_MODE) console.log('Config sent to both vostok1 and sputnik:', config);
+    console.log('Config sent to both vostok1 and sputnik:', config);
 
     // Show success feedback toast
     if (pidOnly) {
@@ -1453,7 +1438,7 @@ function initTerminal() {
 
 // Initialize mission control panel
 function initMissionControl() {
-    if (DEBUG_MODE) console.log('Initializing mission control...');
+    console.log('Initializing mission control...');
     
     // Step 1: Generate Waypoints
     document.getElementById('btn-generate-waypoints').addEventListener('click', () => {
@@ -1524,7 +1509,7 @@ function initMissionControl() {
         setTimeout(() => alert('🤖 Autonomous Mode Restored\n\nJoystick override disabled.\n\n🤖 Mode Autonome Restauré\n\nJoystick désactivé.'), 100);
     });
     
-    if (DEBUG_MODE) console.log('Mission control initialized');
+    console.log('Mission control initialized');
 }
 
 // Generate waypoints and update config
@@ -1602,7 +1587,7 @@ function sendMissionCommand(command) {
     // Publish to Sputnik modular planner only
     missionCommandPublisher.publish(msg);
     addLog(`Mission command: ${command}`, 'info');
-    if (DEBUG_MODE) console.log('Mission command sent to sputnik:', command);
+    console.log('Mission command sent to sputnik:', command);
 }
 
 // Emergency Stop - Immediately halt the boat
@@ -1666,7 +1651,7 @@ function emergencyStop() {
 
 // Update mission control UI based on state
 function updateMissionControlUI(state) {
-    if (DEBUG_MODE) console.log('updateMissionControlUI called with state:', state);
+    console.log('updateMissionControlUI called with state:', state);
     missionState.state = (state.state || 'IDLE').toString().toUpperCase();
     // If no gps_ready field, assume true when connected (for testing)
     missionState.gpsReady = (state.gps_ready !== undefined) ? state.gps_ready : connected;
@@ -2328,7 +2313,7 @@ const TUNING_PRESETS = {
 
 // Initialize tuning panel
 function initTuningPanel() {
-    if (DEBUG_MODE) console.log('Initializing tuning panel...');
+    console.log('Initializing tuning panel...');
 
     // Collapsible section headers
     document.querySelectorAll('.tuning-section-header').forEach(header => {
@@ -2357,7 +2342,7 @@ function initTuningPanel() {
     document.getElementById('btn-apply-oko').addEventListener('click', () => applyOkoParameters());
     document.getElementById('btn-apply-buran').addEventListener('click', () => applyBuranParameters());
 
-    if (DEBUG_MODE) console.log('Tuning panel initialized');
+    console.log('Tuning panel initialized');
 }
 
 // Apply preset configuration
@@ -2489,7 +2474,7 @@ function applyOkoParameters(presetParams = null) {
     const totalParams = Object.keys(params).length;
     addLog(`✅ OKO: ${totalParams} parameters sent via config topic`, 'info');
     showFeedback(`✅ OKO: All ${totalParams} parameters applied successfully!`, 'success');
-    if (DEBUG_MODE) console.log('OKO config sent to /sputnik/set_config:', params);
+    console.log('OKO config sent to /sputnik/set_config:', params);
 }
 
 // Apply BURAN controller parameters via config topic
@@ -2528,7 +2513,7 @@ function applyBuranParameters(presetParams = null) {
     const totalParams = Object.keys(params).length;
     addLog(`✅ BURAN: ${totalParams} parameters sent via config topic`, 'info');
     showFeedback(`✅ BURAN: All ${totalParams} parameters applied successfully!`, 'success');
-    if (DEBUG_MODE) console.log('BURAN config sent to /sputnik/set_config:', params);
+    console.log('BURAN config sent to /sputnik/set_config:', params);
 }
 
 // Show visual feedback toast notification
@@ -2654,7 +2639,7 @@ function setROS2Parameter(nodeName, paramName, paramValue, callback) {
         if (response && response.results && response.results.length > 0) {
             const result = response.results[0];
             if (result.successful) {
-                if (DEBUG_MODE) console.log(`✅ Set ${nodeName}/${paramName} = ${paramValue}`);
+                console.log(`✅ Set ${nodeName}/${paramName} = ${paramValue}`);
                 if (callback) callback(true);
             } else {
                 console.error(`❌ Failed to set ${nodeName}/${paramName}: ${result.reason}`);
@@ -2733,7 +2718,7 @@ function initMissionHistory() {
         exportHistoryAsJSON();
     });
 
-    if (DEBUG_MODE) console.log('Mission history initialized');
+    console.log('Mission history initialized');
 }
 
 // Add event to mission history
@@ -3102,6 +3087,6 @@ generateWaypoints = function() {
 window.addEventListener('load', () => {
     setTimeout(() => {
         initMissionHistory();
-        if (DEBUG_MODE) console.log('Phase 2 features initialized');
+        console.log('Phase 2 features initialized');
     }, 1500);
 });

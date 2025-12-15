@@ -4,6 +4,11 @@
 # PROJET-17 — Vostok1 Complete One-Click Launch Script
 # ============================================================================
 #
+# ℹ️  DASHBOARD PORT: This dashboard runs on PORT 8002
+#     - Robust Avoidance dashboard: http://localhost:8001
+#     - Vostok1 dashboard:        http://localhost:8002
+#     This prevents port conflicts when switching between systems.
+#
 # This script launches the complete Vostok1 autonomous navigation system:
 #   - VRX Gazebo Simulation (Sydney Regatta World)
 #   - ROS Bridge (WebSocket bridge for web dashboard)
@@ -76,7 +81,7 @@ cleanup() {
     pkill -9 -f "sputnik_planner" || true
     pkill -9 -f "buran_controller" || true
     pkill -9 -f "oko_perception" || true
-    pkill -9 -f "http.server 8000" || true
+    pkill -9 -f "http.server 8002" || true
     pkill -9 -f "rviz" || true
     pkill -9 -f "web_dashboard/vostok1" || true
     # Close gnome-terminal tabs we opened (if still running)
@@ -244,7 +249,7 @@ pkill -9 -f "vostok1.launch.yaml" &> /dev/null || true
 pkill -9 -f "sputnik_planner" &> /dev/null || true
 pkill -9 -f "buran_controller" &> /dev/null || true
 pkill -9 -f "oko_perception" &> /dev/null || true
-pkill -9 -f "http.server 8000" &> /dev/null || true
+pkill -9 -f "http.server 8002" &> /dev/null || true
 sleep 4
 
 # T1: Launch Gazebo (VRX Simulation)
@@ -321,13 +326,13 @@ fi
 
 # T6: Launch Web Dashboard
 if [ "$LAUNCH_DASHBOARD" = true ]; then
-    print_status "Launching Web Dashboard (http://localhost:8000)..."
+    print_status "Launching Web Dashboard (http://localhost:8002)..."
 gnome-terminal --wait --tab --title="dashboard" -- bash -i -c "
 cd \"$WS_ROOT/src/uvautoboat/web_dashboard/vostok1\"
 echo 'Starting Web Dashboard HTTP server...'
-echo 'Dashboard available at: http://localhost:8000'
+echo 'Dashboard available at: http://localhost:8002'
 echo 'Note: Wait for GPS to initialize (~10-30s) before opening dashboard'
-python3 -m http.server 8000
+python3 -m http.server 8002
 " &
     DASHBOARD_PID=$!
     sleep 8
@@ -339,15 +344,15 @@ if [ "$OPEN_BROWSER" = true ] && [ "$LAUNCH_DASHBOARD" = true ]; then
     print_status "Waiting for systems to stabilize before opening browser..."
     sleep 8
     if command -v xdg-open &> /dev/null; then
-        xdg-open http://localhost:8000 >/dev/null 2>&1 &
+        xdg-open http://localhost:8002 >/dev/null 2>&1 &
     elif command -v open &> /dev/null; then
-        open http://localhost:8000 >/dev/null 2>&1 &
+        open http://localhost:8002 >/dev/null 2>&1 &
     elif command -v google-chrome &> /dev/null; then
-        google-chrome http://localhost:8000 >/dev/null 2>&1 &
+        google-chrome http://localhost:8002 >/dev/null 2>&1 &
     elif command -v firefox &> /dev/null; then
-        firefox http://localhost:8000 >/dev/null 2>&1 &
+        firefox http://localhost:8002 >/dev/null 2>&1 &
     else
-        print_warning "Could not auto-open browser. Manually visit http://localhost:8000"
+        print_warning "Could not auto-open browser. Manually visit http://localhost:8002"
     fi
 fi
 
@@ -360,7 +365,7 @@ if [ "$LAUNCH_CAMERA" = true ]; then
     echo "  Camera Stream:   http://localhost:8080"
 fi
 if [ "$LAUNCH_DASHBOARD" = true ]; then
-    echo "  Web Dashboard:   http://localhost:8000"
+    echo "  Web Dashboard:   http://localhost:8002"
 fi
 echo ""
 echo -e "${YELLOW}Quick Tips:${NC}"
